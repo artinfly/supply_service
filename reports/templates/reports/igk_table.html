@@ -1,0 +1,14 @@
+{% extends "reports/base.html" %}
+
+{% block title %}IGK {{ status }} {{ year }}{% endblock %}
+
+{% block content %}
+    <h2>IGK {{ status }} {{ year }}</h2>
+    <div id="igk-table"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTable("{% url api_name %}", 'igk-table');
+        });
+    </script>
+{% endblock %}

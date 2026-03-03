@@ -1,0 +1,14 @@
+{% extends "reports/base.html" %}
+
+{% block title %}Дневная статистика по ЦФО{% endblock %}
+
+{% block content %}
+    <h2>Дневная статистика по ЦФО</h2>
+    <div id="day-stat-table"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTable("{% url 'day_stat_with_cfo' %}", 'day-stat-table');
+        });
+    </script>
+{% endblock %}

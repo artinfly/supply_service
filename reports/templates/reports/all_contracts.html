@@ -1,0 +1,14 @@
+{% extends "reports/base.html" %}
+
+{% block title %}All Contracts{% endblock %}
+
+{% block content %}
+    <h2>All Contracts (Все договоры)</h2>
+    <div id="all-contracts-table"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTable("{% url 'all_contracts' %}", 'all-contracts-table');
+        });
+    </script>
+{% endblock %}

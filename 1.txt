@@ -1,0 +1,8 @@
+pip install --no-index --find-links=./wheels -r requirements.txt
+
+python manage.py runserver
+
+python manage.py import_excel "D:\КДР 6ИГК на 28.01.2025 исходный 2.xlsx"
+
+python manage.py normalize_staging
+

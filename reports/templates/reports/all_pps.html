@@ -1,0 +1,14 @@
+{% extends "reports/base.html" %}
+
+{% block title %}All PPs{% endblock %}
+
+{% block content %}
+    <h2>All PPs (Все позиции)</h2>
+    <div id="all-pps-table"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTable("{% url 'all_pps' %}", 'all-pps-table');
+        });
+    </script>
+{% endblock %}
