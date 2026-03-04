@@ -1,14 +1,33 @@
-{% extends "reports/base.html" %}
+{% extends 'reports/base.html' %}
 
-{% block title %}Дневная статистика по ЦФО{% endblock %}
+{% block title %}Дневная статистика по ИГК и ЦФО{% endblock %}
 
 {% block content %}
-    <h2>Дневная статистика по ЦФО</h2>
-    <div id="day-stat-table"></div>
+<div class="page-header">
+    <h5>Дневная статистика по ИГК и ЦФО</h5>
+</div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            loadTable("{% url 'day_stat_with_cfo' %}", 'day-stat-table');
-        });
-    </script>
+<div class="table-container" id="table-wrapper"></div>
+
+<div id="page-data" data-api-url="{% url 'api_day_stat_cfo' %}"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const COLS = [
+    { field: 'igk',                        title: 'ИГК' },
+    { field: 'cfo',                        title: 'ЦФО' },
+    { field: 'orders_count',               title: 'Всего договоров',      format: 'int' },
+    { field: 'orders_sum',                 title: 'Сумма всего, руб.',    format: 'number' },
+    { field: 'concluded_orders_count',     title: 'Заключено',            format: 'int' },
+    { field: 'concluded_orders_sum',       title: 'Сумма заключённых',    format: 'number' },
+    { field: 'not_concluded_orders_count', title: 'Не заключено',         format: 'int' },
+    { field: 'not_concluded_orders_sum',   title: 'Сумма незаключённых',  format: 'number' },
+    { field: 'conc_orders_delta',          title: 'Δ заключено (шт.)',    format: 'int' },
+    { field: 'conc_sum_delta',             title: 'Δ заключено (руб.)',   format: 'number' },
+];
+
+const apiUrl = document.getElementById('page-data').dataset.apiUrl;
+loadTable(apiUrl, 'table-wrapper', COLS);
+</script>
 {% endblock %}

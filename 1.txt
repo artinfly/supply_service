@@ -6,3 +6,347 @@ python manage.py import_excel "D:\КДР 6ИГК на 28.01.2025 исходны�
 
 python manage.py normalize_staging
 
+
+
+
+-- Общее количество записей
+SELECT COUNT(*) FROM igk_stat_data;
+-- Количество записей с разными годами
+SELECT
+    COUNT(*) FILTER (WHERE y25 = true) as y25_true,
+    COUNT(*) FILTER (WHERE y26 = true) as y26_true,
+    COUNT(*) FILTER (WHERE y27 = true) as y27_true
+FROM igk_stat_data;
+-- Количество записей с разными статусами
+SELECT status, COUNT(*) FROM igk_stat_data GROUP BY status;
+-- Данные за сегодня в day_data
+SELECT COUNT(*) FROM day_data WHERE upload_date = CURRENT_DATE;
+
+
+
+
+
+В файле reports/views.py добавьте импорт и функцию:
+import openpyxl
+from openpyxl.utils import get_column_letter
+from django.http import HttpResponse
+
+def export_to_excel(data, filename):
+    """
+    Принимает список словарей (data) и имя файла, возвращает HttpResponse с Excel-файлом.
+    """
+    if not data:
+        # Если данных нет, создаём пустую книгу с сообщением
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws['A1'] = 'Нет данных'
+    else:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        # Заголовки
+        headers = list(data[0].keys())
+        ws.append(headers)
+        # Данные
+        for row in data:
+            ws.append([row.get(h, '') for h in headers])
+        # Автоподбор ширины колонок
+        for col_num, col_name in enumerate(headers, 1):
+            column_letter = get_column_letter(col_num)
+            max_length = len(col_name)
+            for row in data:
+                cell_value = str(row.get(col_name, ''))
+                max_length = max(max_length, len(cell_value))
+            adjusted_width = min(max_length + 2, 50)  # ограничим ширину
+            ws.column_dimensions[column_letter].width = adjusted_width
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}.xlsx"'
+    wb.save(response)
+    return response
+
+
+
+
+
+import openpyxl
+from openpyxl.utils import get_column_letter
+from django.http import HttpResponse, JsonResponse
+from django.db.models import Count, Sum, Q, F, FloatField
+from django.db.models.functions import Coalesce, Round
+from reports.models import IgkStatData
+
+# ==================== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ЭКСПОРТА ====================
+
+def export_to_excel(data, filename):
+    """Принимает список словарей и имя файла, возвращает HttpResponse с Excel."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    if not data:
+        ws['A1'] = 'Нет данных'
+    else:
+        headers = list(data[0].keys())
+        ws.append(headers)
+        for row in data:
+            ws.append([row.get(h, '') for h in headers])
+        # Автоподбор ширины
+        for col_num, header in enumerate(headers, 1):
+            col_letter = get_column_letter(col_num)
+            max_len = len(header)
+            for row in data:
+                val = str(row.get(header, ''))
+                max_len = max(max_len, len(val))
+            ws.column_dimensions[col_letter].width = min(max_len + 2, 50)
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}.xlsx"'
+    wb.save(response)
+    return response
+
+# ==================== ЛОГИКА ПОЛУЧЕНИЯ ДАННЫХ ДЛЯ KDR STAT ====================
+
+def get_kdr_stat_data(year_field):
+    """Возвращает список словарей с данными для KDR Stat по указанному году."""
+    year_filter = {year_field: True}
+    queryset = IgkStatData.objects.values('igk').annotate(
+        orders=Count('contract', distinct=True,
+                     filter=Q(order__isnull=False) & ~Q(order='')),
+        order_sum=Round(
+            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='')), 0.0) / 1000000.0,
+            2
+        ),
+        count_concluded=Count('contract', distinct=True,
+                              filter=Q(order__isnull=False) & ~Q(order='') &
+                                     Q(status__in=['Заключен', 'Исполнен'])),
+        concluded_order_sum=Round(
+            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
+                                    Q(status__in=['Заключен', 'Исполнен'])), 0.0) / 1000000.0,
+            2
+        ),
+        count_curr_year=Count('contract', distinct=True,
+                              filter=Q(order__isnull=False) & ~Q(order='') &
+                                     Q(**year_filter) & ~Q(status='Расторгнут')),
+        order_sum_curr_year=Round(
+            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
+                                    Q(**year_filter) & ~Q(status='Расторгнут')), 0.0) / 1000000.0,
+            2
+        ),
+        count_concluded_curr_year=Count('contract', distinct=True,
+                                        filter=Q(order__isnull=False) & ~Q(order='') &
+                                               Q(**year_filter) & Q(status__in=['Заключен', 'Исполнен'])),
+        concluded_order_sum_curr_year=Round(
+            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
+                                    Q(**year_filter) & Q(status__in=['Заключен', 'Исполнен'])), 0.0) / 1000000.0,
+            2
+        ),
+        pp_sum_plan=Round(
+            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
+                                    Q(**year_filter) & Q(payment_type='Аванс') & ~Q(status='Расторгнут')), 0.0) / 1000000.0,
+            2
+        ),
+        pp_sum_fact=Round(
+            Coalesce(Sum('fact', filter=Q(order__isnull=False) & ~Q(order='') &
+                                    Q(**year_filter) & Q(payment_type='Аванс') & ~Q(status='Расторгнут')), 0.0) / 1000000.0,
+            2
+        ),
+        count_not_concluded_curr_year=Count('contract', distinct=True,
+                                            filter=Q(order__isnull=False) & ~Q(order='') &
+                                                   Q(**year_filter) & Q(status='Не заключен')),
+        not_concluded_order_sum_curr_year=Round(
+            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
+                                    Q(**year_filter) & Q(status='Не заключен')), 0.0) / 1000000.0,
+            2
+        ),
+    )
+
+    data = list(queryset)
+
+    for row in data:
+        if row['count_curr_year']:
+            row['count_concluded_percent_curr_year'] = int(row['count_concluded_curr_year'] * 100 / row['count_curr_year'])
+        else:
+            row['count_concluded_percent_curr_year'] = 0
+
+        if row['order_sum_curr_year']:
+            row['order_sum_percent_curr_year'] = int(row['concluded_order_sum_curr_year'] * 100 / row['order_sum_curr_year'])
+        else:
+            row['order_sum_percent_curr_year'] = 0
+
+        if row['pp_sum_plan']:
+            row['pp_percent'] = int(row['pp_sum_fact'] * 100 / row['pp_sum_plan'])
+        else:
+            row['pp_percent'] = 0
+
+    total = IgkStatData.objects.filter(**year_filter).aggregate(
+        total_orders=Count('contract', distinct=True,
+                           filter=Q(order__isnull=False) & ~Q(order='')),
+        total_order_sum=Round(
+            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='')), 0.0) / 1000000.0,
+            2
+        ),
+        total_count_concluded=Count('contract', distinct=True,
+                                    filter=Q(order__isnull=False) & ~Q(order='') &
+                                           Q(status__in=['Заключен', 'Исполнен'])),
+        total_concluded_sum=Round(
+            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
+                                    Q(status__in=['Заключен', 'Исполнен'])), 0.0) / 1000000.0,
+            2
+        ),
+        total_count_curr_year=Count('contract', distinct=True,
+                                    filter=Q(order__isnull=False) & ~Q(order='') &
+                                           Q(**year_filter) & ~Q(status='Расторгнут')),
+        total_order_sum_curr_year=Round(
+            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
+                                    Q(**year_filter) & ~Q(status='Расторгнут')), 0.0) / 1000000.0,
+            2
+        ),
+        total_count_concluded_curr_year=Count('contract', distinct=True,
+                                              filter=Q(order__isnull=False) & ~Q(order='') &
+                                                     Q(**year_filter) & Q(status__in=['Заключен', 'Исполнен'])),
+        total_concluded_sum_curr_year=Round(
+            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
+                                    Q(**year_filter) & Q(status__in=['Заключен', 'Исполнен'])), 0.0) / 1000000.0,
+            2
+        ),
+        total_pp_sum_plan=Round(
+            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
+                                    Q(**year_filter) & Q(payment_type='Аванс') & ~Q(status='Расторгнут')), 0.0) / 1000000.0,
+            2
+        ),
+        total_pp_sum_fact=Round(
+            Coalesce(Sum('fact', filter=Q(order__isnull=False) & ~Q(order='') &
+                                    Q(**year_filter) & Q(payment_type='Аванс') & ~Q(status='Расторгнут')), 0.0) / 1000000.0,
+            2
+        ),
+        total_count_not_concluded_curr_year=Count('contract', distinct=True,
+                                                  filter=Q(order__isnull=False) & ~Q(order='') &
+                                                         Q(**year_filter) & Q(status='Не заключен')),
+        total_not_concluded_sum_curr_year=Round(
+            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
+                                    Q(**year_filter) & Q(status='Не заключен')), 0.0) / 1000000.0,
+            2
+        ),
+    )
+
+    if total['total_count_curr_year']:
+        total['total_count_concluded_percent_curr_year'] = int(total['total_count_concluded_curr_year'] * 100 / total['total_count_curr_year'])
+    else:
+        total['total_count_concluded_percent_curr_year'] = 0
+
+    if total['total_order_sum_curr_year']:
+        total['total_order_sum_percent_curr_year'] = int(total['total_concluded_sum_curr_year'] * 100 / total['total_order_sum_curr_year'])
+    else:
+        total['total_order_sum_percent_curr_year'] = 0
+
+    if total['total_pp_sum_plan']:
+        total['total_pp_percent'] = int(total['total_pp_sum_fact'] * 100 / total['total_pp_sum_plan'])
+    else:
+        total['total_pp_percent'] = 0
+
+    total_row = {
+        'igk': 'ИТОГО',
+        'orders': total['total_orders'],
+        'order_sum': total['total_order_sum'],
+        'count_concluded': total['total_count_concluded'],
+        'concluded_order_sum': total['total_concluded_sum'],
+        'count_curr_year': total['total_count_curr_year'],
+        'order_sum_curr_year': total['total_order_sum_curr_year'],
+        'count_concluded_curr_year': total['total_count_concluded_curr_year'],
+        'concluded_order_sum_curr_year': total['total_concluded_sum_curr_year'],
+        'pp_sum_plan': total['total_pp_sum_plan'],
+        'pp_sum_fact': total['total_pp_sum_fact'],
+        'count_not_concluded_curr_year': total['total_count_not_concluded_curr_year'],
+        'not_concluded_order_sum_curr_year': total['total_not_concluded_sum_curr_year'],
+        'count_concluded_percent_curr_year': total['total_count_concluded_percent_curr_year'],
+        'order_sum_percent_curr_year': total['total_order_sum_percent_curr_year'],
+        'pp_percent': total['total_pp_percent'],
+    }
+
+    data.append(total_row)
+    return data
+
+# ==================== API ВЬЮХИ (теперь используют get_kdr_stat_data) ====================
+
+def kdr_stat_2025(request):
+    data = get_kdr_stat_data('y25')
+    return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False, 'indent': 2})
+
+def kdr_stat_2026(request):
+    data = get_kdr_stat_data('y26')
+    return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False, 'indent': 2})
+
+def kdr_stat_2027(request):
+    data = get_kdr_stat_data('y27')
+    return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False, 'indent': 2})
+
+# ==================== ЭКСПОРТ В EXCEL ====================
+
+def export_kdr_stat_2025(request):
+    data = get_kdr_stat_data('y25')
+    return export_to_excel(data, 'KDR_Stat_2025')
+
+def export_kdr_stat_2026(request):
+    data = get_kdr_stat_data('y26')
+    return export_to_excel(data, 'KDR_Stat_2026')
+
+def export_kdr_stat_2027(request):
+    data = get_kdr_stat_data('y27')
+    return export_to_excel(data, 'KDR_Stat_2027')
+
+
+
+
+
+
+
+
+
+
+    2. Добавьте маршруты в reports/urls.py
+python
+urlpatterns = [
+    # ... существующие маршруты ...
+
+    # Экспорт KDR Stat
+    path('export/kdr2025/', views.export_kdr_stat_2025, name='export_kdr2025'),
+    path('export/kdr2026/', views.export_kdr_stat_2026, name='export_kdr2026'),
+    path('export/kdr2027/', views.export_kdr_stat_2027, name='export_kdr2027'),
+]
+3. Добавьте кнопку на HTML-страницы
+В шаблоне reports/templates/reports/kdr_table.html (или в любом другом, где отображается KDR Stat) добавьте кнопку:
+
+html
+{% extends "reports/base.html" %}
+
+{% block title %}KDR Stat {{ year }}{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>KDR Stat {{ year }}</h2>
+        <a href="{% url 'export_kdr'|add:year %}" class="btn btn-success">Скачать Excel</a>
+    </div>
+    <div id="kdr-table"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTable("{% url 'kdr'|add:year %}", 'kdr-table');
+        });
+    </script>
+{% endblock %}
+Примечание: В Django нельзя просто так конкатенировать в тегах url. Лучше передавать имя URL через контекст. В вашей view kdr_table вы уже передаёте api_name. Аналогично можно передать и имя для экспорта. Например, в views.py:
+
+python
+def kdr_table(request, year):
+    context = {
+        'year': year,
+        'api_name': f'kdr{year}',
+        'export_name': f'export_kdr{year}',
+    }
+    return render(request, 'reports/kdr_table.html', context)
+Тогда в шаблоне:
+
+html
+<a href="{% url export_name %}" class="btn btn-success">Скачать Excel</a>
+Убедитесь, что в urls.py имена для экспорта соответствуют: export_kdr2025, export_kdr2026, export_kdr2027.

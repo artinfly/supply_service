@@ -1,14 +1,12 @@
-import os
 from pathlib import Path
-from django.conf.global_settings import STATICFILES_DIRS
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-osc+)(j3!4o5cgio)m$nb)l34xhb0t_1*-@owgxuzj6jo!-e50'  # оставьте сгенерированный ключ
+SECRET_KEY = 'django-insecure-osc+)(j3!4o5cgio)m$nb)l34xhb0t_1*-@owgxuzj6jo!-e50'
 
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -35,7 +33,7 @@ ROOT_URLCONF = 'supply_service.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'reports' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -60,6 +58,7 @@ DATABASES = {
         'PORT': '5432',
         'OPTIONS': {
             'client_encoding': 'UTF8',
+            'options': '-c search_path=dbo,public',
         },
     }
 }
@@ -76,8 +75,10 @@ TIME_ZONE = 'Asia/Yekaterinburg'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
+# Статические файлы (Bootstrap и прочее)
+STATIC_URL = '/static/'
 STATICFILES_DIRS = [
-    BASE_DIR / "reports" / "templates" /"reports" / "static",
+    BASE_DIR / 'reports' / 'static',
 ]
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

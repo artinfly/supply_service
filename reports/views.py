@@ -1,29 +1,42 @@
-from django.db.models import Count, Sum, Q, F, FloatField
-from django.db.models.functions import Coalesce, Round
 from django.http import JsonResponse
+from django.shortcuts import render
 from django.db import connection
 from datetime import date, timedelta
-from reports.models import IgkStatData, DayData
-from django.shortcuts import render
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Точные статусы из Excel
+# ──────────────────────────────────────────────────────────────────────
+CONCLUDED  = ('Заключен', 'Исполнен', 'Исполняется')
+NOT_CONCL  = ('Не заключен',)
+TERMINATED = ('Расторгнут',)
+ADVANCE    = 'Аванс'
+
+
+# ──────────────────────────────────────────────────────────────────────
+# HTML-страницы (просто рендерят шаблон, данные грузит JS через API)
+# ──────────────────────────────────────────────────────────────────────
 
 def index(request):
     return render(request, 'reports/index.html')
 
 def kdr_table(request, year):
-    api_name = f'kdr{year}'  # имя URL для API, должно совпадать с names в urls.py
-    return render(request, 'reports/kdr_table.html', {'year': year, 'api_name': api_name})
+    return render(request, 'reports/kdr_table.html', {'year': year})
 
 def igk_concluded_table(request, year):
-    api_name = f'igk_concluded_{year}'
-    return render(request, 'reports/igk_table.html', {'year': year, 'api_name': api_name, 'status': 'Concluded'})
+    return render(request, 'reports/igk_table.html', {
+        'year': year, 'report_type': 'concluded', 'title': f'Заключённые ИГК {year}'
+    })
 
 def igk_not_concluded_table(request, year):
-    api_name = f'igk_not_concluded_{year}'
-    return render(request, 'reports/igk_table.html', {'year': year, 'api_name': api_name, 'status': 'Not Concluded'})
+    return render(request, 'reports/igk_table.html', {
+        'year': year, 'report_type': 'not_concluded', 'title': f'Незаключённые ИГК {year}'
+    })
 
 def igk_terminated_table(request, year):
-    api_name = f'igk_terminated_{year}'
-    return render(request, 'reports/igk_table.html', {'year': year, 'api_name': api_name, 'status': 'Terminated'})
+    return render(request, 'reports/igk_table.html', {
+        'year': year, 'report_type': 'terminated', 'title': f'Расторгнутые ИГК {year}'
+    })
 
 def day_stat_only_igk_table(request):
     return render(request, 'reports/day_stat_only_igk.html')
@@ -37,391 +50,370 @@ def all_pps_table(request):
 def all_contracts_table(request):
     return render(request, 'reports/all_contracts.html')
 
-# ==================== KDR_STAT ====================
 
-def kdr_stat_2025(request):
-    return _kdr_stat_by_year(request, 'y25')
+# ──────────────────────────────────────────────────────────────────────
+# Вспомогательная функция: выполнить SQL и вернуть JsonResponse
+# ──────────────────────────────────────────────────────────────────────
 
-def kdr_stat_2026(request):
-    return _kdr_stat_by_year(request, 'y26')
-
-def kdr_stat_2027(request):
-    return _kdr_stat_by_year(request, 'y27')
-
-def _kdr_stat_by_year(request, year_field):
-    year_filter = {year_field: True}
-    queryset = IgkStatData.objects.values('igk').annotate(
-        orders=Count('contract', distinct=True,
-                     filter=Q(order__isnull=False) & ~Q(order='')),
-        order_sum=Round(
-            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='')), 0.0) / 1000000.0,
-            2
-        ),
-        count_concluded=Count('contract', distinct=True,
-                              filter=Q(order__isnull=False) & ~Q(order='') &
-                                     Q(status__in=['Заключен', 'Исполнен'])),
-        concluded_order_sum=Round(
-            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
-                                    Q(status__in=['Заключен', 'Исполнен'])), 0.0) / 1000000.0,
-            2
-        ),
-        count_curr_year=Count('contract', distinct=True,
-                              filter=Q(order__isnull=False) & ~Q(order='') &
-                                     Q(**year_filter) & ~Q(status='Расторгнут')),
-        order_sum_curr_year=Round(
-            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
-                                    Q(**year_filter) & ~Q(status='Расторгнут')), 0.0) / 1000000.0,
-            2
-        ),
-        count_concluded_curr_year=Count('contract', distinct=True,
-                                        filter=Q(order__isnull=False) & ~Q(order='') &
-                                               Q(**year_filter) & Q(status__in=['Заключен', 'Исполнен'])),
-        concluded_order_sum_curr_year=Round(
-            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
-                                    Q(**year_filter) & Q(status__in=['Заключен', 'Исполнен'])), 0.0) / 1000000.0,
-            2
-        ),
-        pp_sum_plan=Round(
-            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
-                                    Q(**year_filter) & Q(payment_type='Аванс') & ~Q(status='Расторгнут')), 0.0) / 1000000.0,
-            2
-        ),
-        pp_sum_fact=Round(
-            Coalesce(Sum('fact', filter=Q(order__isnull=False) & ~Q(order='') &
-                                    Q(**year_filter) & Q(payment_type='Аванс') & ~Q(status='Расторгнут')), 0.0) / 1000000.0,
-            2
-        ),
-        count_not_concluded_curr_year=Count('contract', distinct=True,
-                                            filter=Q(order__isnull=False) & ~Q(order='') &
-                                                   Q(**year_filter) & Q(status='Не заключен')),
-        not_concluded_order_sum_curr_year=Round(
-            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
-                                    Q(**year_filter) & Q(status='Не заключен')), 0.0) / 1000000.0,
-            2
-        ),
-    )
-
-    data = list(queryset)
-
-    for row in data:
-        if row['count_curr_year']:
-            row['count_concluded_percent_curr_year'] = int(row['count_concluded_curr_year'] * 100 / row['count_curr_year'])
-        else:
-            row['count_concluded_percent_curr_year'] = 0
-
-        if row['order_sum_curr_year']:
-            row['order_sum_percent_curr_year'] = int(row['concluded_order_sum_curr_year'] * 100 / row['order_sum_curr_year'])
-        else:
-            row['order_sum_percent_curr_year'] = 0
-
-        if row['pp_sum_plan']:
-            row['pp_percent'] = int(row['pp_sum_fact'] * 100 / row['pp_sum_plan'])
-        else:
-            row['pp_percent'] = 0
-
-    total = IgkStatData.objects.filter(**year_filter).aggregate(
-        total_orders=Count('contract', distinct=True,
-                           filter=Q(order__isnull=False) & ~Q(order='')),
-        total_order_sum=Round(
-            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='')), 0.0) / 1000000.0,
-            2
-        ),
-        total_count_concluded=Count('contract', distinct=True,
-                                    filter=Q(order__isnull=False) & ~Q(order='') &
-                                           Q(status__in=['Заключен', 'Исполнен'])),
-        total_concluded_sum=Round(
-            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
-                                    Q(status__in=['Заключен', 'Исполнен'])), 0.0) / 1000000.0,
-            2
-        ),
-        total_count_curr_year=Count('contract', distinct=True,
-                                    filter=Q(order__isnull=False) & ~Q(order='') &
-                                           Q(**year_filter) & ~Q(status='Расторгнут')),
-        total_order_sum_curr_year=Round(
-            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
-                                    Q(**year_filter) & ~Q(status='Расторгнут')), 0.0) / 1000000.0,
-            2
-        ),
-        total_count_concluded_curr_year=Count('contract', distinct=True,
-                                              filter=Q(order__isnull=False) & ~Q(order='') &
-                                                     Q(**year_filter) & Q(status__in=['Заключен', 'Исполнен'])),
-        total_concluded_sum_curr_year=Round(
-            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
-                                    Q(**year_filter) & Q(status__in=['Заключен', 'Исполнен'])), 0.0) / 1000000.0,
-            2
-        ),
-        total_pp_sum_plan=Round(
-            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
-                                    Q(**year_filter) & Q(payment_type='Аванс') & ~Q(status='Расторгнут')), 0.0) / 1000000.0,
-            2
-        ),
-        total_pp_sum_fact=Round(
-            Coalesce(Sum('fact', filter=Q(order__isnull=False) & ~Q(order='') &
-                                    Q(**year_filter) & Q(payment_type='Аванс') & ~Q(status='Расторгнут')), 0.0) / 1000000.0,
-            2
-        ),
-        total_count_not_concluded_curr_year=Count('contract', distinct=True,
-                                                  filter=Q(order__isnull=False) & ~Q(order='') &
-                                                         Q(**year_filter) & Q(status='Не заключен')),
-        total_not_concluded_sum_curr_year=Round(
-            Coalesce(Sum('plan', filter=Q(order__isnull=False) & ~Q(order='') &
-                                    Q(**year_filter) & Q(status='Не заключен')), 0.0) / 1000000.0,
-            2
-        ),
-    )
-
-    if total['total_count_curr_year']:
-        total['total_count_concluded_percent_curr_year'] = int(total['total_count_concluded_curr_year'] * 100 / total['total_count_curr_year'])
-    else:
-        total['total_count_concluded_percent_curr_year'] = 0
-
-    if total['total_order_sum_curr_year']:
-        total['total_order_sum_percent_curr_year'] = int(total['total_concluded_sum_curr_year'] * 100 / total['total_order_sum_curr_year'])
-    else:
-        total['total_order_sum_percent_curr_year'] = 0
-
-    if total['total_pp_sum_plan']:
-        total['total_pp_percent'] = int(total['total_pp_sum_fact'] * 100 / total['total_pp_sum_plan'])
-    else:
-        total['total_pp_percent'] = 0
-
-    total_row = {
-        'igk': 'ИТОГО',
-        'orders': total['total_orders'],
-        'order_sum': total['total_order_sum'],
-        'count_concluded': total['total_count_concluded'],
-        'concluded_order_sum': total['total_concluded_sum'],
-        'count_curr_year': total['total_count_curr_year'],
-        'order_sum_curr_year': total['total_order_sum_curr_year'],
-        'count_concluded_curr_year': total['total_count_concluded_curr_year'],
-        'concluded_order_sum_curr_year': total['total_concluded_sum_curr_year'],
-        'pp_sum_plan': total['total_pp_sum_plan'],
-        'pp_sum_fact': total['total_pp_sum_fact'],
-        'count_not_concluded_curr_year': total['total_count_not_concluded_curr_year'],
-        'not_concluded_order_sum_curr_year': total['total_not_concluded_sum_curr_year'],
-        'count_concluded_percent_curr_year': total['total_count_concluded_percent_curr_year'],
-        'order_sum_percent_curr_year': total['total_order_sum_percent_curr_year'],
-        'pp_percent': total['total_pp_percent'],
-    }
-
-    data.append(total_row)
-    return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False, 'indent': 2})
-
-# ==================== IGK_STAT ====================
-
-def igk_stat_concluded_2025(request):
-    return _igk_stat_by_year_status(request, 'y25', ['Заключен', 'Исполнен'])
-
-def igk_stat_concluded_2026(request):
-    return _igk_stat_by_year_status(request, 'y26', ['Заключен', 'Исполнен'])
-
-def igk_stat_concluded_2027(request):
-    return _igk_stat_by_year_status(request, 'y27', ['Заключен', 'Исполнен'])
-
-def igk_stat_not_concluded_2025(request):
-    return _igk_stat_by_year_status(request, 'y25', ['Не заключен'])
-
-def igk_stat_not_concluded_2026(request):
-    return _igk_stat_by_year_status(request, 'y26', ['Не заключен'])
-
-def igk_stat_not_concluded_2027(request):
-    return _igk_stat_by_year_status(request, 'y27', ['Не заключен'])
-
-def igk_stat_terminated_2025(request):
-    return _igk_stat_by_year_status(request, 'y25', ['Расторгнут'])
-
-def igk_stat_terminated_2026(request):
-    return _igk_stat_by_year_status(request, 'y26', ['Расторгнут'])
-
-def igk_stat_terminated_2027(request):
-    return _igk_stat_by_year_status(request, 'y27', ['Расторгнут'])
-
-def _igk_stat_by_year_status(request, year_field, status_list):
-    year_filter = {year_field: True}
-    base_filter = Q(**year_filter) & Q(status__in=status_list)
-
-    queryset = IgkStatData.objects.filter(base_filter).values('igk').annotate(
-        spec_sum=Coalesce(Sum('plan'), 0.0, output_field=FloatField()),
-        pp_sum=Coalesce(Sum('plan', filter=Q(payment_type='Аванс')), 0.0, output_field=FloatField()),
-        pp_fact=Coalesce(Sum('fact', filter=Q(payment_type='Аванс')), 0.0, output_field=FloatField()),
-        pp_quantity=Count('pp_id', distinct=True)
-    ).order_by('igk')
-
+def _query_to_json(sql, params=None):
+    with connection.cursor() as cur:
+        cur.execute(sql, params or [])
+        cols = [c[0] for c in cur.description]
+        rows = cur.fetchall()
     data = []
-    for item in queryset:
-        row = {
-            'igk': item['igk'],
-            'spec_sum': round(item['spec_sum'], 2),
-            'pp_sum': round(item['pp_sum'], 2),
-            'pp_fact': round(item['pp_fact'], 2),
-            'pp_quantity': item['pp_quantity'],
-        }
-        if item['spec_sum']:
-            row['pp_percent'] = int(item['pp_sum'] * 100 / item['spec_sum'])
-            row['fact_percent'] = int(item['pp_fact'] * 100 / item['spec_sum'])
-            row['pp_remain'] = round(item['pp_sum'] - item['pp_fact'], 2)
-            row['remain_percent'] = int((item['pp_sum'] - item['pp_fact']) * 100 / item['spec_sum'])
-        else:
-            row['pp_percent'] = 0
-            row['fact_percent'] = 0
-            row['pp_remain'] = 0
-            row['remain_percent'] = 0
-        data.append(row)
+    for row in rows:
+        record = {}
+        for col, val in zip(cols, row):
+            # Decimal → float для сериализации
+            if hasattr(val, '__float__'):
+                val = float(val)
+            record[col] = val
+        data.append(record)
+    return JsonResponse(data, safe=False,
+                        json_dumps_params={'ensure_ascii': False})
 
-    # Итоговая строка
-    total = IgkStatData.objects.filter(base_filter).aggregate(
-        total_spec_sum=Coalesce(Sum('plan'), 0.0, output_field=FloatField()),
-        total_pp_sum=Coalesce(Sum('plan', filter=Q(payment_type='Аванс')), 0.0, output_field=FloatField()),
-        total_pp_fact=Coalesce(Sum('fact', filter=Q(payment_type='Аванс')), 0.0, output_field=FloatField()),
-        total_pp_quantity=Count('pp_id', distinct=True)
-    )
 
-    total_row = {
-        'igk': 'ИТОГО',
-        'spec_sum': round(total['total_spec_sum'], 2),
-        'pp_sum': round(total['total_pp_sum'], 2),
-        'pp_fact': round(total['total_pp_fact'], 2),
-        'pp_quantity': total['total_pp_quantity'],
-    }
-    if total['total_spec_sum']:
-        total_row['pp_percent'] = int(total['total_pp_sum'] * 100 / total['total_spec_sum'])
-        total_row['fact_percent'] = int(total['total_pp_fact'] * 100 / total['total_spec_sum'])
-        total_row['pp_remain'] = round(total['total_pp_sum'] - total['total_pp_fact'], 2)
-        total_row['remain_percent'] = int((total['total_pp_sum'] - total['total_pp_fact']) * 100 / total['total_spec_sum'])
-    else:
-        total_row['pp_percent'] = 0
-        total_row['fact_percent'] = 0
-        total_row['pp_remain'] = 0
-        total_row['remain_percent'] = 0
+# ──────────────────────────────────────────────────────────────────────
+# API: KDR_Stat
+# ──────────────────────────────────────────────────────────────────────
 
-    data.append(total_row)
-    return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False, 'indent': 2})
+def api_kdr(request, year):
+    year_col = {'2025': 'y25', '2026': 'y26', '2027': 'y27'}.get(year)
+    if not year_col:
+        return JsonResponse({'error': 'Неверный год'}, status=400)
 
-# ==================== DAY_STAT ====================
+    sql = f"""
+    SELECT
+        igk,
+        (SELECT COUNT(DISTINCT contract)
+         FROM dbo.igk_stat_data p2
+         WHERE p2.igk = p.igk AND "order" IS NOT NULL AND "order" != '') AS orders,
 
-def day_stat_only_igk(request):
+        ROUND(CAST(
+            (SELECT COALESCE(SUM(plan), 0)
+             FROM dbo.igk_stat_data
+             WHERE igk = p.igk AND "order" IS NOT NULL AND "order" != '')
+            / 1000000.0 AS numeric), 2) AS order_sum,
+
+        (SELECT COUNT(DISTINCT contract)
+         FROM dbo.igk_stat_data
+         WHERE igk = p.igk AND "order" != ''
+           AND status IN ('Заключен','Исполнен','Исполняется')) AS count_concluded,
+
+        ROUND(CAST(
+            (SELECT COALESCE(SUM(plan), 0)
+             FROM dbo.igk_stat_data
+             WHERE igk = p.igk AND "order" != ''
+               AND status IN ('Заключен','Исполнен','Исполняется'))
+            / 1000000.0 AS numeric), 2) AS concluded_order_sum,
+
+        (SELECT COUNT(DISTINCT contract)
+         FROM dbo.igk_stat_data
+         WHERE igk = p.igk AND "order" IS NOT NULL
+           AND {year_col} = TRUE AND status != 'Расторгнут') AS count_curr_year,
+
+        ROUND(CAST(
+            (SELECT COALESCE(SUM(plan), 0)
+             FROM dbo.igk_stat_data
+             WHERE igk = p.igk AND "order" IS NOT NULL
+               AND {year_col} = TRUE AND status != 'Расторгнут')
+            / 1000000.0 AS numeric), 2) AS order_sum_curr_year,
+
+        (SELECT COUNT(DISTINCT contract)
+         FROM dbo.igk_stat_data
+         WHERE igk = p.igk AND "order" IS NOT NULL
+           AND {year_col} = TRUE
+           AND status IN ('Заключен','Исполнен','Исполняется')) AS count_concluded_curr_year,
+
+        ROUND(CAST(
+            (SELECT COALESCE(SUM(plan), 0)
+             FROM dbo.igk_stat_data
+             WHERE igk = p.igk AND "order" IS NOT NULL
+               AND {year_col} = TRUE
+               AND status IN ('Заключен','Исполнен','Исполняется'))
+            / 1000000.0 AS numeric), 2) AS concluded_order_sum_curr_year,
+
+        ROUND(CAST(
+            (SELECT COALESCE(SUM(plan), 0)
+             FROM dbo.igk_stat_data
+             WHERE igk = p.igk AND "order" IS NOT NULL
+               AND {year_col} = TRUE AND payment_type = 'Аванс'
+               AND status != 'Расторгнут')
+            / 1000000.0 AS numeric), 2) AS pp_sum_plan,
+
+        ROUND(CAST(
+            (SELECT COALESCE(SUM(fact), 0)
+             FROM dbo.igk_stat_data
+             WHERE igk = p.igk AND "order" IS NOT NULL
+               AND {year_col} = TRUE AND payment_type = 'Аванс'
+               AND status != 'Расторгнут')
+            / 1000000.0 AS numeric), 2) AS pp_sum_fact,
+
+        (SELECT COUNT(DISTINCT contract)
+         FROM dbo.igk_stat_data
+         WHERE igk = p.igk AND "order" != ''
+           AND status = 'Не заключен'
+           AND {year_col} = TRUE) AS count_not_concluded_curr_year,
+
+        ROUND(CAST(
+            (SELECT COALESCE(SUM(plan), 0)
+             FROM dbo.igk_stat_data
+             WHERE igk = p.igk AND "order" IS NOT NULL
+               AND {year_col} = TRUE AND status = 'Не заключен')
+            / 1000000.0 AS numeric), 2) AS not_concluded_order_sum_curr_year,
+
+        CASE
+            WHEN (SELECT COUNT(DISTINCT contract) FROM dbo.igk_stat_data
+                  WHERE igk = p.igk AND "order" IS NOT NULL
+                    AND {year_col} = TRUE AND status != 'Расторгнут') = 0 THEN 0
+            ELSE CAST(
+                (SELECT COUNT(DISTINCT contract) FROM dbo.igk_stat_data
+                 WHERE igk = p.igk AND "order" IS NOT NULL
+                   AND {year_col} = TRUE
+                   AND status IN ('Заключен','Исполнен','Исполняется')) * 100.0
+                /
+                (SELECT COUNT(DISTINCT contract) FROM dbo.igk_stat_data
+                 WHERE igk = p.igk AND "order" IS NOT NULL
+                   AND {year_col} = TRUE AND status != 'Расторгнут')
+            AS int)
+        END AS count_concluded_percent_curr_year,
+
+        CASE
+            WHEN (SELECT SUM(plan) FROM dbo.igk_stat_data
+                  WHERE igk = p.igk AND "order" IS NOT NULL
+                    AND {year_col} = TRUE AND status != 'Расторгнут') IS NULL THEN 0
+            ELSE CAST(
+                (SELECT COALESCE(SUM(plan), 0) FROM dbo.igk_stat_data
+                 WHERE igk = p.igk AND "order" IS NOT NULL
+                   AND {year_col} = TRUE
+                   AND status IN ('Заключен','Исполнен','Исполняется')) * 100.0
+                /
+                NULLIF((SELECT SUM(plan) FROM dbo.igk_stat_data
+                        WHERE igk = p.igk AND "order" IS NOT NULL
+                          AND {year_col} = TRUE AND status != 'Расторгнут'), 0)
+            AS int)
+        END AS order_sum_percent_curr_year,
+
+        CASE
+            WHEN (SELECT SUM(plan) FROM dbo.igk_stat_data
+                  WHERE igk = p.igk AND "order" IS NOT NULL
+                    AND {year_col} = TRUE AND payment_type = 'Аванс'
+                    AND status != 'Расторгнут') IS NULL THEN 0
+            ELSE CAST(
+                (SELECT COALESCE(SUM(fact), 0) FROM dbo.igk_stat_data
+                 WHERE igk = p.igk AND "order" IS NOT NULL
+                   AND {year_col} = TRUE AND payment_type = 'Аванс'
+                   AND status != 'Расторгнут')
+                /
+                NULLIF((SELECT SUM(plan) FROM dbo.igk_stat_data
+                        WHERE igk = p.igk AND "order" IS NOT NULL
+                          AND {year_col} = TRUE AND payment_type = 'Аванс'
+                          AND status != 'Расторгнут'), 0) * 100
+            AS int)
+        END AS pp_percent
+
+    FROM dbo.igk_stat_data p
+    GROUP BY igk
+    ORDER BY igk
+    """
+    return _query_to_json(sql)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# API: IGK_Stat (Заключённые / Незаключённые / Расторгнутые)
+# ──────────────────────────────────────────────────────────────────────
+
+def _igk_stat_sql(year_col, statuses):
+    status_list = "'" + "','".join(statuses) + "'"
+    return f"""
+    SELECT
+        igk,
+        ROUND(CAST(COALESCE(SUM(plan), 0) AS numeric), 2) AS spec_sum,
+        ROUND(CAST(COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0) AS numeric), 2) AS pp_sum,
+        ROUND(CAST(
+            COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0) * 100.0
+            / NULLIF(SUM(plan), 0) AS numeric), 0) AS pp_percent,
+        ROUND(CAST(COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0) AS numeric), 2) AS pp_fact,
+        ROUND(CAST(
+            COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0) * 100.0
+            / NULLIF(SUM(plan), 0) AS numeric), 0) AS fact_percent,
+        ROUND(CAST(
+            COALESCE(SUM(CASE WHEN payment_type = 'Аванс' AND plan >= 0 THEN plan END), 0)
+            - COALESCE(SUM(CASE WHEN payment_type = 'Аванс' AND plan >= 0 THEN fact END), 0)
+        AS numeric), 2) AS pp_remain,
+        ROUND(CAST(
+            (COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0)
+             - COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0)) * 100.0
+            / NULLIF(SUM(plan), 0) AS numeric), 0) AS remain_percent,
+        COUNT(*) AS pp_quantity
+    FROM dbo.igk_stat_data
+    WHERE {year_col} = TRUE AND status IN ({status_list})
+    GROUP BY igk
+    ORDER BY igk
+    """
+
+def _igk_stat_total_sql(year_col, statuses):
+    status_list = "'" + "','".join(statuses) + "'"
+    return f"""
+    SELECT
+        'ИТОГО' AS igk,
+        ROUND(CAST(COALESCE(SUM(plan), 0) AS numeric), 2) AS spec_sum,
+        ROUND(CAST(COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0) AS numeric), 2) AS pp_sum,
+        ROUND(CAST(
+            COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0) * 100.0
+            / NULLIF(SUM(plan), 0) AS numeric), 0) AS pp_percent,
+        ROUND(CAST(COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0) AS numeric), 2) AS pp_fact,
+        ROUND(CAST(
+            COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0) * 100.0
+            / NULLIF(SUM(plan), 0) AS numeric), 0) AS fact_percent,
+        ROUND(CAST(
+            COALESCE(SUM(CASE WHEN payment_type = 'Аванс' AND plan >= 0 THEN plan END), 0)
+            - COALESCE(SUM(CASE WHEN payment_type = 'Аванс' AND plan >= 0 THEN fact END), 0)
+        AS numeric), 2) AS pp_remain,
+        ROUND(CAST(
+            (COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0)
+             - COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0)) * 100.0
+            / NULLIF(SUM(plan), 0) AS numeric), 0) AS remain_percent,
+        COUNT(*) AS pp_quantity
+    FROM dbo.igk_stat_data
+    WHERE {year_col} = TRUE AND status IN ({status_list})
+    """
+
+def _igk_stat_response(year, statuses):
+    year_col = {'2025': 'y25', '2026': 'y26', '2027': 'y27'}.get(year)
+    if not year_col:
+        return JsonResponse({'error': 'Неверный год'}, status=400)
+
+    with connection.cursor() as cur:
+        cur.execute(_igk_stat_sql(year_col, statuses))
+        cols = [c[0] for c in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+        cur.execute(_igk_stat_total_sql(year_col, statuses))
+        total_cols = [c[0] for c in cur.description]
+        total = dict(zip(total_cols, cur.fetchone()))
+
+    rows.append(total)
+    return JsonResponse(rows, safe=False,
+                        json_dumps_params={'ensure_ascii': False})
+
+def api_igk_concluded(request, year):
+    return _igk_stat_response(year, CONCLUDED)
+
+def api_igk_not_concluded(request, year):
+    return _igk_stat_response(year, NOT_CONCL)
+
+def api_igk_terminated(request, year):
+    return _igk_stat_response(year, TERMINATED)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# API: Day Stat
+# ──────────────────────────────────────────────────────────────────────
+
+def api_day_stat_igk(request):
     today = date.today()
-    yesterday = today - timedelta(days=1)
     is_friday = today.weekday() == 4
-    delta_day = today - timedelta(days=7) if is_friday else yesterday
+    prev_date = today - timedelta(days=7 if is_friday else 1)
 
-    queryset = DayData.objects.filter(
-        cfo__isnull=True,
-        upload_date=today
-    ).values('igk').annotate(
-        orders_count=Coalesce(Sum('orders_count'), 0),
-        orders_sum=Coalesce(Sum('orders_sum'), 0.0),
-        concluded_orders_count=Coalesce(Sum('concluded_orders_count'), 0),
-        concluded_orders_sum=Coalesce(Sum('concluded_orders_sum'), 0.0),
-        not_concluded_orders_count=F('orders_count') - F('concluded_orders_count'),
-        not_concluded_orders_sum=Round(
-            F('orders_sum') - F('concluded_orders_sum'),
-            2
-        ),
-    )
+    sql = """
+    SELECT
+        t.igk,
+        t.orders_count,
+        t.orders_sum,
+        t.concluded_orders_count,
+        t.concluded_orders_sum,
+        t.orders_count - t.concluded_orders_count AS not_concluded_orders_count,
+        ROUND(CAST(t.orders_sum - t.concluded_orders_sum AS numeric), 2) AS not_concluded_orders_sum,
+        t.concluded_orders_count - COALESCE(p.concluded_orders_count, 0) AS conc_orders_delta,
+        ROUND(CAST(t.concluded_orders_sum - COALESCE(p.concluded_orders_sum, 0) AS numeric), 2) AS conc_sum_delta
+    FROM dbo.day_data t
+    LEFT JOIN dbo.day_data p
+        ON p.igk = t.igk AND p.cfo IS NULL AND p.upload_date = %s
+    WHERE t.cfo IS NULL AND t.upload_date = %s
+    """
+    return _query_to_json(sql, [prev_date, today])
 
-    data = list(queryset)
-    for row in data:
-        yesterday_data = DayData.objects.filter(
-            igk=row['igk'],
-            cfo__isnull=True,
-            upload_date=delta_day
-        ).aggregate(
-            conc_orders=Coalesce(Sum('concluded_orders_count'), 0),
-            conc_sum=Coalesce(Sum('concluded_orders_sum'), 0.0)
-        )
-        row['conc_orders_delta'] = row['concluded_orders_count'] - yesterday_data['conc_orders']
-        row['conc_sum_delta'] = round(row['concluded_orders_sum'] - yesterday_data['conc_sum'], 2)
-
-    return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False, 'indent': 2})
-
-def day_stat_with_cfo(request):
+def api_day_stat_cfo(request):
     today = date.today()
-    yesterday = today - timedelta(days=1)
     is_friday = today.weekday() == 4
-    delta_day = today - timedelta(days=7) if is_friday else yesterday
+    prev_date = today - timedelta(days=7 if is_friday else 1)
 
-    queryset = DayData.objects.filter(
-        cfo__isnull=False,
-        upload_date=today
-    ).values('igk', 'cfo').annotate(
-        orders_count=Coalesce(Sum('orders_count'), 0),
-        orders_sum=Coalesce(Sum('orders_sum'), 0.0),
-        concluded_orders_count=Coalesce(Sum('concluded_orders_count'), 0),
-        concluded_orders_sum=Coalesce(Sum('concluded_orders_sum'), 0.0),
-        not_concluded_orders_count=F('orders_count') - F('concluded_orders_count'),
-        not_concluded_orders_sum=Round(
-            F('orders_sum') - F('concluded_orders_sum'),
-            2
-        ),
+    sql = """
+    SELECT
+        t.igk,
+        t.cfo,
+        t.orders_count,
+        t.orders_sum,
+        t.concluded_orders_count,
+        t.concluded_orders_sum,
+        t.orders_count - t.concluded_orders_count AS not_concluded_orders_count,
+        ROUND(CAST(t.orders_sum - t.concluded_orders_sum AS numeric), 2) AS not_concluded_orders_sum,
+        t.concluded_orders_count - COALESCE(p.concluded_orders_count, 0) AS conc_orders_delta,
+        ROUND(CAST(t.concluded_orders_sum - COALESCE(p.concluded_orders_sum, 0) AS numeric), 2) AS conc_sum_delta
+    FROM dbo.day_data t
+    LEFT JOIN dbo.day_data p
+        ON p.igk = t.igk AND p.cfo = t.cfo AND p.upload_date = %s
+    WHERE t.cfo IS NOT NULL AND t.upload_date = %s
+    """
+    return _query_to_json(sql, [prev_date, today])
+
+
+# ──────────────────────────────────────────────────────────────────────
+# API: AllPPs
+# ──────────────────────────────────────────────────────────────────────
+
+def api_all_pps(request):
+    sql = """
+    SELECT DISTINCT
+        igk, c_agent, cfo, contract, status,
+        COALESCE(payment_type, 'ИНОЕ') AS payment_type,
+        item, "order", y25, y26, y27, stage,
+        ROUND(CAST(SUM(plan) OVER w_full AS numeric), 2) AS spec_sum,
+        ROUND(CAST(SUM(plan) OVER w_full AS numeric), 2) AS pp_sum,
+        CASE
+            WHEN SUM(plan) OVER w_full = 0 THEN 0
+            ELSE ROUND(CAST(
+                SUM(CASE WHEN payment_type = 'Аванс' THEN plan ELSE 0 END) OVER w_full
+                * 100.0 / NULLIF(SUM(plan) OVER w_full, 0) AS numeric), 0)
+        END AS pp_percent,
+        ROUND(CAST(SUM(fact) OVER w_full AS numeric), 2) AS pp_fact,
+        ROUND(CAST(SUM(fact) OVER w_order * 100.0
+              / NULLIF(SUM(plan) OVER w_order, 0) AS numeric), 0) AS fact_percent,
+        ROUND(CAST(SUM(plan) OVER w_order - SUM(fact) OVER w_order AS numeric), 2) AS pp_remain,
+        ROUND(CAST(
+            (SUM(plan) OVER w_order - SUM(fact) OVER w_order) * 100.0
+            / NULLIF(SUM(plan) OVER w_order, 0) AS numeric), 0) AS remain_percent,
+        pp_id,
+        plan_date
+    FROM dbo.igk_stat_data
+    WINDOW
+        w_full  AS (PARTITION BY igk, contract, payment_type, "order", stage),
+        w_order AS (PARTITION BY igk, contract, "order")
+    ORDER BY igk
+    """
+    return _query_to_json(sql)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# API: AllContracts
+# ──────────────────────────────────────────────────────────────────────
+
+def api_all_contracts(request):
+    sql = """
+    SELECT
+        igk, c_agent, contract, status,
+        COALESCE(payment_type, 'ИНОЕ') AS payment_type,
+        item, "order", stage, y25, y26, y27,
+        ROUND(CAST(SUM(plan) AS numeric), 2) AS spec_sum,
+        ROUND(CAST(SUM(CASE WHEN payment_type = 'Аванс' THEN plan ELSE 0 END) AS numeric), 2) AS pp_sum,
+        ROUND(CAST(SUM(CASE WHEN payment_type = 'Аванс' THEN fact ELSE 0 END) AS numeric), 2) AS pp_fact,
+        ROUND(CAST(SUM(plan) - SUM(COALESCE(fact, 0)) AS numeric), 2) AS pp_remain
+    FROM dbo.igk_stat_data
+    GROUP BY GROUPING SETS (
+        (igk, c_agent, contract, payment_type, item, "order", stage, y25, y26, y27, status),
+        (c_agent, contract, igk, "order", y25, y26, y27, item, status)
     )
-
-    data = list(queryset)
-    for row in data:
-        yesterday_data = DayData.objects.filter(
-            igk=row['igk'],
-            cfo=row['cfo'],
-            upload_date=delta_day
-        ).aggregate(
-            conc_orders=Coalesce(Sum('concluded_orders_count'), 0),
-            conc_sum=Coalesce(Sum('concluded_orders_sum'), 0.0)
-        )
-        row['conc_orders_delta'] = row['concluded_orders_count'] - yesterday_data['conc_orders']
-        row['conc_sum_delta'] = round(row['concluded_orders_sum'] - yesterday_data['conc_sum'], 2)
-
-    return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False, 'indent': 2})
-
-# ==================== ALL PPs и ALL Contracts ====================
-
-def all_pps(request):
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT 
-                igk, c_agent, cfo, contract, status, payment_type, item, "order", 
-                y25, y26, y27, stage,
-                ROUND(CAST(SUM(plan) OVER (PARTITION BY igk, contract, payment_type, "order", stage) AS numeric), 2) AS SpecSum,
-                ROUND(CAST(SUM(plan) OVER (PARTITION BY igk, contract, payment_type, "order", stage) AS numeric), 2) AS PPSum,
-                CASE 
-                    WHEN SUM(plan) OVER (PARTITION BY igk, contract, payment_type, "order", stage) = 0 THEN 0
-                    ELSE ROUND(CAST(SUM(CASE WHEN payment_type = 'Аванс' THEN plan ELSE 0 END) OVER (PARTITION BY igk, contract, "order", stage) * 100.0 / 
-                               SUM(plan) OVER (PARTITION BY igk, contract, payment_type, "order", stage) AS numeric), 0)
-                END AS PP_Percent,
-                ROUND(CAST(SUM(fact) OVER (PARTITION BY igk, contract, payment_type, "order", stage) AS numeric), 2) AS PPFact,
-                ROUND(CAST(SUM(fact) OVER (PARTITION BY igk, contract, "order") * 100.0 / 
-                      NULLIF(SUM(plan) OVER (PARTITION BY igk, contract, "order"), 0) AS numeric), 0) AS Fact_Percent,
-                ROUND(CAST(SUM(plan) OVER (PARTITION BY igk, contract, "order") - 
-                      SUM(fact) OVER (PARTITION BY igk, contract, "order") AS numeric), 2) AS PPRemain,
-                ROUND(CAST((SUM(plan) OVER (PARTITION BY igk, contract, "order") - 
-                      SUM(fact) OVER (PARTITION BY igk, contract, "order")) * 100.0 / 
-                      NULLIF(SUM(plan) OVER (PARTITION BY igk, contract, "order"), 0) AS numeric), 0) AS Remain_Perce,
-                pp_id,
-                plan_date
-            FROM "dbo"."igk_stat_data"
-            ORDER BY igk
-        """)
-        columns = [col[0] for col in cursor.description]
-        rows = cursor.fetchall()
-        data = [dict(zip(columns, row)) for row in rows]
-    return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False, 'indent': 2})
-
-def all_contracts(request):
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT 
-                igk, c_agent, contract, status, 
-                COALESCE(payment_type, 'ИНОЕ') AS payment_type,
-                item, "order", stage, y25, y26, y27,
-                ROUND(CAST(SUM(plan) AS numeric), 2) AS SpecSum,
-                ROUND(CAST(SUM(CASE WHEN payment_type = 'Аванс' THEN plan ELSE 0 END) AS numeric), 2) AS PPSum,
-                ROUND(CAST(SUM(CASE WHEN payment_type = 'Аванс' THEN fact ELSE 0 END) AS numeric), 2) AS PPFact,
-                ROUND(CAST(SUM(plan) - SUM(fact) AS numeric), 2) AS PPRemain
-            FROM "dbo"."igk_stat_data"
-            GROUP BY GROUPING SETS (
-                (igk, c_agent, contract, payment_type, item, "order", stage, y25, y26, y27, status),
-                (c_agent, contract, igk, "order", y25, y26, y27, item, status)
-            )
-        """)
-        columns = [col[0] for col in cursor.description]
-        rows = cursor.fetchall()
-        data = [dict(zip(columns, row)) for row in rows]
-    return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False, 'indent': 2})
+    ORDER BY igk NULLS LAST, contract
+    """
+    return _query_to_json(sql)

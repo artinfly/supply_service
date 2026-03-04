@@ -1,9 +1,89 @@
-{% extends "reports/base.html" %}
+{% extends 'reports/base.html' %}
 
-{% block title %}Главная - Отчёты снабжения{% endblock %}
+{% block title %}Главная — Отдел снабжения УВЗ{% endblock %}
 
 {% block content %}
-    <h1 class="mb-4">Добро пожаловать в систему отчётов отдела снабжения</h1>
-    <p>Используйте меню для просмотра доступных отчётов.</p>
-    <p>Для редактирования данных перейдите в <a href="/admin">админку</a>.</p>
+<div class="page-header">
+    <h5>Главная страница</h5>
+</div>
+
+<div class="row g-3">
+
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h6 class="card-title text-muted mb-3">КДР — статистика</h6>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'kdr_table' '2025' %}" class="btn btn-outline-primary btn-sm">КДР 2025</a>
+                    <a href="{% url 'kdr_table' '2026' %}" class="btn btn-outline-primary btn-sm">КДР 2026</a>
+                    <a href="{% url 'kdr_table' '2027' %}" class="btn btn-outline-primary btn-sm">КДР 2027</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <h6 class="card-title text-muted mb-3">ИГК — Заключённые</h6>
+                <div class="d-flex flex-column gap-2">
+                    <a href="{% url 'igk_concluded_table' '2025' %}" class="btn btn-outline-success btn-sm">2025</a>
+                    <a href="{% url 'igk_concluded_table' '2026' %}" class="btn btn-outline-success btn-sm">2026</a>
+                    <a href="{% url 'igk_concluded_table' '2027' %}" class="btn btn-outline-success btn-sm">2027</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <h6 class="card-title text-muted mb-3">ИГК — Незаключённые</h6>
+                <div class="d-flex flex-column gap-2">
+                    <a href="{% url 'igk_not_concluded_table' '2025' %}" class="btn btn-outline-warning btn-sm">2025</a>
+                    <a href="{% url 'igk_not_concluded_table' '2026' %}" class="btn btn-outline-warning btn-sm">2026</a>
+                    <a href="{% url 'igk_not_concluded_table' '2027' %}" class="btn btn-outline-warning btn-sm">2027</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <h6 class="card-title text-muted mb-3">ИГК — Расторгнутые</h6>
+                <div class="d-flex flex-column gap-2">
+                    <a href="{% url 'igk_terminated_table' '2025' %}" class="btn btn-outline-danger btn-sm">2025</a>
+                    <a href="{% url 'igk_terminated_table' '2026' %}" class="btn btn-outline-danger btn-sm">2026</a>
+                    <a href="{% url 'igk_terminated_table' '2027' %}" class="btn btn-outline-danger btn-sm">2027</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <h6 class="card-title text-muted mb-3">Дневная статистика</h6>
+                <div class="d-flex flex-column gap-2">
+                    <a href="{% url 'day_stat_only_igk_table' %}" class="btn btn-outline-secondary btn-sm">По ИГК</a>
+                    <a href="{% url 'day_stat_with_cfo_table' %}" class="btn btn-outline-secondary btn-sm">По ИГК и ЦФО</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <h6 class="card-title text-muted mb-3">Договоры</h6>
+                <div class="d-flex flex-column gap-2">
+                    <a href="{% url 'all_pps_table' %}" class="btn btn-outline-secondary btn-sm">Все позиции (AllPPs)</a>
+                    <a href="{% url 'all_contracts_table' %}" class="btn btn-outline-secondary btn-sm">Все договоры</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
 {% endblock %}
