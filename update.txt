@@ -1,0 +1,25 @@
+1. В DBeaver:
+ALTER TABLE igk_stat_data ADD COLUMN y28 BOOLEAN;
+2. В normalize_staging.py найти функцию parse_year_flags и добавить год:
+def parse_year_flags(dataplan):
+    ...
+    return year == 2025, year == 2026, year == 2027, year == 2028
+И в INSERT добавить y28 в список колонок и y28 в кортеж значений.
+3. В views.py добавить в словарь:
+YEAR_COL = {'2025': 'y25', '2026': 'y26', '2027': 'y27', '2028': 'y28'}
+И в шаблонах добавить пункты меню для 2028.
+
+
+base.html — боковое меню
+all_contracts.html — фильтр по году (выпадающий список с годами)
+all_pps.html
+views.py — словарь YEAR_COL
+normalize_staging.py — функция parse_year_flags + INSERT
+DBeaver — ALTER TABLE igk_stat_data ADD COLUMN y28 BOOLEAN
+
+
+
+
+Теперь чтобы добавить 2028 - поменять одну строку в views.py:
+pythonYEARS = [2025, 2026, 2027, 2028]
+В DBeaver ALTER TABLE igk_stat_data ADD COLUMN y28 BOOLEAN + правка normalize_staging.py.

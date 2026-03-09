@@ -51,14 +51,13 @@ WSGI_APPLICATION = 'supply_service.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'prepayments',
+        'NAME': 'supply_service',
         'USER': 'postgres',
         'PASSWORD': 'postgres',
         'HOST': 'localhost',
         'PORT': '5432',
         'OPTIONS': {
             'client_encoding': 'UTF8',
-            'options': '-c search_path=dbo,public',
         },
     }
 }

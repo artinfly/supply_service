@@ -8,317 +8,201 @@
     <link rel="stylesheet" href="{% static 'reports/bootstrap/css/bootstrap.min.css' %}">
     <style>
         :root {
-            --orange:      #e07b2a;
-            --orange-soft: #f5e6d6;
-            --sidebar-bg:  #2c2c2c;
+            --orange:        #e07b2a;
+            --orange-soft:   #f5e6d6;
+            --sidebar-bg:    #2c2c2c;
             --sidebar-hover: #3a3a3a;
-            --header-bg:   #3d3d3d;
-            --total-bg:    #fde9d4;
-            --subtotal-bg: #fff5ec;
+            --header-bg:     #3d3d3d;
+            --total-bg:      #fde9d4;
+            --subtotal-bg:   #fff5ec;
         }
-
-        body {
-            font-size: 0.875rem;
-            background-color: #f5f5f5;
-            color: #2c2c2c;
-        }
-
-        /* ── Боковое меню ── */
+        body { font-size: 0.875rem; background-color: #f5f5f5; color: #2c2c2c; }
         .sidebar {
-            position: fixed;
-            top: 0; left: 0;
-            height: 100vh;
-            width: 250px;
+            position: fixed; top: 0; left: 0;
+            height: 100vh; width: 250px;
             background-color: var(--sidebar-bg);
-            overflow-y: auto;
-            z-index: 100;
-            padding-bottom: 2rem;
+            overflow-y: auto; z-index: 100; padding-bottom: 2rem;
         }
         .sidebar-header {
-            padding: 1rem;
-            background-color: #222;
-            color: #fff;
-            font-weight: 600;
-            font-size: 0.9rem;
+            padding: 1rem; background-color: #222; color: #fff;
+            font-weight: 600; font-size: 0.9rem;
             border-bottom: 2px solid var(--orange);
         }
         .sidebar .nav-section {
-            padding: 0.6rem 1rem 0.2rem;
-            font-size: 0.68rem;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            color: #888;
-            margin-top: 0.4rem;
+            padding: 0.6rem 1rem 0.2rem; font-size: 0.68rem;
+            text-transform: uppercase; letter-spacing: 0.07em;
+            color: #888; margin-top: 0.4rem;
         }
-        .sidebar .nav-link,
-        .sidebar .nav-sub-link {
-            color: #bbb;
-            padding: 0.35rem 1rem;
-            font-size: 0.81rem;
-            display: block;
-            text-decoration: none;
-            transition: background 0.15s;
+        .sidebar .nav-link, .sidebar .nav-sub-link {
+            color: #bbb; padding: 0.35rem 1rem; font-size: 0.81rem;
+            display: block; text-decoration: none; transition: background 0.15s;
         }
-        .sidebar .nav-sub-link {
-            padding-left: 1.75rem;
-            font-size: 0.79rem;
+        .sidebar .nav-sub-link { padding-left: 1.75rem; font-size: 0.79rem; }
+        .sidebar .nav-link:hover, .sidebar .nav-sub-link:hover {
+            background-color: var(--sidebar-hover); color: #fff;
         }
-        .sidebar .nav-link:hover,
-        .sidebar .nav-sub-link:hover {
+        .sidebar .nav-link.active, .sidebar .nav-sub-link.active {
             background-color: var(--sidebar-hover);
-            color: #fff;
+            color: var(--orange); border-left: 3px solid var(--orange);
         }
-        .sidebar .nav-link.active,
-        .sidebar .nav-sub-link.active {
-            background-color: var(--sidebar-hover);
-            color: var(--orange);
-            border-left: 3px solid var(--orange);
-        }
-
-        /* ── Основной контент ── */
-        .main-content {
-            margin-left: 250px;
-            padding: 1.25rem 1.5rem;
-            min-height: 100vh;
-        }
-
-        /* ── Заголовок страницы ── */
+        .main-content { margin-left: 250px; padding: 1.25rem 1.5rem; min-height: 100vh; }
         .page-header {
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
+            margin-bottom: 1rem; padding-bottom: 0.5rem;
             border-bottom: 2px solid var(--orange-soft);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            display: flex; align-items: center; gap: 0.5rem;
         }
-        .page-header h5 {
-            margin: 0;
-            font-weight: 600;
-            color: #2c2c2c;
-        }
-
-        /* ── Контейнер таблицы ── */
+        .page-header h5 { margin: 0; font-weight: 600; color: #2c2c2c; }
         .table-container {
-            background: #fff;
-            border-radius: 6px;
+            background: #fff; border-radius: 6px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            overflow: auto;
-            max-height: calc(100vh - 110px);
+            overflow: auto; max-height: calc(100vh - 150px);
             border: 1px solid #e8e8e8;
         }
-
-        /* ── Таблица ── */
-        .report-table {
-            border-collapse: separate;
-            border-spacing: 0;
-            width: 100%;
-            margin: 0;
-        }
+        .report-table { border-collapse: separate; border-spacing: 0; width: 100%; margin: 0; }
         .report-table thead th {
-            background-color: var(--header-bg);
-            color: #fff;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            font-size: 0.75rem;
-            font-weight: 500;
-            white-space: nowrap;
+            background-color: var(--header-bg); color: #fff;
+            position: sticky; top: 0; z-index: 10;
+            font-size: 0.75rem; font-weight: 500; white-space: nowrap;
             padding: 0.5rem 0.75rem;
-            border-right: 1px solid #555;
-            border-bottom: 2px solid var(--orange);
+            border-right: 1px solid #555; border-bottom: 2px solid var(--orange);
+            cursor: default; user-select: none;
         }
-        .report-table thead th:last-child {
-            border-right: none;
-        }
+        .report-table thead th:last-child { border-right: none; }
         .report-table tbody td {
-            font-size: 0.8rem;
-            padding: 0.32rem 0.75rem;
-            white-space: nowrap;
-            border-bottom: 1px solid #f0f0f0;
-            border-right: 1px solid #f0f0f0;
+            font-size: 0.8rem; padding: 0.32rem 0.75rem; white-space: nowrap;
+            border-bottom: 1px solid #f0f0f0; border-right: 1px solid #f0f0f0;
         }
         .report-table tbody td.wrap {
-            white-space: normal;
-            min-width: 150px;
-            max-width: 300px;
+            white-space: normal; word-break: break-word;
+            line-height: 1.4; min-width: 180px; max-width: 600px;
         }
-        .report-table tbody td:last-child {
-            border-right: none;
-        }
-        .report-table tbody tr:hover td {
-            background-color: #fafafa;
-        }
-
-        /* Строка ИТОГО (последняя) */
+        .report-table tbody td:last-child { border-right: none; }
+        .report-table tbody tr:hover td { background-color: #fafafa; }
         .row-total td {
             background-color: var(--total-bg) !important;
-            font-weight: 700;
-            border-top: 2px solid var(--orange);
+            font-weight: 700; border-top: 2px solid var(--orange);
         }
-
-        /* Промежуточный итог по договору */
         .row-subtotal td {
             background-color: var(--subtotal-bg) !important;
-            font-weight: 600;
-            font-style: italic;
-            border-top: 1px solid #e0c9b5;
+            font-weight: 700; border-top: 1px solid #e0c9b5;
+            border-bottom: 2px solid #d4a97a;
         }
-
-        /* ── Кнопки фильтра по году ── */
         .btn-year {
-            background-color: #fff;
-            border: 1px solid #ddd;
-            color: #555;
-            font-size: 0.78rem;
-            padding: 0.2rem 0.75rem;
-            border-radius: 4px;
+            background-color: #fff; border: 1px solid #ddd;
+            color: #555; font-size: 0.78rem;
+            padding: 0.2rem 0.75rem; border-radius: 4px;
         }
-        .btn-year:hover {
-            border-color: var(--orange);
-            color: var(--orange);
-        }
-        .btn-year.active {
-            background-color: var(--orange);
-            border-color: var(--orange);
-            color: #fff;
-        }
-
-        /* ── Спиннер / ошибка ── */
+        .btn-year:hover { border-color: var(--orange); color: var(--orange); }
+        .btn-year.active { background-color: var(--orange); border-color: var(--orange); color: #fff; }
         .loading-spinner {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 3rem;
-            color: #999;
-            font-size: 0.85rem;
+            display: flex; align-items: center; justify-content: center;
+            padding: 3rem; color: #999; font-size: 0.85rem;
         }
-        .error-msg {
-            padding: 1rem;
-            color: #c0392b;
-            font-size: 0.85rem;
-        }
+        .error-msg { padding: 1rem; color: #c0392b; font-size: 0.85rem; }
     </style>
 </head>
 <body>
 
-<!-- Боковое меню -->
 <nav class="sidebar">
-    <div class="sidebar-header">⚙ Отдел снабжения УВЗ</div>
+    <div class="sidebar-header">Отдел снабжения УВЗ</div>
 
     <div class="nav-section">Главная</div>
     <a href="{% url 'index' %}" class="nav-link">Обзор</a>
 
     <div class="nav-section">КДР — статистика</div>
-    <a href="{% url 'kdr_table' '2025' %}" class="nav-sub-link">КДР 2025</a>
-    <a href="{% url 'kdr_table' '2026' %}" class="nav-sub-link">КДР 2026</a>
-    <a href="{% url 'kdr_table' '2027' %}" class="nav-sub-link">КДР 2027</a>
+    {% for y in years %}
+    <a href="{% url 'kdr_table' y|stringformat:'s' %}" class="nav-sub-link">КДР {{ y }}</a>
+    {% endfor %}
 
     <div class="nav-section">ИГК — Заключённые</div>
-    <a href="{% url 'igk_concluded_table' '2025' %}" class="nav-sub-link">2025</a>
-    <a href="{% url 'igk_concluded_table' '2026' %}" class="nav-sub-link">2026</a>
-    <a href="{% url 'igk_concluded_table' '2027' %}" class="nav-sub-link">2027</a>
+    {% for y in years %}
+    <a href="{% url 'igk_concluded_table' y|stringformat:'s' %}" class="nav-sub-link">{{ y }}</a>
+    {% endfor %}
 
     <div class="nav-section">ИГК — Незаключённые</div>
-    <a href="{% url 'igk_not_concluded_table' '2025' %}" class="nav-sub-link">2025</a>
-    <a href="{% url 'igk_not_concluded_table' '2026' %}" class="nav-sub-link">2026</a>
-    <a href="{% url 'igk_not_concluded_table' '2027' %}" class="nav-sub-link">2027</a>
+    {% for y in years %}
+    <a href="{% url 'igk_not_concluded_table' y|stringformat:'s' %}" class="nav-sub-link">{{ y }}</a>
+    {% endfor %}
 
     <div class="nav-section">ИГК — Расторгнутые</div>
-    <a href="{% url 'igk_terminated_table' '2025' %}" class="nav-sub-link">2025</a>
-    <a href="{% url 'igk_terminated_table' '2026' %}" class="nav-sub-link">2026</a>
-    <a href="{% url 'igk_terminated_table' '2027' %}" class="nav-sub-link">2027</a>
+    {% for y in years %}
+    <a href="{% url 'igk_terminated_table' y|stringformat:'s' %}" class="nav-sub-link">{{ y }}</a>
+    {% endfor %}
 
     <div class="nav-section">Дневная статистика</div>
     <a href="{% url 'day_stat_only_igk_table' %}" class="nav-sub-link">По ИГК</a>
     <a href="{% url 'day_stat_with_cfo_table' %}" class="nav-sub-link">По ИГК и ЦФО</a>
 
     <div class="nav-section">Договоры</div>
-    <a href="{% url 'all_pps_table' %}" class="nav-sub-link">Все позиции (AllPPs)</a>
+    <a href="{% url 'all_pps_table' %}" class="nav-sub-link">Все позиции</a>
     <a href="{% url 'all_contracts_table' %}" class="nav-sub-link">Все договоры</a>
+
+    <div class="nav-section">История изменений</div>
+    <a href="{% url 'history_status_table' %}" class="nav-sub-link">Статусы</a>
+    <a href="{% url 'history_plan_table' %}" class="nav-sub-link">План</a>
+    <a href="{% url 'history_fact_table' %}" class="nav-sub-link">Факт</a>
+
+    <div class="nav-section">Служебное</div>
+    <a href="{% url 'contract_dupes_table' %}" class="nav-sub-link">Дубликаты договоров</a>
 </nav>
 
-<!-- Основной контент -->
 <div class="main-content">
     {% block content %}{% endblock %}
 </div>
 
 <script src="{% static 'reports/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
 <script>
-
 function fmtIgk(val) {
     if (!val || val === 'ИТОГО') return val;
     return String(val).slice(-4);
 }
-
-// rowClass(row) — возвращает CSS-класс строки:
-//   'row-total'    — строка ИТОГО
-//   'row-subtotal' — промежуточный итог по договору (stage и payment_type пустые)
-//   ''             — обычная строка
 function rowClass(row, idx, total) {
     if (idx === total - 1 && row.igk === 'ИТОГО') return 'row-total';
-    // Признак промежуточного итога в AllContracts/AllPPs:
-    // GROUPING SETS даёт строку где stage=null и payment_type=null
-    if (row.stage === null && row.payment_type === null) return 'row-subtotal';
     return '';
 }
-
 async function loadTable(apiUrl, tableId, columnDefs) {
     const container = document.getElementById(tableId);
     container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm me-2"></div>Загрузка...</div>';
-
     try {
         const resp = await fetch(apiUrl);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
-
         if (!data.length) {
             container.innerHTML = '<div class="p-3 text-muted">Нет данных</div>';
             return;
         }
-
         let html = '<table class="report-table"><thead><tr>';
-        columnDefs.forEach(col => {
-            html += `<th>${col.title}</th>`;
-        });
+        columnDefs.forEach(col => { html += `<th>${col.title}</th>`; });
         html += '</tr></thead><tbody>';
-
         data.forEach((row, idx) => {
             const cls = rowClass(row, idx, data.length);
             html += `<tr class="${cls}">`;
             columnDefs.forEach(col => {
                 let val = row[col.field];
                 if (val === null || val === undefined) val = '';
-
-                if (col.field === 'igk' && val !== '') {
-                    val = fmtIgk(val);
-                } else if (col.format === 'number' && val !== '') {
-                    val = parseFloat(val).toLocaleString('ru-RU', {
-                        minimumFractionDigits: 2, maximumFractionDigits: 2
-                    });
-                } else if (col.format === 'percent' && val !== '') {
-                    val = val + '%';
-                } else if (col.format === 'int' && val !== '') {
-                    val = parseInt(val).toLocaleString('ru-RU');
-                } else if (col.format === 'bool') {
-                    val = val ? '✓' : '';
-                }
-
+                if (col.field === 'igk' && val !== '') val = fmtIgk(val);
+                else if (col.field === 'stage' && val !== '') val = String(val).trim();
+                else if (col.format === 'number' && val !== '')
+                    val = parseFloat(val).toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2});
+                else if (col.format === 'percent' && val !== '') val = val + '%';
+                else if (col.format === 'int' && val !== '') val = parseInt(val).toLocaleString('ru-RU');
+                else if (col.format === 'bool') val = val ? 'да' : '';
                 const align = col.align || (col.format ? 'text-end' : '');
-                const wrap = (!col.format && col.wrap !== false) ? 'wrap' : '';
+                const wrap  = (!col.format && col.wrap !== false) ? 'wrap' : '';
                 html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${val}</td>`;
             });
             html += '</tr>';
         });
-
         html += '</tbody></table>';
         container.innerHTML = html;
-
     } catch (e) {
         container.innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
     }
 }
+document.querySelectorAll('.sidebar a').forEach(link => {
+    if (link.href === window.location.href) link.classList.add('active');
+});
 </script>
-
 {% block extra_js %}{% endblock %}
 </body>
 </html>

@@ -1,0 +1,29 @@
+{% extends 'reports/base.html' %}
+{% block title %}История изменений факта{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h5>Изменения договоров — факт</h5>
+</div>
+<div class="table-container" id="table-wrapper"></div>
+<div id="page-data" data-api-url="{% url 'api_history_fact' %}"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const COLS = [
+    { field: 'igk',               title: 'ИГК' },
+    { field: 'c_agent',           title: 'Контрагент' },
+    { field: 'cfo',               title: 'ЦФО' },
+    { field: 'contract',          title: 'Договор' },
+    { field: 'payment_type',      title: 'Тип платежа' },
+    { field: 'item',              title: 'Предмет' },
+    { field: 'old_fact',          title: 'Факт (старый), руб.',  format: 'number' },
+    { field: 'new_fact',          title: 'Факт (новый), руб.',   format: 'number' },
+    { field: 'fact_changed_date', title: 'Дата изменения' },
+    { field: 'c_date',            title: 'Год создания' },
+];
+const apiUrl = document.getElementById('page-data').dataset.apiUrl;
+loadTable(apiUrl, 'table-wrapper', COLS);
+</script>
+{% endblock %}

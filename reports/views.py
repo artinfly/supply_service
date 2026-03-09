@@ -3,57 +3,78 @@ from django.shortcuts import render
 from django.db import connection
 from datetime import date, timedelta
 
-
-# ──────────────────────────────────────────────────────────────────────
-# Точные статусы из Excel
-# ──────────────────────────────────────────────────────────────────────
-CONCLUDED  = ('Заключен', 'Исполнен', 'Исполняется')
-NOT_CONCL  = ('Не заключен',)
+CONCLUDED  = ('Исполняется', 'Возвращен на уточнение', 'На согласовании', 'Подписан', 'На утверждении')
+NOT_CONCL  = ('Черновик',)
 TERMINATED = ('Расторгнут',)
-ADVANCE    = 'Аванс'
+
+YEARS    = [2025, 2026, 2027]
+YEAR_COL = {str(y): f'y{str(y)[2:]}' for y in YEARS}
 
 
-# ──────────────────────────────────────────────────────────────────────
-# HTML-страницы (просто рендерят шаблон, данные грузит JS через API)
-# ──────────────────────────────────────────────────────────────────────
+def _years_context():
+    return {'years': YEARS, 'year_cols': [(y, f"y{str(y)[2:]}") for y in YEARS]}
+
 
 def index(request):
-    return render(request, 'reports/index.html')
+    return render(request, 'reports/index.html', _years_context())
 
 def kdr_table(request, year):
-    return render(request, 'reports/kdr_table.html', {'year': year})
+    ctx = _years_context()
+    ctx['year'] = year
+    return render(request, 'reports/kdr_table.html', ctx)
 
 def igk_concluded_table(request, year):
-    return render(request, 'reports/igk_table.html', {
-        'year': year, 'report_type': 'concluded', 'title': f'Заключённые ИГК {year}'
-    })
+    ctx = _years_context()
+    ctx.update({'year': year, 'report_type': 'concluded', 'title': f'Заключённые ИГК {year}'})
+    return render(request, 'reports/igk_table.html', ctx)
 
 def igk_not_concluded_table(request, year):
-    return render(request, 'reports/igk_table.html', {
-        'year': year, 'report_type': 'not_concluded', 'title': f'Незаключённые ИГК {year}'
-    })
+    ctx = _years_context()
+    ctx.update({'year': year, 'report_type': 'not_concluded', 'title': f'Незаключённые ИГК {year}'})
+    return render(request, 'reports/igk_table.html', ctx)
 
 def igk_terminated_table(request, year):
-    return render(request, 'reports/igk_table.html', {
-        'year': year, 'report_type': 'terminated', 'title': f'Расторгнутые ИГК {year}'
-    })
+    ctx = _years_context()
+    ctx.update({'year': year, 'report_type': 'terminated', 'title': f'Расторгнутые ИГК {year}'})
+    return render(request, 'reports/igk_table.html', ctx)
 
 def day_stat_only_igk_table(request):
-    return render(request, 'reports/day_stat_only_igk.html')
+    return render(request, 'reports/day_stat_only_igk.html', _years_context())
 
 def day_stat_with_cfo_table(request):
-    return render(request, 'reports/day_stat_with_cfo.html')
+    return render(request, 'reports/day_stat_with_cfo.html', _years_context())
 
 def all_pps_table(request):
-    return render(request, 'reports/all_pps.html')
+    return render(request, 'reports/all_pps.html', _years_context())
 
 def all_contracts_table(request):
-    return render(request, 'reports/all_contracts.html')
+    with connection.cursor() as cur:
+        cur.execute("""
+            SELECT DISTINCT RIGHT(igk, 4)
+            FROM igk_stat_data
+            WHERE igk IS NOT NULL
+            ORDER BY RIGHT(igk, 4)
+        """)
+        igk_list = [row[0] for row in cur.fetchall()]
+    ctx = _years_context()
+    ctx['igk_list'] = igk_list
+    ctx['concluded_statuses']  = list(CONCLUDED)
+    ctx['not_concl_statuses']  = list(NOT_CONCL)
+    ctx['terminated_statuses'] = list(TERMINATED)
+    return render(request, 'reports/all_contracts.html', ctx)
 
+def history_status_table(request):
+    return render(request, 'reports/history_status.html', _years_context())
 
-# ──────────────────────────────────────────────────────────────────────
-# Вспомогательная функция: выполнить SQL и вернуть JsonResponse
-# ──────────────────────────────────────────────────────────────────────
+def history_plan_table(request):
+    return render(request, 'reports/history_plan.html', _years_context())
+
+def history_fact_table(request):
+    return render(request, 'reports/history_fact.html', _years_context())
+
+def contract_dupes_table(request):
+    return render(request, 'reports/contract_dupes.html', _years_context())
+
 
 def _query_to_json(sql, params=None):
     with connection.cursor() as cur:
@@ -64,238 +85,121 @@ def _query_to_json(sql, params=None):
     for row in rows:
         record = {}
         for col, val in zip(cols, row):
-            # Decimal → float для сериализации
             if hasattr(val, '__float__'):
                 val = float(val)
             record[col] = val
         data.append(record)
-    return JsonResponse(data, safe=False,
-                        json_dumps_params={'ensure_ascii': False})
+    return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False})
 
-
-# ──────────────────────────────────────────────────────────────────────
-# API: KDR_Stat
-# ──────────────────────────────────────────────────────────────────────
 
 def api_kdr(request, year):
-    year_col = {'2025': 'y25', '2026': 'y26', '2027': 'y27'}.get(year)
-    if not year_col:
-        return JsonResponse({'error': 'Неверный год'}, status=400)
+    yc = YEAR_COL.get(year)
+    if not yc:
+        return JsonResponse({'error': 'invalid year'}, status=400)
+
+    cl = "'" + "','".join(CONCLUDED) + "'"
+    nl = "'" + "','".join(NOT_CONCL) + "'"
 
     sql = f"""
     SELECT
         igk,
-        (SELECT COUNT(DISTINCT contract)
-         FROM dbo.igk_stat_data p2
+        (SELECT COUNT(DISTINCT contract) FROM igk_stat_data p2
          WHERE p2.igk = p.igk AND "order" IS NOT NULL AND "order" != '') AS orders,
-
-        ROUND(CAST(
-            (SELECT COALESCE(SUM(plan), 0)
-             FROM dbo.igk_stat_data
-             WHERE igk = p.igk AND "order" IS NOT NULL AND "order" != '')
-            / 1000000.0 AS numeric), 2) AS order_sum,
-
-        (SELECT COUNT(DISTINCT contract)
-         FROM dbo.igk_stat_data
-         WHERE igk = p.igk AND "order" != ''
-           AND status IN ('Заключен','Исполнен','Исполняется')) AS count_concluded,
-
-        ROUND(CAST(
-            (SELECT COALESCE(SUM(plan), 0)
-             FROM dbo.igk_stat_data
-             WHERE igk = p.igk AND "order" != ''
-               AND status IN ('Заключен','Исполнен','Исполняется'))
-            / 1000000.0 AS numeric), 2) AS concluded_order_sum,
-
-        (SELECT COUNT(DISTINCT contract)
-         FROM dbo.igk_stat_data
-         WHERE igk = p.igk AND "order" IS NOT NULL
-           AND {year_col} = TRUE AND status != 'Расторгнут') AS count_curr_year,
-
-        ROUND(CAST(
-            (SELECT COALESCE(SUM(plan), 0)
-             FROM dbo.igk_stat_data
-             WHERE igk = p.igk AND "order" IS NOT NULL
-               AND {year_col} = TRUE AND status != 'Расторгнут')
-            / 1000000.0 AS numeric), 2) AS order_sum_curr_year,
-
-        (SELECT COUNT(DISTINCT contract)
-         FROM dbo.igk_stat_data
-         WHERE igk = p.igk AND "order" IS NOT NULL
-           AND {year_col} = TRUE
-           AND status IN ('Заключен','Исполнен','Исполняется')) AS count_concluded_curr_year,
-
-        ROUND(CAST(
-            (SELECT COALESCE(SUM(plan), 0)
-             FROM dbo.igk_stat_data
-             WHERE igk = p.igk AND "order" IS NOT NULL
-               AND {year_col} = TRUE
-               AND status IN ('Заключен','Исполнен','Исполняется'))
-            / 1000000.0 AS numeric), 2) AS concluded_order_sum_curr_year,
-
-        ROUND(CAST(
-            (SELECT COALESCE(SUM(plan), 0)
-             FROM dbo.igk_stat_data
-             WHERE igk = p.igk AND "order" IS NOT NULL
-               AND {year_col} = TRUE AND payment_type = 'Аванс'
-               AND status != 'Расторгнут')
-            / 1000000.0 AS numeric), 2) AS pp_sum_plan,
-
-        ROUND(CAST(
-            (SELECT COALESCE(SUM(fact), 0)
-             FROM dbo.igk_stat_data
-             WHERE igk = p.igk AND "order" IS NOT NULL
-               AND {year_col} = TRUE AND payment_type = 'Аванс'
-               AND status != 'Расторгнут')
-            / 1000000.0 AS numeric), 2) AS pp_sum_fact,
-
-        (SELECT COUNT(DISTINCT contract)
-         FROM dbo.igk_stat_data
-         WHERE igk = p.igk AND "order" != ''
-           AND status = 'Не заключен'
-           AND {year_col} = TRUE) AS count_not_concluded_curr_year,
-
-        ROUND(CAST(
-            (SELECT COALESCE(SUM(plan), 0)
-             FROM dbo.igk_stat_data
-             WHERE igk = p.igk AND "order" IS NOT NULL
-               AND {year_col} = TRUE AND status = 'Не заключен')
-            / 1000000.0 AS numeric), 2) AS not_concluded_order_sum_curr_year,
-
-        CASE
-            WHEN (SELECT COUNT(DISTINCT contract) FROM dbo.igk_stat_data
-                  WHERE igk = p.igk AND "order" IS NOT NULL
-                    AND {year_col} = TRUE AND status != 'Расторгнут') = 0 THEN 0
-            ELSE CAST(
-                (SELECT COUNT(DISTINCT contract) FROM dbo.igk_stat_data
-                 WHERE igk = p.igk AND "order" IS NOT NULL
-                   AND {year_col} = TRUE
-                   AND status IN ('Заключен','Исполнен','Исполняется')) * 100.0
-                /
-                (SELECT COUNT(DISTINCT contract) FROM dbo.igk_stat_data
-                 WHERE igk = p.igk AND "order" IS NOT NULL
-                   AND {year_col} = TRUE AND status != 'Расторгнут')
-            AS int)
+        ROUND(CAST(COALESCE((SELECT SUM(plan) FROM igk_stat_data
+             WHERE igk = p.igk AND "order" IS NOT NULL AND "order" != ''), 0) / 1000000.0 AS numeric), 2) AS order_sum,
+        (SELECT COUNT(DISTINCT contract) FROM igk_stat_data
+         WHERE igk = p.igk AND "order" != '' AND status IN ({cl})) AS count_concluded,
+        ROUND(CAST(COALESCE((SELECT SUM(plan) FROM igk_stat_data
+             WHERE igk = p.igk AND "order" != '' AND status IN ({cl})), 0) / 1000000.0 AS numeric), 2) AS concluded_order_sum,
+        (SELECT COUNT(DISTINCT contract) FROM igk_stat_data
+         WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND status != 'Расторгнут') AS count_curr_year,
+        ROUND(CAST(COALESCE((SELECT SUM(plan) FROM igk_stat_data
+             WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND status != 'Расторгнут'), 0) / 1000000.0 AS numeric), 2) AS order_sum_curr_year,
+        (SELECT COUNT(DISTINCT contract) FROM igk_stat_data
+         WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND status IN ({cl})) AS count_concluded_curr_year,
+        ROUND(CAST(COALESCE((SELECT SUM(plan) FROM igk_stat_data
+             WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND status IN ({cl})), 0) / 1000000.0 AS numeric), 2) AS concluded_order_sum_curr_year,
+        ROUND(CAST(COALESCE((SELECT SUM(plan) FROM igk_stat_data
+             WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND payment_type = 'Аванс' AND status != 'Расторгнут'), 0) / 1000000.0 AS numeric), 2) AS pp_sum_plan,
+        ROUND(CAST(COALESCE((SELECT SUM(fact) FROM igk_stat_data
+             WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND payment_type = 'Аванс' AND status != 'Расторгнут'), 0) / 1000000.0 AS numeric), 2) AS pp_sum_fact,
+        (SELECT COUNT(DISTINCT contract) FROM igk_stat_data
+         WHERE igk = p.igk AND "order" != '' AND status IN ({nl}) AND {yc} = TRUE) AS count_not_concluded_curr_year,
+        ROUND(CAST(COALESCE((SELECT SUM(plan) FROM igk_stat_data
+             WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND status IN ({nl})), 0) / 1000000.0 AS numeric), 2) AS not_concluded_order_sum_curr_year,
+        CASE WHEN (SELECT COUNT(DISTINCT contract) FROM igk_stat_data
+                   WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND status != 'Расторгнут') = 0 THEN 0
+             ELSE CAST((SELECT COUNT(DISTINCT contract) FROM igk_stat_data
+                        WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND status IN ({cl})) * 100.0
+                  / NULLIF((SELECT COUNT(DISTINCT contract) FROM igk_stat_data
+                        WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND status != 'Расторгнут'), 0) AS int)
         END AS count_concluded_percent_curr_year,
-
-        CASE
-            WHEN (SELECT SUM(plan) FROM dbo.igk_stat_data
-                  WHERE igk = p.igk AND "order" IS NOT NULL
-                    AND {year_col} = TRUE AND status != 'Расторгнут') IS NULL THEN 0
-            ELSE CAST(
-                (SELECT COALESCE(SUM(plan), 0) FROM dbo.igk_stat_data
-                 WHERE igk = p.igk AND "order" IS NOT NULL
-                   AND {year_col} = TRUE
-                   AND status IN ('Заключен','Исполнен','Исполняется')) * 100.0
-                /
-                NULLIF((SELECT SUM(plan) FROM dbo.igk_stat_data
-                        WHERE igk = p.igk AND "order" IS NOT NULL
-                          AND {year_col} = TRUE AND status != 'Расторгнут'), 0)
-            AS int)
+        CASE WHEN COALESCE((SELECT SUM(plan) FROM igk_stat_data
+                  WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND status != 'Расторгнут'), 0) = 0 THEN 0
+             ELSE CAST(COALESCE((SELECT SUM(plan) FROM igk_stat_data
+                  WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND status IN ({cl})), 0) * 100.0
+                  / NULLIF((SELECT SUM(plan) FROM igk_stat_data
+                        WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND status != 'Расторгнут'), 0) AS int)
         END AS order_sum_percent_curr_year,
-
-        CASE
-            WHEN (SELECT SUM(plan) FROM dbo.igk_stat_data
-                  WHERE igk = p.igk AND "order" IS NOT NULL
-                    AND {year_col} = TRUE AND payment_type = 'Аванс'
-                    AND status != 'Расторгнут') IS NULL THEN 0
-            ELSE CAST(
-                (SELECT COALESCE(SUM(fact), 0) FROM dbo.igk_stat_data
-                 WHERE igk = p.igk AND "order" IS NOT NULL
-                   AND {year_col} = TRUE AND payment_type = 'Аванс'
-                   AND status != 'Расторгнут')
-                /
-                NULLIF((SELECT SUM(plan) FROM dbo.igk_stat_data
-                        WHERE igk = p.igk AND "order" IS NOT NULL
-                          AND {year_col} = TRUE AND payment_type = 'Аванс'
-                          AND status != 'Расторгнут'), 0) * 100
-            AS int)
+        CASE WHEN COALESCE((SELECT SUM(plan) FROM igk_stat_data
+                  WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND payment_type = 'Аванс' AND status != 'Расторгнут'), 0) = 0 THEN 0
+             ELSE CAST(COALESCE((SELECT SUM(fact) FROM igk_stat_data
+                  WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND payment_type = 'Аванс' AND status != 'Расторгнут'), 0)
+                  / NULLIF((SELECT SUM(plan) FROM igk_stat_data
+                        WHERE igk = p.igk AND "order" IS NOT NULL AND {yc} = TRUE AND payment_type = 'Аванс' AND status != 'Расторгнут'), 0) * 100 AS int)
         END AS pp_percent
-
-    FROM dbo.igk_stat_data p
+    FROM igk_stat_data p
     GROUP BY igk
     ORDER BY igk
     """
     return _query_to_json(sql)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# API: IGK_Stat (Заключённые / Незаключённые / Расторгнутые)
-# ──────────────────────────────────────────────────────────────────────
-
-def _igk_stat_sql(year_col, statuses):
-    status_list = "'" + "','".join(statuses) + "'"
+def _igk_stat_sql(yc, statuses):
+    sl = "'" + "','".join(statuses) + "'"
     return f"""
-    SELECT
-        igk,
+    SELECT igk,
         ROUND(CAST(COALESCE(SUM(plan), 0) AS numeric), 2) AS spec_sum,
         ROUND(CAST(COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0) AS numeric), 2) AS pp_sum,
-        ROUND(CAST(
-            COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0) * 100.0
-            / NULLIF(SUM(plan), 0) AS numeric), 0) AS pp_percent,
+        ROUND(CAST(COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0) * 100.0 / NULLIF(SUM(plan), 0) AS numeric), 0) AS pp_percent,
         ROUND(CAST(COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0) AS numeric), 2) AS pp_fact,
-        ROUND(CAST(
-            COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0) * 100.0
-            / NULLIF(SUM(plan), 0) AS numeric), 0) AS fact_percent,
-        ROUND(CAST(
-            COALESCE(SUM(CASE WHEN payment_type = 'Аванс' AND plan >= 0 THEN plan END), 0)
-            - COALESCE(SUM(CASE WHEN payment_type = 'Аванс' AND plan >= 0 THEN fact END), 0)
-        AS numeric), 2) AS pp_remain,
-        ROUND(CAST(
-            (COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0)
-             - COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0)) * 100.0
-            / NULLIF(SUM(plan), 0) AS numeric), 0) AS remain_percent,
+        ROUND(CAST(COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0) * 100.0 / NULLIF(SUM(plan), 0) AS numeric), 0) AS fact_percent,
+        ROUND(CAST(COALESCE(SUM(CASE WHEN payment_type = 'Аванс' AND plan >= 0 THEN plan END), 0) - COALESCE(SUM(CASE WHEN payment_type = 'Аванс' AND plan >= 0 THEN fact END), 0) AS numeric), 2) AS pp_remain,
+        ROUND(CAST((COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0) - COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0)) * 100.0 / NULLIF(SUM(plan), 0) AS numeric), 0) AS remain_percent,
         COUNT(*) AS pp_quantity
-    FROM dbo.igk_stat_data
-    WHERE {year_col} = TRUE AND status IN ({status_list})
-    GROUP BY igk
-    ORDER BY igk
+    FROM igk_stat_data
+    WHERE {yc} = TRUE AND status IN ({sl})
+    GROUP BY igk ORDER BY igk
     """
 
-def _igk_stat_total_sql(year_col, statuses):
-    status_list = "'" + "','".join(statuses) + "'"
+def _igk_stat_total_sql(yc, statuses):
+    sl = "'" + "','".join(statuses) + "'"
     return f"""
-    SELECT
-        'ИТОГО' AS igk,
+    SELECT 'ИТОГО' AS igk,
         ROUND(CAST(COALESCE(SUM(plan), 0) AS numeric), 2) AS spec_sum,
         ROUND(CAST(COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0) AS numeric), 2) AS pp_sum,
-        ROUND(CAST(
-            COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0) * 100.0
-            / NULLIF(SUM(plan), 0) AS numeric), 0) AS pp_percent,
+        ROUND(CAST(COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0) * 100.0 / NULLIF(SUM(plan), 0) AS numeric), 0) AS pp_percent,
         ROUND(CAST(COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0) AS numeric), 2) AS pp_fact,
-        ROUND(CAST(
-            COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0) * 100.0
-            / NULLIF(SUM(plan), 0) AS numeric), 0) AS fact_percent,
-        ROUND(CAST(
-            COALESCE(SUM(CASE WHEN payment_type = 'Аванс' AND plan >= 0 THEN plan END), 0)
-            - COALESCE(SUM(CASE WHEN payment_type = 'Аванс' AND plan >= 0 THEN fact END), 0)
-        AS numeric), 2) AS pp_remain,
-        ROUND(CAST(
-            (COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0)
-             - COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0)) * 100.0
-            / NULLIF(SUM(plan), 0) AS numeric), 0) AS remain_percent,
+        ROUND(CAST(COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0) * 100.0 / NULLIF(SUM(plan), 0) AS numeric), 0) AS fact_percent,
+        ROUND(CAST(COALESCE(SUM(CASE WHEN payment_type = 'Аванс' AND plan >= 0 THEN plan END), 0) - COALESCE(SUM(CASE WHEN payment_type = 'Аванс' AND plan >= 0 THEN fact END), 0) AS numeric), 2) AS pp_remain,
+        ROUND(CAST((COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN plan END), 0) - COALESCE(SUM(CASE WHEN payment_type = 'Аванс' THEN fact END), 0)) * 100.0 / NULLIF(SUM(plan), 0) AS numeric), 0) AS remain_percent,
         COUNT(*) AS pp_quantity
-    FROM dbo.igk_stat_data
-    WHERE {year_col} = TRUE AND status IN ({status_list})
+    FROM igk_stat_data
+    WHERE {yc} = TRUE AND status IN ({sl})
     """
 
 def _igk_stat_response(year, statuses):
-    year_col = {'2025': 'y25', '2026': 'y26', '2027': 'y27'}.get(year)
-    if not year_col:
-        return JsonResponse({'error': 'Неверный год'}, status=400)
-
+    yc = YEAR_COL.get(year)
+    if not yc:
+        return JsonResponse({'error': 'invalid year'}, status=400)
     with connection.cursor() as cur:
-        cur.execute(_igk_stat_sql(year_col, statuses))
+        cur.execute(_igk_stat_sql(yc, statuses))
         cols = [c[0] for c in cur.description]
         rows = [dict(zip(cols, r)) for r in cur.fetchall()]
-
-        cur.execute(_igk_stat_total_sql(year_col, statuses))
-        total_cols = [c[0] for c in cur.description]
-        total = dict(zip(total_cols, cur.fetchone()))
-
+        cur.execute(_igk_stat_total_sql(yc, statuses))
+        total = dict(zip(cols, cur.fetchone()))
     rows.append(total)
-    return JsonResponse(rows, safe=False,
-                        json_dumps_params={'ensure_ascii': False})
+    return JsonResponse(rows, safe=False, json_dumps_params={'ensure_ascii': False})
 
 def api_igk_concluded(request, year):
     return _igk_stat_response(year, CONCLUDED)
@@ -307,113 +211,204 @@ def api_igk_terminated(request, year):
     return _igk_stat_response(year, TERMINATED)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# API: Day Stat
-# ──────────────────────────────────────────────────────────────────────
-
 def api_day_stat_igk(request):
     today = date.today()
-    is_friday = today.weekday() == 4
-    prev_date = today - timedelta(days=7 if is_friday else 1)
-
+    prev_date = today - timedelta(days=7 if today.weekday() == 4 else 1)
     sql = """
-    SELECT
-        t.igk,
-        t.orders_count,
-        t.orders_sum,
-        t.concluded_orders_count,
-        t.concluded_orders_sum,
+    SELECT t.igk, t.orders_count, t.orders_sum, t.concluded_orders_count, t.concluded_orders_sum,
         t.orders_count - t.concluded_orders_count AS not_concluded_orders_count,
         ROUND(CAST(t.orders_sum - t.concluded_orders_sum AS numeric), 2) AS not_concluded_orders_sum,
         t.concluded_orders_count - COALESCE(p.concluded_orders_count, 0) AS conc_orders_delta,
         ROUND(CAST(t.concluded_orders_sum - COALESCE(p.concluded_orders_sum, 0) AS numeric), 2) AS conc_sum_delta
-    FROM dbo.day_data t
-    LEFT JOIN dbo.day_data p
-        ON p.igk = t.igk AND p.cfo IS NULL AND p.upload_date = %s
+    FROM day_data t
+    LEFT JOIN day_data p ON p.igk = t.igk AND p.cfo IS NULL AND p.upload_date = %s
     WHERE t.cfo IS NULL AND t.upload_date = %s
     """
     return _query_to_json(sql, [prev_date, today])
 
 def api_day_stat_cfo(request):
     today = date.today()
-    is_friday = today.weekday() == 4
-    prev_date = today - timedelta(days=7 if is_friday else 1)
-
+    prev_date = today - timedelta(days=7 if today.weekday() == 4 else 1)
     sql = """
-    SELECT
-        t.igk,
-        t.cfo,
-        t.orders_count,
-        t.orders_sum,
-        t.concluded_orders_count,
-        t.concluded_orders_sum,
+    SELECT t.igk, t.cfo, t.orders_count, t.orders_sum, t.concluded_orders_count, t.concluded_orders_sum,
         t.orders_count - t.concluded_orders_count AS not_concluded_orders_count,
         ROUND(CAST(t.orders_sum - t.concluded_orders_sum AS numeric), 2) AS not_concluded_orders_sum,
         t.concluded_orders_count - COALESCE(p.concluded_orders_count, 0) AS conc_orders_delta,
         ROUND(CAST(t.concluded_orders_sum - COALESCE(p.concluded_orders_sum, 0) AS numeric), 2) AS conc_sum_delta
-    FROM dbo.day_data t
-    LEFT JOIN dbo.day_data p
-        ON p.igk = t.igk AND p.cfo = t.cfo AND p.upload_date = %s
+    FROM day_data t
+    LEFT JOIN day_data p ON p.igk = t.igk AND p.cfo = t.cfo AND p.upload_date = %s
     WHERE t.cfo IS NOT NULL AND t.upload_date = %s
     """
     return _query_to_json(sql, [prev_date, today])
 
 
-# ──────────────────────────────────────────────────────────────────────
-# API: AllPPs
-# ──────────────────────────────────────────────────────────────────────
-
 def api_all_pps(request):
     sql = """
-    SELECT DISTINCT
-        igk, c_agent, cfo, contract, status,
+    SELECT DISTINCT igk, c_agent, cfo, contract, status,
         COALESCE(payment_type, 'ИНОЕ') AS payment_type,
         item, "order", y25, y26, y27, stage,
         ROUND(CAST(SUM(plan) OVER w_full AS numeric), 2) AS spec_sum,
         ROUND(CAST(SUM(plan) OVER w_full AS numeric), 2) AS pp_sum,
-        CASE
-            WHEN SUM(plan) OVER w_full = 0 THEN 0
-            ELSE ROUND(CAST(
-                SUM(CASE WHEN payment_type = 'Аванс' THEN plan ELSE 0 END) OVER w_full
-                * 100.0 / NULLIF(SUM(plan) OVER w_full, 0) AS numeric), 0)
+        CASE WHEN SUM(plan) OVER w_full = 0 THEN 0
+             ELSE ROUND(CAST(SUM(CASE WHEN payment_type = 'Аванс' THEN plan ELSE 0 END) OVER w_full * 100.0 / NULLIF(SUM(plan) OVER w_full, 0) AS numeric), 0)
         END AS pp_percent,
         ROUND(CAST(SUM(fact) OVER w_full AS numeric), 2) AS pp_fact,
-        ROUND(CAST(SUM(fact) OVER w_order * 100.0
-              / NULLIF(SUM(plan) OVER w_order, 0) AS numeric), 0) AS fact_percent,
+        ROUND(CAST(SUM(fact) OVER w_order * 100.0 / NULLIF(SUM(plan) OVER w_order, 0) AS numeric), 0) AS fact_percent,
         ROUND(CAST(SUM(plan) OVER w_order - SUM(fact) OVER w_order AS numeric), 2) AS pp_remain,
-        ROUND(CAST(
-            (SUM(plan) OVER w_order - SUM(fact) OVER w_order) * 100.0
-            / NULLIF(SUM(plan) OVER w_order, 0) AS numeric), 0) AS remain_percent,
-        pp_id,
-        plan_date
-    FROM dbo.igk_stat_data
+        ROUND(CAST((SUM(plan) OVER w_order - SUM(fact) OVER w_order) * 100.0 / NULLIF(SUM(plan) OVER w_order, 0) AS numeric), 0) AS remain_percent,
+        pp_id, plan_date
+    FROM igk_stat_data
     WINDOW
-        w_full  AS (PARTITION BY igk, contract, payment_type, "order", stage),
+        w_full AS (PARTITION BY igk, contract, payment_type, "order", stage),
         w_order AS (PARTITION BY igk, contract, "order")
     ORDER BY igk
     """
     return _query_to_json(sql)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# API: AllContracts
-# ──────────────────────────────────────────────────────────────────────
-
 def api_all_contracts(request):
+    search_agent = request.GET.get('agent', '').strip()
+    igk_filter   = request.GET.get('igk', '').strip()
+    statuses_raw = request.GET.getlist('status')
+    year_filter  = request.GET.get('year', '').strip()
+
+    conditions = ["payment_type IS NOT NULL AND TRIM(payment_type) != ''"]
+    params = []
+
+    if search_agent:
+        conditions.append("c_agent ILIKE %s")
+        params.append(f'%{search_agent}%')
+    if igk_filter:
+        conditions.append("igk LIKE %s")
+        params.append(f'%{igk_filter}')
+    if statuses_raw:
+        placeholders = ','.join(['%s'] * len(statuses_raw))
+        conditions.append(f"status IN ({placeholders})")
+        params.extend(statuses_raw)
+    if year_filter and year_filter in YEAR_COL:
+        conditions.append(f"{YEAR_COL[year_filter]} = TRUE")
+
+    where_clause = 'WHERE ' + ' AND '.join(conditions)
+
+    sql_detail = f"""
+        SELECT igk, c_agent, contract, status,
+            COALESCE(payment_type, 'ИНОЕ') AS payment_type,
+            item, "order", TRIM(stage) AS stage, y25, y26, y27,
+            ROUND(CAST(SUM(plan) AS numeric), 2) AS spec_sum,
+            ROUND(CAST(SUM(CASE WHEN payment_type = 'Аванс' THEN plan ELSE 0 END) AS numeric), 2) AS pp_sum,
+            ROUND(CAST(SUM(CASE WHEN payment_type = 'Аванс' THEN fact ELSE 0 END) AS numeric), 2) AS pp_fact,
+            ROUND(CAST(SUM(plan) - SUM(COALESCE(fact, 0)) AS numeric), 2) AS pp_remain,
+            0 AS is_subtotal
+        FROM igk_stat_data
+        {where_clause}
+        GROUP BY igk, c_agent, contract, status, payment_type, item, "order", stage, y25, y26, y27
+        ORDER BY igk NULLS LAST, contract, payment_type
+    """
+
+    sql_total = f"""
+        SELECT igk, c_agent, contract, status,
+            'ИТОГО' AS payment_type,
+            item, "order", NULL AS stage, y25, y26, y27,
+            ROUND(CAST(SUM(plan) AS numeric), 2) AS spec_sum,
+            ROUND(CAST(SUM(CASE WHEN payment_type = 'Аванс' THEN plan ELSE 0 END) AS numeric), 2) AS pp_sum,
+            ROUND(CAST(SUM(CASE WHEN payment_type = 'Аванс' THEN fact ELSE 0 END) AS numeric), 2) AS pp_fact,
+            ROUND(CAST(SUM(plan) - SUM(COALESCE(fact, 0)) AS numeric), 2) AS pp_remain,
+            1 AS is_subtotal
+        FROM igk_stat_data
+        {where_clause}
+        GROUP BY igk, c_agent, contract, status, item, "order", y25, y26, y27
+        ORDER BY igk NULLS LAST, contract
+    """
+
+    with connection.cursor() as cur:
+        cur.execute(sql_detail, params)
+        cols = [c[0] for c in cur.description]
+        detail_rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        cur.execute(sql_total, params)
+        total_rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for row in detail_rows:
+        groups[(row['igk'], row['contract'], row['order'])].append(row)
+    totals = {}
+    for row in total_rows:
+        totals[(row['igk'], row['contract'], row['order'])] = row
+
+    result = []
+    for key, rows in groups.items():
+        result.extend(rows)
+        if key in totals:
+            result.append(totals[key])
+
+    for row in result:
+        for k, v in row.items():
+            if hasattr(v, '__float__'):
+                row[k] = float(v)
+
+    return JsonResponse(result, safe=False, json_dumps_params={'ensure_ascii': False})
+
+
+def api_history_status(request):
     sql = """
-    SELECT
-        igk, c_agent, contract, status,
-        COALESCE(payment_type, 'ИНОЕ') AS payment_type,
-        item, "order", stage, y25, y26, y27,
-        ROUND(CAST(SUM(plan) AS numeric), 2) AS spec_sum,
-        ROUND(CAST(SUM(CASE WHEN payment_type = 'Аванс' THEN plan ELSE 0 END) AS numeric), 2) AS pp_sum,
-        ROUND(CAST(SUM(CASE WHEN payment_type = 'Аванс' THEN fact ELSE 0 END) AS numeric), 2) AS pp_fact,
-        ROUND(CAST(SUM(plan) - SUM(COALESCE(fact, 0)) AS numeric), 2) AS pp_remain
-    FROM dbo.igk_stat_data
-    GROUP BY GROUPING SETS (
-        (igk, c_agent, contract, payment_type, item, "order", stage, y25, y26, y27, status),
-        (c_agent, contract, igk, "order", y25, y26, y27, item, status)
-    )
-    ORDER BY igk NULLS LAST, contract
+    SELECT RIGHT(isd.igk, 4) AS igk, isd.c_agent, isd.cfo, isd.contract,
+        ch.old_status, ch.new_status, isd.payment_type, isd.item,
+        ROUND(CAST(SUM(isd.plan) AS numeric), 2) AS plan_sum,
+        ROUND(CAST(SUM(isd.fact) AS numeric), 2) AS fact_sum,
+        ch.update_date, ch.upload_date, isd.c_date
+    FROM contracts_history ch
+    LEFT JOIN igk_stat_data isd ON ch.hash = digest(
+        concat(isd.igk, isd.c_agent, isd.contract, isd.item,
+               isd."order", TRIM(isd.stage), isd.plan_date), 'md5')
+    WHERE ch.old_status IS NOT NULL
+    GROUP BY isd.igk, isd.c_agent, isd.cfo, isd.contract, isd.item,
+             isd.payment_type, isd."order", ch.old_status, ch.new_status,
+             ch.update_date, ch.upload_date, isd.c_date
+    ORDER BY ch.update_date DESC NULLS LAST
+    """
+    return _query_to_json(sql)
+
+def api_history_plan(request):
+    sql = """
+    SELECT RIGHT(isd.igk, 4) AS igk, isd.c_agent, isd.cfo, isd.contract,
+        isd.payment_type, isd.item, ch.old_plan, ch.new_plan,
+        ch.plan_changed_date, isd.c_date
+    FROM contracts_history ch
+    LEFT JOIN igk_stat_data isd ON ch.hash = digest(
+        concat(isd.igk, isd.c_agent, isd.contract, isd.item,
+               isd."order", TRIM(isd.stage), isd.plan_date), 'md5')
+    WHERE ch.plan_changed_date IS NOT NULL
+    GROUP BY isd.igk, isd.c_agent, isd.cfo, isd.contract, isd.item,
+             isd.payment_type, isd."order", ch.update_date, ch.upload_date,
+             isd.c_date, ch.old_plan, ch.new_plan, ch.plan_changed_date
+    ORDER BY ch.plan_changed_date DESC NULLS LAST
+    """
+    return _query_to_json(sql)
+
+def api_history_fact(request):
+    sql = """
+    SELECT RIGHT(isd.igk, 4) AS igk, isd.c_agent, isd.cfo, isd.contract,
+        isd.payment_type, isd.item, ch.old_fact, ch.new_fact,
+        ch.fact_changed_date, isd.c_date
+    FROM contracts_history ch
+    LEFT JOIN igk_stat_data isd ON ch.hash = digest(
+        concat(isd.igk, isd.c_agent, isd.contract, isd.item,
+               isd."order", TRIM(isd.stage), isd.plan_date), 'md5')
+    WHERE ch.fact_changed_date IS NOT NULL
+    GROUP BY isd.igk, isd.c_agent, isd.cfo, isd.contract, isd.item,
+             isd.payment_type, isd."order", ch.update_date, ch.upload_date,
+             isd.c_date, ch.old_fact, ch.new_fact, ch.fact_changed_date
+    ORDER BY ch.fact_changed_date DESC NULLS LAST
+    """
+    return _query_to_json(sql)
+
+
+def api_contract_dupes(request):
+    sql = """
+    SELECT c_agent, contract, item, "order", TRIM(stage) AS stage, plan_date, COUNT(*) AS dupes_count
+    FROM igk_stat_data
+    GROUP BY igk, c_agent, contract, item, "order", stage, plan_date
+    HAVING COUNT(*) > 1
+    ORDER BY contract, c_agent
     """
     return _query_to_json(sql)

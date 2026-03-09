@@ -1,19 +1,56 @@
 {% extends 'reports/base.html' %}
-
 {% block title %}Все договоры{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h5>Все договоры — AllContracts</h5>
+<div class="page-header"><h5>Все договоры</h5></div>
+
+<div class="filter-panel mb-2">
+    <div class="d-flex flex-wrap gap-2 align-items-end">
+
+        <div class="filter-group">
+            <label class="filter-label">Контрагент</label>
+            <input type="text" id="filter-agent" class="filter-input" placeholder="Поиск контрагента...">
+        </div>
+
+        <div class="filter-group">
+            <label class="filter-label">ИГК</label>
+            <select id="filter-igk" class="filter-select">
+                <option value="">Все</option>
+                {% for igk in igk_list %}
+                <option value="{{ igk }}">{{ igk }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label class="filter-label">Год</label>
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-year active" data-year="all">Все</button>
+                {% for y, yc in year_cols %}
+                <button class="btn btn-sm btn-year" data-year="{{ yc }}">{{ y }}</button>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="filter-group">
+            <label class="filter-label">Состояние</label>
+            <div class="d-flex gap-2 flex-wrap">
+                <label class="status-check"><input type="checkbox" id="cb-concluded" checked> Заключённые</label>
+                <label class="status-check"><input type="checkbox" id="cb-not-concluded"> Незаключённые</label>
+                <label class="status-check"><input type="checkbox" id="cb-terminated"> Расторгнутые</label>
+            </div>
+        </div>
+
+        <div class="filter-group">
+            <button id="btn-search" class="btn btn-sm btn-orange">Найти</button>
+            <button id="btn-reset" class="btn btn-sm btn-outline-secondary ms-1">Сбросить</button>
+        </div>
+
+    </div>
 </div>
 
-<!-- Фильтры по году -->
-<div class="mb-2 d-flex gap-2 align-items-center">
-    <span class="text-muted" style="font-size:0.8rem">Год:</span>
-    <button class="btn btn-sm btn-year active" data-year="all">Все</button>
-    <button class="btn btn-sm btn-year" data-year="y25">2025</button>
-    <button class="btn btn-sm btn-year" data-year="y26">2026</button>
-    <button class="btn btn-sm btn-year" data-year="y27">2027</button>
+<div class="mb-1 text-muted" style="font-size:0.78rem">
+    Показано: <span id="row-count">0</span> записей
 </div>
 
 <div class="table-container" id="table-wrapper"></div>
@@ -21,7 +58,24 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+.filter-panel { background:#fff; border:1px solid #e8e8e8; border-radius:6px; padding:0.75rem 1rem; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+.filter-group { display:flex; flex-direction:column; gap:0.2rem; }
+.filter-label { font-size:0.72rem; color:#888; text-transform:uppercase; letter-spacing:0.05em; margin:0; }
+.filter-input { border:1px solid #ddd; border-radius:4px; padding:0.25rem 0.5rem; font-size:0.82rem; width:200px; outline:none; transition:border-color 0.15s; }
+.filter-input:focus { border-color:var(--orange); }
+.filter-select { border:1px solid #ddd; border-radius:4px; padding:0.25rem 0.5rem; font-size:0.82rem; width:110px; background:#fff; }
+.report-table tbody td.wrap { width:440px; white-space:normal; word-break:break-word; line-height:1.3; }
+.status-check { font-size:0.8rem; display:flex; align-items:center; gap:0.3rem; cursor:pointer; white-space:nowrap; }
+.btn-orange { background-color:var(--orange); color:#fff; border:none; }
+.btn-orange:hover { background-color:#c96a1e; color:#fff; }
+</style>
+
 <script>
+const CONCLUDED_STATUSES  = {{ concluded_statuses|safe }};
+const NOT_CONCL_STATUSES  = {{ not_concl_statuses|safe }};
+const TERMINATED_STATUSES = {{ terminated_statuses|safe }};
+
 const COLS = [
     { field: 'igk',          title: 'ИГК' },
     { field: 'c_agent',      title: 'Контрагент' },
@@ -38,40 +92,47 @@ const COLS = [
 ];
 
 const apiUrl = document.getElementById('page-data').dataset.apiUrl;
-let allData = [];
 let activeYear = 'all';
 
-function applyFilter() {
-    const filtered = activeYear === 'all'
-        ? allData
-        : allData.filter(r => r[activeYear] == 1);
-    renderTable(filtered, 'table-wrapper', COLS);
+function buildUrl() {
+    const params = new URLSearchParams();
+    const agent = document.getElementById('filter-agent').value.trim();
+    const igk   = document.getElementById('filter-igk').value.trim();
+    if (agent) params.append('agent', agent);
+    if (igk)   params.append('igk', igk);
+    if (document.getElementById('cb-concluded').checked)
+        CONCLUDED_STATUSES.forEach(s => params.append('status', s));
+    if (document.getElementById('cb-not-concluded').checked)
+        NOT_CONCL_STATUSES.forEach(s => params.append('status', s));
+    if (document.getElementById('cb-terminated').checked)
+        TERMINATED_STATUSES.forEach(s => params.append('status', s));
+    if (activeYear !== 'all') params.append('year', activeYear);
+    return apiUrl + (params.toString() ? '?' + params.toString() : '');
 }
 
-function renderTable(data, tableId, columnDefs) {
-    const container = document.getElementById(tableId);
+function renderTable(data) {
+    const container = document.getElementById('table-wrapper');
+    document.getElementById('row-count').textContent = data.length;
     if (!data.length) {
-        container.innerHTML = '<div class="p-3 text-muted">Нет данных</div>';
+        container.innerHTML = '<div class="p-3 text-muted">Нет данных по заданным фильтрам</div>';
         return;
     }
     let html = '<table class="report-table"><thead><tr>';
-    columnDefs.forEach(col => { html += `<th>${col.title}</th>`; });
+    COLS.forEach(col => { html += `<th>${col.title}</th>`; });
     html += '</tr></thead><tbody>';
-
-    data.forEach((row, idx) => {
-        const cls = rowClass(row, idx, data.length);
+    data.forEach(row => {
+        const cls = row.is_subtotal === 1 ? 'row-subtotal' : '';
         html += `<tr class="${cls}">`;
-        columnDefs.forEach(col => {
+        COLS.forEach(col => {
             let val = row[col.field];
             if (val === null || val === undefined) val = '';
-            if (col.field === 'igk' && val !== '') val = fmtIgk(val);
+            if (col.field === 'payment_type' && row.is_subtotal === 1) val = 'ИТОГО';
+            else if (col.field === 'igk' && val !== '') val = String(val).slice(-4);
             else if (col.field === 'stage' && val !== '') val = String(val).trim();
             else if (col.format === 'number' && val !== '')
                 val = parseFloat(val).toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2});
-            else if (col.format === 'percent' && val !== '') val = val + '%';
-            else if (col.format === 'int' && val !== '') val = parseInt(val).toLocaleString('ru-RU');
-            const align = col.align || (col.format ? 'text-end' : '');
-            const wrap = (!col.format && col.wrap !== false) ? 'wrap' : '';
+            const align = col.format ? 'text-end' : '';
+            const wrap  = !col.format ? 'wrap' : '';
             html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${val}</td>`;
         });
         html += '</tr>';
@@ -80,28 +141,38 @@ function renderTable(data, tableId, columnDefs) {
     container.innerHTML = html;
 }
 
-// Кнопки фильтра
+async function loadData() {
+    const container = document.getElementById('table-wrapper');
+    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm me-2"></div>Загрузка...</div>';
+    try {
+        const resp = await fetch(buildUrl());
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        renderTable(await resp.json());
+    } catch(e) {
+        container.innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
+    }
+}
+
 document.querySelectorAll('.btn-year').forEach(btn => {
     btn.addEventListener('click', function() {
         document.querySelectorAll('.btn-year').forEach(b => b.classList.remove('active'));
         this.classList.add('active');
         activeYear = this.dataset.year;
-        applyFilter();
     });
 });
-
-// Загрузка данных
-(async () => {
-    const container = document.getElementById('table-wrapper');
-    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm me-2"></div>Загрузка...</div>';
-    try {
-        const resp = await fetch(apiUrl);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        allData = await resp.json();
-        applyFilter();
-    } catch(e) {
-        container.innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
-    }
-})();
+document.getElementById('filter-agent').addEventListener('keydown', e => { if (e.key === 'Enter') loadData(); });
+document.getElementById('btn-search').addEventListener('click', loadData);
+document.getElementById('btn-reset').addEventListener('click', () => {
+    document.getElementById('filter-agent').value = '';
+    document.getElementById('filter-igk').value = '';
+    document.getElementById('cb-concluded').checked = true;
+    document.getElementById('cb-not-concluded').checked = false;
+    document.getElementById('cb-terminated').checked = false;
+    document.querySelectorAll('.btn-year').forEach(b => b.classList.remove('active'));
+    document.querySelector('.btn-year[data-year="all"]').classList.add('active');
+    activeYear = 'all';
+    loadData();
+});
+loadData();
 </script>
 {% endblock %}

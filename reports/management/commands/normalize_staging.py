@@ -1,27 +1,9 @@
-"""
-python manage.py normalize_staging
-
-Переносит данные из staging_excel → igk_stat_data, nsi_igk, nsi_cfo.
-Полностью заменяет igk_stat_data при каждом запуске (TRUNCATE + INSERT),
-чтобы данные всегда соответствовали последнему загруженному файлу.
-"""
-
 from django.core.management.base import BaseCommand
 from django.db import connection
+from datetime import date
 
 
-# ─────────────────────────────────────────────
-# Точные статусы из Excel (регистр важен!)
-# Если в вашем Excel другие — поправьте здесь.
-# ─────────────────────────────────────────────
-CONCLUDED_STATUSES = ('Исполнен', 'Исполняется', 'Заключен')
-NOT_CONCLUDED_STATUS = 'Не заключен'
-TERMINATED_STATUS = 'Расторгнут'
-ADVANCE_PAYMENT = 'Аванс'
-
-
-def parse_float(val: str | None) -> float | None:
-    """'1 239 587,32' → 1239587.32"""
+def parse_float(val):
     if not val or str(val).strip() in ('', '-', 'None'):
         return None
     try:
@@ -30,8 +12,7 @@ def parse_float(val: str | None) -> float | None:
         return None
 
 
-def parse_year_flags(dataplan: str | None) -> tuple[bool, bool, bool]:
-    """'2025.04' → (True, False, False)"""
+def parse_year_flags(dataplan):
     if not dataplan or str(dataplan).strip() == '':
         return False, False, False
     try:
@@ -42,45 +23,37 @@ def parse_year_flags(dataplan: str | None) -> tuple[bool, bool, bool]:
 
 
 class Command(BaseCommand):
-    help = 'Нормализует данные из staging_excel в основные таблицы'
+    help = 'normalize_staging'
 
     def handle(self, *args, **kwargs):
-        with connection.cursor() as cur:
+        today = date.today()
 
-            # ── 1. Справочник ЦФО ──────────────────────────────────────
-            self.stdout.write('Заполняем nsi_cfo...')
+        with connection.cursor() as cur:
             cur.execute("""
-                INSERT INTO dbo.nsi_cfo (cfo)
+                INSERT INTO nsi_cfo (cfo)
                 SELECT DISTINCT TRIM(cfo)
-                FROM dbo.staging_excel
+                FROM staging_excel
                 WHERE cfo IS NOT NULL AND TRIM(cfo) <> ''
                 ON CONFLICT (cfo) DO NOTHING
             """)
 
-            # ── 2. Справочник ИГК ──────────────────────────────────────
-            self.stdout.write('Заполняем nsi_igk...')
             cur.execute("""
-                INSERT INTO dbo.nsi_igk (igk)
+                INSERT INTO nsi_igk (igk)
                 SELECT DISTINCT TRIM(igk)
-                FROM dbo.staging_excel
+                FROM staging_excel
                 WHERE igk IS NOT NULL AND TRIM(igk) <> ''
                 ON CONFLICT (igk) DO NOTHING
             """)
 
-            # ── 3. Читаем staging ───────────────────────────────────────
-            self.stdout.write('Читаем staging_excel...')
             cur.execute("""
-                SELECT
-                    igk, kontragent, cfo, dogovor, sostoyanie,
+                SELECT igk, kontragent, cfo, dogovor, sostoyanie,
                     tip_platezha, predmet, zakaz, plan, fakt,
                     tol, etap_grafika, dataplan, sozdan
-                FROM dbo.staging_excel
+                FROM staging_excel
             """)
             rows = cur.fetchall()
-            self.stdout.write(f'  Строк в staging: {len(rows)}')
 
-            # ── 4. Формируем записи для igk_stat_data ──────────────────
-            records = []
+            new_records = []
             for row in rows:
                 (igk, c_agent, cfo, contract, status,
                  payment_type, item, order_, plan_raw, fact_raw,
@@ -91,43 +64,103 @@ class Command(BaseCommand):
                 tol_val  = parse_float(tol_raw)
                 y25, y26, y27 = parse_year_flags(dataplan)
 
-                # Нормализуем payment_type: пустое → None
                 pt = str(payment_type).strip() if payment_type else None
                 if pt == '':
                     pt = None
 
-                records.append((
-                    str(igk).strip()       if igk       else None,
-                    str(c_agent).strip()   if c_agent   else None,
-                    str(cfo).strip()       if cfo       else None,
-                    str(contract).strip()  if contract  else None,
-                    str(status).strip()    if status    else None,
+                new_records.append((
+                    str(igk).strip()      if igk      else None,
+                    str(c_agent).strip()  if c_agent  else None,
+                    str(cfo).strip()      if cfo      else None,
+                    str(contract).strip() if contract else None,
+                    str(status).strip()   if status   else None,
                     pt,
-                    str(item).strip()      if item      else None,
-                    str(order_).strip()    if order_    else None,
-                    plan_val,
-                    fact_val,
-                    tol_val,
-                    str(stage).strip()     if stage     else None,
+                    str(item).strip()     if item     else None,
+                    str(order_).strip()   if order_   else None,
+                    plan_val, fact_val, tol_val,
+                    str(stage).strip()    if stage    else None,
                     y25, y26, y27,
-                    False,                  # is_deleted
-                    str(dataplan).strip()  if dataplan  else None,
-                    str(c_date).strip()    if c_date    else None,
+                    False,
+                    str(dataplan).strip() if dataplan else None,
+                    str(c_date).strip()   if c_date   else None,
                 ))
 
-            # ── 5. Заменяем igk_stat_data ──────────────────────────────
-            self.stdout.write('Очищаем igk_stat_data...')
-            cur.execute('TRUNCATE TABLE dbo.igk_stat_data RESTART IDENTITY')
+            cur.execute("""
+                SELECT igk, c_agent, contract, item, "order", stage, plan_date,
+                    status, plan, fact
+                FROM igk_stat_data
+            """)
+            old_rows = cur.fetchall()
 
-            self.stdout.write(f'Вставляем {len(records)} записей...')
+            old_map = {}
+            for r in old_rows:
+                key = (
+                    str(r[0] or ''), str(r[1] or ''), str(r[2] or ''),
+                    str(r[3] or ''), str(r[4] or ''), str(r[5] or '').strip(),
+                    str(r[6] or '')
+                )
+                old_map[key] = {'status': r[7], 'plan': r[8], 'fact': r[9]}
+
+            new_map = {}
+            for r in new_records:
+                key = (
+                    str(r[0] or ''), str(r[1] or ''), str(r[3] or ''),
+                    str(r[6] or ''), str(r[7] or ''), str(r[11] or '').strip(),
+                    str(r[16] or '')
+                )
+                new_map[key] = {'status': r[4], 'plan': r[8], 'fact': r[9]}
+
+            history_records = []
+            for key, new_vals in new_map.items():
+                if key not in old_map:
+                    continue
+                old_vals = old_map[key]
+                igk, c_agent, contract, item, order_, stage, plan_date = key
+                hash_str = f"{igk}{c_agent}{contract}{item}{order_}{stage}{plan_date}"
+
+                old_status = old_vals['status']
+                new_status = new_vals['status']
+                old_plan   = old_vals['plan']
+                new_plan   = new_vals['plan']
+                old_fact   = old_vals['fact']
+                new_fact   = new_vals['fact']
+
+                status_changed = old_status != new_status
+                plan_changed = old_plan != new_plan and not (old_plan is None and new_plan is None)
+                fact_changed = old_fact != new_fact and not (old_fact is None and new_fact is None)
+
+                if status_changed or plan_changed or fact_changed:
+                    history_records.append((
+                        hash_str,
+                        old_status if status_changed else None,
+                        new_status if status_changed else None,
+                        today if status_changed else None,
+                        today,
+                        old_plan if plan_changed else None,
+                        new_plan if plan_changed else None,
+                        old_fact if fact_changed else None,
+                        new_fact if fact_changed else None,
+                        today if plan_changed else None,
+                        today if fact_changed else None,
+                    ))
+
+            if history_records:
+                cur.executemany("""
+                    INSERT INTO contracts_history
+                        (hash, old_status, new_status, update_date, upload_date,
+                         old_plan, new_plan, old_fact, new_fact,
+                         plan_changed_date, fact_changed_date)
+                    VALUES (digest(%s, 'md5'), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, history_records)
+
+            cur.execute('TRUNCATE TABLE igk_stat_data RESTART IDENTITY')
+
             cur.executemany("""
-                INSERT INTO dbo.igk_stat_data
+                INSERT INTO igk_stat_data
                     (igk, c_agent, cfo, contract, status, payment_type,
                      item, "order", plan, fact, tolerance, stage,
                      y25, y26, y27, is_deleted, plan_date, c_date)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, records)
+            """, new_records)
 
-        self.stdout.write(self.style.SUCCESS(
-            f'✓ Нормализация завершена. Вставлено {len(records)} записей.'
-        ))
+        self.stdout.write(f'done: {len(new_records)} rows, {len(history_records)} changes')

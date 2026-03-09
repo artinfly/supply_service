@@ -1,0 +1,29 @@
+{% extends 'reports/base.html' %}
+{% block title %}Дубликаты договоров{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h5>Дубликаты договоров</h5>
+</div>
+<div class="mb-2 text-muted" style="font-size:0.8rem">
+    Записи у которых совпадает комбинация: ИГК + Контрагент + Договор + Предмет + Заказ + Этап + Дата плана
+</div>
+<div class="table-container" id="table-wrapper"></div>
+<div id="page-data" data-api-url="{% url 'api_contract_dupes' %}"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const COLS = [
+    { field: 'c_agent',      title: 'Контрагент' },
+    { field: 'contract',     title: 'Договор' },
+    { field: 'item',         title: 'Предмет' },
+    { field: 'order',        title: 'Заказ' },
+    { field: 'stage',        title: 'Этап' },
+    { field: 'plan_date',    title: 'Дата плана' },
+    { field: 'dupes_count',  title: 'Кол-во дублей', format: 'int' },
+];
+const apiUrl = document.getElementById('page-data').dataset.apiUrl;
+loadTable(apiUrl, 'table-wrapper', COLS);
+</script>
+{% endblock %}

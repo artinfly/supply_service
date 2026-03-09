@@ -1,0 +1,128 @@
+DROP DATABASE prepayments;
+
+
+CREATE DATABASE supply_service
+    ENCODING = 'UTF8'
+    LC_COLLATE = 'ru_RU.UTF-8'
+    LC_CTYPE = 'ru_RU.UTF-8'
+    TEMPLATE = template0;
+
+
+python manage.py migrate
+
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+
+DROP TABLE IF EXISTS contracts_history   CASCADE;
+DROP TABLE IF EXISTS igk_year_data       CASCADE;
+DROP TABLE IF EXISTS igk_stat_data       CASCADE;
+DROP TABLE IF EXISTS orders_quantities   CASCADE;
+DROP TABLE IF EXISTS day_data            CASCADE;
+DROP TABLE IF EXISTS staging_excel       CASCADE;
+DROP TABLE IF EXISTS users               CASCADE;
+DROP TABLE IF EXISTS nsi_cfo             CASCADE;
+DROP TABLE IF EXISTS nsi_igk             CASCADE;
+
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+DROP TABLE IF EXISTS contracts_history CASCADE;
+DROP TABLE IF EXISTS igk_stat_data CASCADE;
+DROP TABLE IF EXISTS orders_quantities CASCADE;
+DROP TABLE IF EXISTS day_data CASCADE;
+DROP TABLE IF EXISTS staging_excel CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS nsi_cfo CASCADE;
+DROP TABLE IF EXISTS nsi_igk CASCADE;
+
+CREATE TABLE nsi_cfo (
+    cfo_id SERIAL PRIMARY KEY,
+    cfo VARCHAR(50) NOT NULL UNIQUE
+);
+
+CREATE TABLE nsi_igk (
+    igk_id SERIAL PRIMARY KEY,
+    igk VARCHAR(50) NOT NULL UNIQUE
+);
+
+CREATE TABLE users (
+    uid SERIAL PRIMARY KEY,
+    username VARCHAR(16) NOT NULL UNIQUE,
+    password VARCHAR(256) NOT NULL,
+    full_name VARCHAR(50)
+);
+
+CREATE TABLE igk_stat_data (
+    pp_id SERIAL PRIMARY KEY,
+    igk VARCHAR(500),
+    c_agent VARCHAR(500),
+    cfo VARCHAR(500),
+    contract VARCHAR(500),
+    status VARCHAR(500),
+    payment_type VARCHAR(500),
+    item VARCHAR(500),
+    "order" VARCHAR(500),
+    plan NUMERIC(18,2),
+    fact NUMERIC(18,2),
+    tolerance NUMERIC(18,2),
+    stage VARCHAR(250),
+    y25 BOOLEAN,
+    y26 BOOLEAN,
+    y27 BOOLEAN,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    plan_date VARCHAR(50),
+    c_date VARCHAR(256)
+);
+
+CREATE TABLE contracts_history (
+    id SERIAL PRIMARY KEY,
+    hash BYTEA NOT NULL,
+    old_status VARCHAR(50),
+    new_status VARCHAR(50),
+    update_date DATE,
+    upload_date DATE,
+    old_plan NUMERIC(18,2),
+    new_plan NUMERIC(18,2),
+    old_fact NUMERIC(18,2),
+    new_fact NUMERIC(18,2),
+    plan_changed_date DATE,
+    fact_changed_date DATE
+);
+
+CREATE INDEX idx_ch_hash ON contracts_history(hash);
+
+CREATE TABLE staging_excel (
+    id SERIAL PRIMARY KEY,
+    igk TEXT, kontragent TEXT, cfo TEXT, dogovor TEXT,
+    sostoyanie TEXT, tip_platezha TEXT, predmet TEXT, zakaz TEXT,
+    plan TEXT, fakt TEXT, tol TEXT, etap_grafika TEXT,
+    dataplan TEXT, sozdan TEXT,
+    f15 TEXT, f16 TEXT, f17 TEXT, f18 TEXT, f19 TEXT,
+    f20 TEXT, f21 TEXT, f22 TEXT, f23 TEXT, f24 TEXT,
+    f25 TEXT, f26 TEXT, f27 TEXT, f28 TEXT, f29 TEXT,
+    f30 TEXT, f31 TEXT, f32 TEXT, f33 TEXT, f34 TEXT,
+    f35 TEXT, f36 TEXT, f37 TEXT, f38 TEXT, f39 TEXT
+);
+
+CREATE TABLE day_data (
+    id SERIAL PRIMARY KEY,
+    igk VARCHAR(50) NOT NULL,
+    cfo VARCHAR(50),
+    orders_count INT,
+    orders_sum NUMERIC(18,2),
+    concluded_orders_count INT,
+    concluded_orders_sum NUMERIC(18,2),
+    upload_date DATE
+);
+
+CREATE TABLE orders_quantities (
+    id SERIAL PRIMARY KEY,
+    igk INT NOT NULL REFERENCES nsi_igk(igk_id),
+    cfo INT REFERENCES nsi_cfo(cfo_id),
+    quantity INT NOT NULL,
+    upload_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    y25 BOOLEAN,
+    y26 BOOLEAN,
+    y27 BOOLEAN
+);
