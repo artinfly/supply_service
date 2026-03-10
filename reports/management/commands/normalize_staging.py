@@ -2,7 +2,6 @@ from django.core.management.base import BaseCommand
 from django.db import connection
 from datetime import date
 
-
 def parse_float(val):
     if not val or str(val).strip() in ('', '-', 'None'):
         return None
@@ -10,7 +9,6 @@ def parse_float(val):
         return float(str(val).replace('\xa0', '').replace(' ', '').replace(',', '.'))
     except ValueError:
         return None
-
 
 def parse_year_flags(dataplan):
     if not dataplan or str(dataplan).strip() == '':
@@ -20,7 +18,6 @@ def parse_year_flags(dataplan):
         return year == 2025, year == 2026, year == 2027
     except (ValueError, IndexError):
         return False, False, False
-
 
 class Command(BaseCommand):
     help = 'normalize_staging'
@@ -61,7 +58,7 @@ class Command(BaseCommand):
 
                 plan_val = parse_float(plan_raw)
                 fact_val = parse_float(fact_raw)
-                tol_val  = parse_float(tol_raw)
+                tol_val = parse_float(tol_raw)
                 y25, y26, y27 = parse_year_flags(dataplan)
 
                 pt = str(payment_type).strip() if payment_type else None
@@ -69,20 +66,20 @@ class Command(BaseCommand):
                     pt = None
 
                 new_records.append((
-                    str(igk).strip()      if igk      else None,
-                    str(c_agent).strip()  if c_agent  else None,
-                    str(cfo).strip()      if cfo      else None,
+                    str(igk).strip() if igk else None,
+                    str(c_agent).strip() if c_agent else None,
+                    str(cfo).strip() if cfo else None,
                     str(contract).strip() if contract else None,
-                    str(status).strip()   if status   else None,
+                    str(status).strip() if status else None,
                     pt,
-                    str(item).strip()     if item     else None,
-                    str(order_).strip()   if order_   else None,
+                    str(item).strip() if item else None,
+                    str(order_).strip() if order_ else None,
                     plan_val, fact_val, tol_val,
-                    str(stage).strip()    if stage    else None,
+                    str(stage).strip() if stage else None,
                     y25, y26, y27,
                     False,
                     str(dataplan).strip() if dataplan else None,
-                    str(c_date).strip()   if c_date   else None,
+                    str(c_date).strip() if c_date else None,
                 ))
 
             cur.execute("""
@@ -120,10 +117,10 @@ class Command(BaseCommand):
 
                 old_status = old_vals['status']
                 new_status = new_vals['status']
-                old_plan   = old_vals['plan']
-                new_plan   = new_vals['plan']
-                old_fact   = old_vals['fact']
-                new_fact   = new_vals['fact']
+                old_plan = old_vals['plan']
+                new_plan = new_vals['plan']
+                old_fact = old_vals['fact']
+                new_fact = new_vals['fact']
 
                 status_changed = old_status != new_status
                 plan_changed = old_plan != new_plan and not (old_plan is None and new_plan is None)

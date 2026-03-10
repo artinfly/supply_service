@@ -1,35 +1,157 @@
 {% extends 'reports/base.html' %}
-
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h5>{{ title }}</h5>
-</div>
+<div class="page-header"><h5>{{ title }}</h5></div>
 
 <div class="table-container" id="table-wrapper"></div>
 
-{# Передаём URL из Django в JS через data-атрибут #}
 <div id="page-data"
-     data-api-url="{% if report_type == 'concluded' %}{% url 'api_igk_concluded' year %}{% elif report_type == 'not_concluded' %}{% url 'api_igk_not_concluded' year %}{% else %}{% url 'api_igk_terminated' year %}{% endif %}">
+     data-api-url="{% if report_type == 'concluded' %}{% url 'api_igk_concluded' year %}{% elif report_type == 'not_concluded' %}{% url 'api_igk_not_concluded' year %}{% else %}{% url 'api_igk_terminated' year %}{% endif %}"
+     data-year="{{ year }}"
+     data-type="{{ report_type }}">
+</div>
+
+<div class="modal fade" id="igkModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom:2px solid #e07b2a; padding:0.75rem 1rem;">
+                <h6 class="modal-title" id="igkModalTitle" style="font-weight:600;"></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="padding:0;">
+                <div id="modal-table-wrapper"></div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 const COLS = [
-    { field: 'igk',            title: 'ИГК' },
-    { field: 'spec_sum',       title: 'Сумма спец., руб.',  format: 'number' },
-    { field: 'pp_sum',         title: 'Сумма АП, руб.',     format: 'number' },
-    { field: 'pp_percent',     title: '% АП',               format: 'percent' },
-    { field: 'pp_fact',        title: 'Факт АП, руб.',      format: 'number' },
-    { field: 'fact_percent',   title: '% факт',             format: 'percent' },
-    { field: 'pp_remain',      title: 'Остаток АП, руб.',   format: 'number' },
-    { field: 'remain_percent', title: '% остаток',          format: 'percent' },
-    { field: 'pp_quantity',    title: 'Кол-во ПП',          format: 'int' },
+    { field: 'igk', title: 'ИГК' },
+    { field: 'spec_sum', title: 'Сумма спец., руб.', format: 'number' },
+    { field: 'pp_sum', title: 'Сумма АП, руб.', format: 'number' },
+    { field: 'pp_percent', title: '% АП', format: 'percent' },
+    { field: 'pp_fact', title: 'Факт АП, руб.', format: 'number' },
+    { field: 'fact_percent', title: '% факт', format: 'percent' },
+    { field: 'pp_remain', title: 'Остаток АП, руб.', format: 'number' },
+    { field: 'remain_percent', title: '% остаток', format: 'percent' },
+    { field: 'pp_quantity', title: 'Кол-во ПП', format: 'int' },
 ];
 
-const apiUrl = document.getElementById('page-data').dataset.apiUrl;
-loadTable(apiUrl, 'table-wrapper', COLS);
+const DETAIL_COLS = [
+    { field: 'contract', title: 'Договор' },
+    { field: 'c_agent', title: 'Контрагент' },
+    { field: 'status', title: 'Состояние' },
+    { field: 'payment_type', title: 'Тип платежа' },
+    { field: 'item', title: 'Предмет' },
+    { field: 'order', title: 'Заказ' },
+    { field: 'stage', title: 'Этап' },
+    { field: 'plan_sum', title: 'План, руб.', format: 'number' },
+    { field: 'fact_sum', title: 'Факт, руб.', format: 'number' },
+    { field: 'remain', title: 'Остаток, руб.', format: 'number' },
+];
+
+const pageData = document.getElementById('page-data');
+const apiUrl = pageData.dataset.apiUrl;
+const year = pageData.dataset.year;
+const repType = pageData.dataset.type;
+
+function renderModal(data) {
+    const container = document.getElementById('modal-table-wrapper');
+    if (!data.length) {
+        container.innerHTML = '<div class="p-3 text-muted">Нет данных</div>';
+        return;
+    }
+    let html = '<table class="report-table"><thead><tr>';
+    DETAIL_COLS.forEach(col => { html += `<th>${col.title}</th>`; });
+    html += '</tr></thead><tbody>';
+    data.forEach(row => {
+        html += '<tr>';
+        DETAIL_COLS.forEach(col => {
+            let val = row[col.field];
+            if (val === null || val === undefined) val = '';
+            if (col.format === 'number' && val !== '')
+                val = parseFloat(val).toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2});
+            const align = col.format ? 'text-end' : '';
+            const wrap = !col.format ? 'wrap' : '';
+            html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${val}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+async function openIgkDetail(igkCode) {
+    const modal = new bootstrap.Modal(document.getElementById('igkModal'));
+    document.getElementById('igkModalTitle').textContent = `ИГК ${igkCode} — ${year}`;
+    document.getElementById('modal-table-wrapper').innerHTML =
+        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm me-2"></div>Загрузка...</div>';
+    modal.show();
+    try {
+        const url = `/reports/api/igk-detail/${year}/${igkCode}/?type=${repType}`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        renderModal(await resp.json());
+    } catch(e) {
+        document.getElementById('modal-table-wrapper').innerHTML =
+            `<div class="error-msg">Ошибка: ${e.message}</div>`;
+    }
+}
+
+async function loadMainTable() {
+    const container = document.getElementById('table-wrapper');
+    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm me-2"></div>Загрузка...</div>';
+    try {
+        const resp = await fetch(apiUrl);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (!data.length) {
+            container.innerHTML = '<div class="p-3 text-muted">Нет данных</div>';
+            return;
+        }
+        let html = '<table class="report-table"><thead><tr>';
+        COLS.forEach(col => { html += `<th>${col.title}</th>`; });
+        html += '</tr></thead><tbody>';
+        data.forEach((row, idx) => {
+            const isTotal = idx === data.length - 1 && row.igk === 'ИТОГО';
+            const cls = isTotal ? 'row-total' : '';
+            html += `<tr class="${cls}">`;
+            COLS.forEach(col => {
+                let val = row[col.field];
+                if (val === null || val === undefined) val = '';
+                let inner = '';
+                if (col.field === 'igk' && val !== '' && !isTotal) {
+                    const code = String(val).slice(-4);
+                    inner = `<span class="igk-link" data-igk="${code}" style="color:#e07b2a;cursor:pointer;text-decoration:underline;">${code}</span>`;
+                } else if (col.format === 'number' && val !== '') {
+                    inner = parseFloat(val).toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2});
+                } else if (col.format === 'percent' && val !== '') {
+                    inner = val + '%';
+                } else if (col.format === 'int' && val !== '') {
+                    inner = parseInt(val).toLocaleString('ru-RU');
+                } else {
+                    inner = val;
+                }
+                const align = col.format ? 'text-end' : '';
+                html += `<td class="${align}">${inner}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+
+        container.querySelectorAll('.igk-link').forEach(el => {
+            el.addEventListener('click', () => openIgkDetail(el.dataset.igk));
+        });
+    } catch(e) {
+        container.innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
+    }
+}
+
+loadMainTable();
 </script>
 {% endblock %}

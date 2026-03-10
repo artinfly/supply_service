@@ -15,13 +15,13 @@
 {% block extra_js %}
 <script>
 const COLS = [
-    { field: 'c_agent',      title: 'Контрагент' },
-    { field: 'contract',     title: 'Договор' },
-    { field: 'item',         title: 'Предмет' },
-    { field: 'order',        title: 'Заказ' },
-    { field: 'stage',        title: 'Этап' },
-    { field: 'plan_date',    title: 'Дата плана' },
-    { field: 'dupes_count',  title: 'Кол-во дублей', format: 'int' },
+    { field: 'c_agent', title: 'Контрагент' },
+    { field: 'contract', title: 'Договор' },
+    { field: 'item', title: 'Предмет' },
+    { field: 'order', title: 'Заказ' },
+    { field: 'stage', title: 'Этап' },
+    { field: 'plan_date', title: 'Дата плана' },
+    { field: 'dupes_count', title: 'Кол-во дублей', format: 'int' },
 ];
 const apiUrl = document.getElementById('page-data').dataset.apiUrl;
 loadTable(apiUrl, 'table-wrapper', COLS);

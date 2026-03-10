@@ -1,7 +1,14 @@
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.db import connection
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.core.management import call_command
+from collections import defaultdict
+from io import StringIO
 from datetime import date, timedelta
+import tempfile, os
 
 CONCLUDED  = ('Исполняется', 'Возвращен на уточнение', 'На согласовании', 'Подписан', 'На утверждении')
 NOT_CONCL  = ('Черновик',)
@@ -11,42 +18,68 @@ YEARS    = [2025, 2026, 2027]
 YEAR_COL = {str(y): f'y{str(y)[2:]}' for y in YEARS}
 
 
+def login_view(request):
+    if request.user.is_authenticated:
+        return redirect('/reports/')
+    error = False
+    if request.method == 'POST':
+        user = authenticate(request, username=request.POST.get('username'), password=request.POST.get('password'))
+        if user is not None:
+            login(request, user)
+            return redirect('/reports/')
+        error = True
+    return render(request, 'reports/login.html', {'error': error})
+
+def logout_view(request):
+    logout(request)
+    return redirect('/login/')
+
+
 def _years_context():
-    return {'years': YEARS, 'year_cols': [(y, f"y{str(y)[2:]}") for y in YEARS]}
+    return {'years': YEARS, 'year_cols': [(y, f'y{str(y)[2:]}') for y in YEARS]}
 
 
+@login_required
 def index(request):
     return render(request, 'reports/index.html', _years_context())
 
+@login_required
 def kdr_table(request, year):
     ctx = _years_context()
     ctx['year'] = year
     return render(request, 'reports/kdr_table.html', ctx)
 
+@login_required
 def igk_concluded_table(request, year):
     ctx = _years_context()
     ctx.update({'year': year, 'report_type': 'concluded', 'title': f'Заключённые ИГК {year}'})
     return render(request, 'reports/igk_table.html', ctx)
 
+@login_required
 def igk_not_concluded_table(request, year):
     ctx = _years_context()
     ctx.update({'year': year, 'report_type': 'not_concluded', 'title': f'Незаключённые ИГК {year}'})
     return render(request, 'reports/igk_table.html', ctx)
 
+@login_required
 def igk_terminated_table(request, year):
     ctx = _years_context()
     ctx.update({'year': year, 'report_type': 'terminated', 'title': f'Расторгнутые ИГК {year}'})
     return render(request, 'reports/igk_table.html', ctx)
 
+@login_required
 def day_stat_only_igk_table(request):
     return render(request, 'reports/day_stat_only_igk.html', _years_context())
 
+@login_required
 def day_stat_with_cfo_table(request):
     return render(request, 'reports/day_stat_with_cfo.html', _years_context())
 
+@login_required
 def all_pps_table(request):
     return render(request, 'reports/all_pps.html', _years_context())
 
+@login_required
 def all_contracts_table(request):
     with connection.cursor() as cur:
         cur.execute("""
@@ -63,15 +96,19 @@ def all_contracts_table(request):
     ctx['terminated_statuses'] = list(TERMINATED)
     return render(request, 'reports/all_contracts.html', ctx)
 
+@login_required
 def history_status_table(request):
     return render(request, 'reports/history_status.html', _years_context())
 
+@login_required
 def history_plan_table(request):
     return render(request, 'reports/history_plan.html', _years_context())
 
+@login_required
 def history_fact_table(request):
     return render(request, 'reports/history_fact.html', _years_context())
 
+@login_required
 def contract_dupes_table(request):
     return render(request, 'reports/contract_dupes.html', _years_context())
 
@@ -92,6 +129,7 @@ def _query_to_json(sql, params=None):
     return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False})
 
 
+@login_required
 def api_kdr(request, year):
     yc = YEAR_COL.get(year)
     if not yc:
@@ -201,16 +239,20 @@ def _igk_stat_response(year, statuses):
     rows.append(total)
     return JsonResponse(rows, safe=False, json_dumps_params={'ensure_ascii': False})
 
+@login_required
 def api_igk_concluded(request, year):
     return _igk_stat_response(year, CONCLUDED)
 
+@login_required
 def api_igk_not_concluded(request, year):
     return _igk_stat_response(year, NOT_CONCL)
 
+@login_required
 def api_igk_terminated(request, year):
     return _igk_stat_response(year, TERMINATED)
 
 
+@login_required
 def api_day_stat_igk(request):
     today = date.today()
     prev_date = today - timedelta(days=7 if today.weekday() == 4 else 1)
@@ -226,6 +268,7 @@ def api_day_stat_igk(request):
     """
     return _query_to_json(sql, [prev_date, today])
 
+@login_required
 def api_day_stat_cfo(request):
     today = date.today()
     prev_date = today - timedelta(days=7 if today.weekday() == 4 else 1)
@@ -242,6 +285,7 @@ def api_day_stat_cfo(request):
     return _query_to_json(sql, [prev_date, today])
 
 
+@login_required
 def api_all_pps(request):
     sql = """
     SELECT DISTINCT igk, c_agent, cfo, contract, status,
@@ -266,6 +310,7 @@ def api_all_pps(request):
     return _query_to_json(sql)
 
 
+@login_required
 def api_all_contracts(request):
     search_agent = request.GET.get('agent', '').strip()
     igk_filter   = request.GET.get('igk', '').strip()
@@ -327,7 +372,6 @@ def api_all_contracts(request):
         cur.execute(sql_total, params)
         total_rows = [dict(zip(cols, r)) for r in cur.fetchall()]
 
-    from collections import defaultdict
     groups = defaultdict(list)
     for row in detail_rows:
         groups[(row['igk'], row['contract'], row['order'])].append(row)
@@ -349,6 +393,7 @@ def api_all_contracts(request):
     return JsonResponse(result, safe=False, json_dumps_params={'ensure_ascii': False})
 
 
+@login_required
 def api_history_status(request):
     sql = """
     SELECT RIGHT(isd.igk, 4) AS igk, isd.c_agent, isd.cfo, isd.contract,
@@ -368,6 +413,7 @@ def api_history_status(request):
     """
     return _query_to_json(sql)
 
+@login_required
 def api_history_plan(request):
     sql = """
     SELECT RIGHT(isd.igk, 4) AS igk, isd.c_agent, isd.cfo, isd.contract,
@@ -385,6 +431,7 @@ def api_history_plan(request):
     """
     return _query_to_json(sql)
 
+@login_required
 def api_history_fact(request):
     sql = """
     SELECT RIGHT(isd.igk, 4) AS igk, isd.c_agent, isd.cfo, isd.contract,
@@ -403,6 +450,7 @@ def api_history_fact(request):
     return _query_to_json(sql)
 
 
+@login_required
 def api_contract_dupes(request):
     sql = """
     SELECT c_agent, contract, item, "order", TRIM(stage) AS stage, plan_date, COUNT(*) AS dupes_count
@@ -412,3 +460,64 @@ def api_contract_dupes(request):
     ORDER BY contract, c_agent
     """
     return _query_to_json(sql)
+
+
+@login_required
+def api_igk_detail(request, year, igk):
+    yc = YEAR_COL.get(year)
+    if not yc:
+        return JsonResponse({'error': 'invalid year'}, status=400)
+    report_type = request.GET.get('type', 'concluded')
+    if report_type == 'concluded':
+        statuses = CONCLUDED
+    elif report_type == 'not_concluded':
+        statuses = NOT_CONCL
+    else:
+        statuses = TERMINATED
+    sl = "'" + "','".join(statuses) + "'"
+    sql = f"""
+    SELECT
+        contract, c_agent, status,
+        COALESCE(payment_type, 'ИНОЕ') AS payment_type,
+        item, "order", TRIM(stage) AS stage,
+        ROUND(CAST(SUM(plan) AS numeric), 2) AS plan_sum,
+        ROUND(CAST(SUM(fact) AS numeric), 2) AS fact_sum,
+        ROUND(CAST(SUM(plan) - SUM(COALESCE(fact, 0)) AS numeric), 2) AS remain
+    FROM igk_stat_data
+    WHERE igk LIKE %s AND {yc} = TRUE AND status IN ({sl})
+        AND payment_type IS NOT NULL AND TRIM(payment_type) != ''
+    GROUP BY contract, c_agent, status, payment_type, item, "order", stage
+    ORDER BY contract, payment_type
+    """
+    return _query_to_json(sql, [f'%{igk}'])
+
+
+def is_operator(user):
+    return user.is_superuser or user.groups.filter(name='operator').exists()
+
+
+@login_required
+def upload_excel(request):
+    if not is_operator(request.user):
+        return JsonResponse({'error': 'forbidden'}, status=403)
+    result = None
+    if request.method == 'POST' and request.FILES.get('excel_file'):
+        f = request.FILES['excel_file']
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+            for chunk in f.chunks():
+                tmp.write(chunk)
+            tmp_path = tmp.name
+        try:
+            out = StringIO()
+            call_command('import_excel', tmp_path, stdout=out)
+            call_command('normalize_staging', stdout=out)
+            result = out.getvalue()
+            messages.success(request, 'Файл успешно загружен и нормализован')
+        except Exception as e:
+            messages.error(request, f'Ошибка: {e}')
+            result = str(e)
+        finally:
+            os.unlink(tmp_path)
+    ctx = _years_context()
+    ctx['result'] = result
+    return render(request, 'reports/upload.html', ctx)

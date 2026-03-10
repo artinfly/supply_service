@@ -15,22 +15,22 @@
 {% block extra_js %}
 <script>
 const COLS = [
-    { field: 'igk',                              title: 'ИГК' },
-    { field: 'orders',                           title: 'Всего договоров',         format: 'int' },
-    { field: 'order_sum',                        title: 'Сумма, млн руб.',         format: 'number' },
-    { field: 'count_concluded',                  title: 'Заключено',               format: 'int' },
-    { field: 'concluded_order_sum',              title: 'Сумма заключённых, млн',  format: 'number' },
-    { field: 'count_curr_year',                  title: 'Договоров {{ year }}',    format: 'int' },
-    { field: 'order_sum_curr_year',              title: 'Сумма {{ year }}, млн',   format: 'number' },
-    { field: 'count_concluded_curr_year',        title: 'Заключено {{ year }}',    format: 'int' },
-    { field: 'concluded_order_sum_curr_year',    title: 'Сумма заключённых {{ year }}, млн', format: 'number' },
-    { field: 'pp_sum_plan',                      title: 'АП план {{ year }}, млн', format: 'number' },
-    { field: 'pp_sum_fact',                      title: 'АП факт {{ year }}, млн', format: 'number' },
-    { field: 'count_not_concluded_curr_year',    title: 'Не заключено {{ year }}', format: 'int' },
-    { field: 'not_concluded_order_sum_curr_year',title: 'Сумма незаключённых {{ year }}, млн', format: 'number' },
-    { field: 'count_concluded_percent_curr_year',title: '% заключено (кол-во)',    format: 'percent' },
-    { field: 'order_sum_percent_curr_year',      title: '% заключено (сумма)',     format: 'percent' },
-    { field: 'pp_percent',                       title: '% АП',                    format: 'percent' },
+    { field: 'igk', title: 'ИГК' },
+    { field: 'orders', title: 'Всего договоров', format: 'int' },
+    { field: 'order_sum', title: 'Сумма, млн руб.', format: 'number' },
+    { field: 'count_concluded', title: 'Заключено', format: 'int' },
+    { field: 'concluded_order_sum', title: 'Сумма заключённых, млн', format: 'number' },
+    { field: 'count_curr_year', title: 'Договоров {{ year }}', format: 'int' },
+    { field: 'order_sum_curr_year', title: 'Сумма {{ year }}, млн', format: 'number' },
+    { field: 'count_concluded_curr_year', title: 'Заключено {{ year }}', format: 'int' },
+    { field: 'concluded_order_sum_curr_year', title: 'Сумма заключённых {{ year }}, млн', format: 'number' },
+    { field: 'pp_sum_plan', title: 'АП план {{ year }}, млн', format: 'number' },
+    { field: 'pp_sum_fact', title: 'АП факт {{ year }}, млн', format: 'number' },
+    { field: 'count_not_concluded_curr_year', title: 'Не заключено {{ year }}', format: 'int' },
+    { field: 'not_concluded_order_sum_curr_year', title: 'Сумма незаключённых {{ year }}, млн', format: 'number' },
+    { field: 'count_concluded_percent_curr_year', title: '% заключено (кол-во)', format: 'percent' },
+    { field: 'order_sum_percent_curr_year', title: '% заключено (сумма)', format: 'percent' },
+    { field: 'pp_percent', title: '% АП', format: 'percent' },
 ];
 
 const apiUrl = document.getElementById('page-data').dataset.apiUrl;

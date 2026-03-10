@@ -1,11 +1,8 @@
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 SECRET_KEY = 'django-insecure-osc+)(j3!4o5cgio)m$nb)l34xhb0t_1*-@owgxuzj6jo!-e50'
-
 DEBUG = True
-
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
@@ -56,9 +53,7 @@ DATABASES = {
         'PASSWORD': 'postgres',
         'HOST': 'localhost',
         'PORT': '5432',
-        'OPTIONS': {
-            'client_encoding': 'UTF8',
-        },
+        'OPTIONS': {'client_encoding': 'UTF8'},
     }
 }
 
@@ -74,10 +69,11 @@ TIME_ZONE = 'Asia/Yekaterinburg'
 USE_I18N = True
 USE_TZ = True
 
-# Статические файлы (Bootstrap и прочее)
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [
-    BASE_DIR / 'reports' / 'static',
-]
+STATICFILES_DIRS = [BASE_DIR / 'reports' / 'static']
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/reports/'
+LOGOUT_REDIRECT_URL = '/login/'

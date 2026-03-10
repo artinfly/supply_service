@@ -12,19 +12,19 @@
 {% block extra_js %}
 <script>
 const COLS = [
-    { field: 'igk',        title: 'ИГК' },
-    { field: 'c_agent',    title: 'Контрагент' },
-    { field: 'cfo',        title: 'ЦФО' },
-    { field: 'contract',   title: 'Договор' },
+    { field: 'igk', title: 'ИГК' },
+    { field: 'c_agent', title: 'Контрагент' },
+    { field: 'cfo', title: 'ЦФО' },
+    { field: 'contract', title: 'Договор' },
     { field: 'old_status', title: 'Старый статус' },
     { field: 'new_status', title: 'Новый статус' },
     { field: 'payment_type', title: 'Тип платежа' },
-    { field: 'item',       title: 'Предмет' },
-    { field: 'plan_sum',   title: 'План, руб.',   format: 'number' },
-    { field: 'fact_sum',   title: 'Факт, руб.',   format: 'number' },
-    { field: 'update_date',  title: 'Дата изменения' },
-    { field: 'upload_date',  title: 'Дата загрузки' },
-    { field: 'c_date',       title: 'Год создания' },
+    { field: 'item', title: 'Предмет' },
+    { field: 'plan_sum', title: 'План, руб.', format: 'number' },
+    { field: 'fact_sum', title: 'Факт, руб.', format: 'number' },
+    { field: 'update_date', title: 'Дата изменения' },
+    { field: 'upload_date', title: 'Дата загрузки' },
+    { field: 'c_date', title: 'Год создания' },
 ];
 const apiUrl = document.getElementById('page-data').dataset.apiUrl;
 loadTable(apiUrl, 'table-wrapper', COLS);

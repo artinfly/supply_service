@@ -1,8 +1,10 @@
-venv/
+.venv/
 __pycache__/
 *.pyc
-.DS_Store
-.idea/
-wheels/
+*.txt
+*.db
 *.sqlite3
-*.log
+*.sql
+.idea/
+.vscode/
+wheels/

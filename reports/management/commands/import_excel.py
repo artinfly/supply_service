@@ -3,20 +3,20 @@ from django.db import connection
 import openpyxl
 
 COLUMN_MAP = {
-    'ИГК':          'igk',
-    'Контрагент':   'kontragent',
-    'ЦФО':          'cfo',
-    'Договор':      'dogovor',
-    'Состояние':    'sostoyanie',
-    'Тип платежа':  'tip_platezha',
-    'Предмет':      'predmet',
-    'Заказ':        'zakaz',
-    'ПЛАН':         'plan',
-    'ФАКТ':         'fakt',
-    'Тол':          'tol',
+    'ИГК': 'igk',
+    'Контрагент': 'kontragent',
+    'ЦФО': 'cfo',
+    'Договор': 'dogovor',
+    'Состояние': 'sostoyanie',
+    'Тип платежа': 'tip_platezha',
+    'Предмет': 'predmet',
+    'Заказ': 'zakaz',
+    'ПЛАН': 'plan',
+    'ФАКТ': 'fakt',
+    'Тол': 'tol',
     'Этап графика': 'etap_grafika',
-    'ДатаПЛАН':     'dataplan',
-    'Создан':       'sozdan',
+    'ДатаПЛАН': 'dataplan',
+    'Создан': 'sozdan',
 }
 
 DB_FIELDS = list(COLUMN_MAP.values())
@@ -24,7 +24,6 @@ INSERT_SQL = f"""
     INSERT INTO staging_excel ({', '.join(DB_FIELDS)})
     VALUES ({', '.join(['%s'] * len(DB_FIELDS))})
 """
-
 
 class Command(BaseCommand):
     help = 'import_excel'

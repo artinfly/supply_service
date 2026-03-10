@@ -72,23 +72,23 @@
 </style>
 
 <script>
-const CONCLUDED_STATUSES  = {{ concluded_statuses|safe }};
-const NOT_CONCL_STATUSES  = {{ not_concl_statuses|safe }};
+const CONCLUDED_STATUSES = {{ concluded_statuses|safe }};
+const NOT_CONCL_STATUSES = {{ not_concl_statuses|safe }};
 const TERMINATED_STATUSES = {{ terminated_statuses|safe }};
 
 const COLS = [
-    { field: 'igk',          title: 'ИГК' },
-    { field: 'c_agent',      title: 'Контрагент' },
-    { field: 'contract',     title: 'Договор' },
-    { field: 'status',       title: 'Состояние' },
+    { field: 'igk', title: 'ИГК' },
+    { field: 'c_agent', title: 'Контрагент' },
+    { field: 'contract', title: 'Договор' },
+    { field: 'status', title: 'Состояние' },
     { field: 'payment_type', title: 'Тип платежа' },
-    { field: 'item',         title: 'Предмет' },
-    { field: 'order',        title: 'Заказ' },
-    { field: 'stage',        title: 'Этап' },
-    { field: 'spec_sum',     title: 'Сумма спец., руб.',  format: 'number' },
-    { field: 'pp_sum',       title: 'Сумма АП, руб.',     format: 'number' },
-    { field: 'pp_fact',      title: 'Факт АП, руб.',      format: 'number' },
-    { field: 'pp_remain',    title: 'Остаток АП, руб.',   format: 'number' },
+    { field: 'item', title: 'Предмет' },
+    { field: 'order', title: 'Заказ' },
+    { field: 'stage', title: 'Этап' },
+    { field: 'spec_sum', title: 'Сумма спец., руб.', format: 'number' },
+    { field: 'pp_sum', title: 'Сумма АП, руб.', format: 'number' },
+    { field: 'pp_fact', title: 'Факт АП, руб.', format: 'number' },
+    { field: 'pp_remain', title: 'Остаток АП, руб.', format: 'number' },
 ];
 
 const apiUrl = document.getElementById('page-data').dataset.apiUrl;
@@ -97,9 +97,9 @@ let activeYear = 'all';
 function buildUrl() {
     const params = new URLSearchParams();
     const agent = document.getElementById('filter-agent').value.trim();
-    const igk   = document.getElementById('filter-igk').value.trim();
+    const igk = document.getElementById('filter-igk').value.trim();
     if (agent) params.append('agent', agent);
-    if (igk)   params.append('igk', igk);
+    if (igk) params.append('igk', igk);
     if (document.getElementById('cb-concluded').checked)
         CONCLUDED_STATUSES.forEach(s => params.append('status', s));
     if (document.getElementById('cb-not-concluded').checked)
@@ -132,7 +132,7 @@ function renderTable(data) {
             else if (col.format === 'number' && val !== '')
                 val = parseFloat(val).toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2});
             const align = col.format ? 'text-end' : '';
-            const wrap  = !col.format ? 'wrap' : '';
+            const wrap = !col.format ? 'wrap' : '';
             html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${val}</td>`;
         });
         html += '</tr>';

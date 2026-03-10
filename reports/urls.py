@@ -2,10 +2,8 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    # ── Главная ───────────────────────────────────────────────────────
     path('', views.index, name='index'),
 
-    # ── HTML страницы ─────────────────────────────────────────────────
     path('kdr/<str:year>/',               views.kdr_table,               name='kdr_table'),
     path('igk-concluded/<str:year>/',     views.igk_concluded_table,     name='igk_concluded_table'),
     path('igk-not-concluded/<str:year>/', views.igk_not_concluded_table, name='igk_not_concluded_table'),
@@ -18,8 +16,8 @@ urlpatterns = [
     path('history-plan/',                 views.history_plan_table,      name='history_plan_table'),
     path('history-fact/',                 views.history_fact_table,      name='history_fact_table'),
     path('contract-dupes/',               views.contract_dupes_table,    name='contract_dupes_table'),
+    path('upload/',                        views.upload_excel,            name='upload_excel'),
 
-    # ── API (JSON) ────────────────────────────────────────────────────
     path('api/kdr/<str:year>/',               views.api_kdr,               name='api_kdr'),
     path('api/igk-concluded/<str:year>/',     views.api_igk_concluded,     name='api_igk_concluded'),
     path('api/igk-not-concluded/<str:year>/', views.api_igk_not_concluded, name='api_igk_not_concluded'),
@@ -32,4 +30,5 @@ urlpatterns = [
     path('api/history-plan/',                 views.api_history_plan,      name='api_history_plan'),
     path('api/history-fact/',                 views.api_history_fact,      name='api_history_fact'),
     path('api/contract-dupes/',               views.api_contract_dupes,    name='api_contract_dupes'),
+    path('api/igk-detail/<str:year>/<str:igk>/', views.api_igk_detail,         name='api_igk_detail'),
 ]

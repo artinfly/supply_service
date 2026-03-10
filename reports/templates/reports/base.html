@@ -104,7 +104,10 @@
 <body>
 
 <nav class="sidebar">
-    <div class="sidebar-header">Отдел снабжения УВЗ</div>
+    <div class="sidebar-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Отдел снабжения УВЗ</span>
+        <a href="/logout/" style="color:#888;font-size:0.75rem;text-decoration:none;" title="Выйти">&#x2715;</a>
+    </div>
 
     <div class="nav-section">Главная</div>
     <a href="{% url 'index' %}" class="nav-link">Обзор</a>
@@ -144,6 +147,12 @@
 
     <div class="nav-section">Служебное</div>
     <a href="{% url 'contract_dupes_table' %}" class="nav-sub-link">Дубликаты договоров</a>
+    {% if user.groups.all|length > 0 and user.groups.all.0.name == 'operator' or user.is_superuser %}
+    <a href="{% url 'upload_excel' %}" class="nav-sub-link">Загрузка данных</a>
+    {% endif %}
+    {% if user.is_superuser %}
+    <a href="/admin/" class="nav-sub-link">Админка</a>
+    {% endif %}
 </nav>
 
 <div class="main-content">
@@ -199,6 +208,16 @@ async function loadTable(apiUrl, tableId, columnDefs) {
         container.innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
     }
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.querySelector('.sidebar');
+    const saved = sessionStorage.getItem('sidebar_scroll');
+    if (saved) sidebar.scrollTop = parseInt(saved);
+    sidebar.addEventListener('scroll', () => {
+        sessionStorage.setItem('sidebar_scroll', sidebar.scrollTop);
+    });
+});
+
 document.querySelectorAll('.sidebar a').forEach(link => {
     if (link.href === window.location.href) link.classList.add('active');
 });
