@@ -1,0 +1,138 @@
+{% extends 'reports/base.html' %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h5>{{ title }}</h5>
+</div>
+<div class="table-container" id="table-wrapper"></div>
+<div id="page-data"
+     data-api-url="{% if report_type == 'concluded' %}{% url 'api_igk_concluded' year %}{% elif report_type == 'not_concluded' %}{% url 'api_igk_not_concluded' year %}{% else %}{% url 'api_igk_terminated' year %}{% endif %}"
+     data-year="{{ year }}"
+     data-type="{{ report_type }}"
+     data-detail-url="{% url 'api_igk_detail' year '000' %}"
+     style="display:none"></div>
+
+<div class="modal fade" id="igkModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom:2px solid var(--orange);padding:0.75rem 1rem">
+                <h6 class="modal-title" id="igkModalTitle" style="font-weight:600"></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="padding:0">
+                <div id="modal-table-wrapper"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const COLS = [
+    { field: 'igk',            title: 'ИГК' },
+    { field: 'spec_sum',       title: 'Сумма по спецификации, руб.', format: 'number' },
+    { field: 'pp_sum',         title: 'Сумма аванса (план), руб.',   format: 'number' },
+    { field: 'pp_percent',     title: '% аванса',                    format: 'percent' },
+    { field: 'pp_fact',        title: 'Оплачено авансов, руб.',      format: 'number' },
+    { field: 'fact_percent',   title: '% оплаты',                    format: 'percent' },
+    { field: 'pp_remain',      title: 'Остаток аванса, руб.',        format: 'number' },
+    { field: 'remain_percent', title: '% остатка',                   format: 'percent' },
+    { field: 'pp_quantity',    title: 'Кол-во позиций',              format: 'int' },
+];
+
+const DETAIL_COLS = [
+    { field: 'contract',     title: 'Договор' },
+    { field: 'c_agent',      title: 'Контрагент' },
+    { field: 'status',       title: 'Состояние' },
+    { field: 'payment_type', title: 'Тип платежа' },
+    { field: 'item',         title: 'Предмет' },
+    { field: 'order',        title: 'Заказ' },
+    { field: 'stage',        title: 'Этап' },
+    { field: 'plan_sum',     title: 'План, руб.',    format: 'number' },
+    { field: 'fact_sum',     title: 'Факт, руб.',    format: 'number' },
+    { field: 'remain',       title: 'Остаток, руб.', format: 'number' },
+];
+
+const pd         = document.getElementById('page-data');
+const apiUrl     = pd.dataset.apiUrl;
+const year       = pd.dataset.year;
+const reportType = pd.dataset.type;
+const detailBase = pd.dataset.detailUrl.replace('/000/', '/');
+
+function renderTable(data, cols, container) {
+    if (!data.length) { container.innerHTML = '<div class="p-3 text-muted">Нет данных</div>'; return; }
+    let html = '<table class="report-table"><thead><tr>';
+    cols.forEach(col => { html += `<th>${col.title}</th>`; });
+    html += '</tr></thead><tbody>';
+    data.forEach(row => {
+        html += '<tr>';
+        cols.forEach(col => {
+            const val   = row[col.field] ?? '';
+            const align = col.format ? 'text-end' : '';
+            const wrap  = !col.format ? 'wrap' : '';
+            html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${fmt(val, col.format)}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+async function openDetail(igkCode) {
+    document.getElementById('igkModalTitle').textContent = `ИГК ${igkCode} — ${year}`;
+    const container = document.getElementById('modal-table-wrapper');
+    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div>Загрузка...</div>';
+    new bootstrap.Modal(document.getElementById('igkModal')).show();
+    try {
+        const resp = await fetch(`${detailBase}${igkCode}/?type=${reportType}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        renderTable(await resp.json(), DETAIL_COLS, container);
+    } catch(e) {
+        container.innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
+    }
+}
+
+async function loadMain() {
+    const container = document.getElementById('table-wrapper');
+    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div>Загрузка...</div>';
+    try {
+        const resp = await fetch(apiUrl);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (!data.length) { container.innerHTML = '<div class="p-3 text-muted">Нет данных</div>'; return; }
+
+        let html = '<table class="report-table"><thead><tr>';
+        COLS.forEach(col => { html += `<th>${col.title}</th>`; });
+        html += '</tr></thead><tbody>';
+        data.forEach((row, idx) => {
+            const isTotal = idx === data.length - 1 && row.igk === 'ИТОГО';
+            html += `<tr class="${isTotal ? 'row-total' : ''}">`;
+            COLS.forEach(col => {
+                const val = row[col.field] ?? '';
+                let inner;
+                if (col.field === 'igk' && val !== '' && !isTotal) {
+                    const code = String(val).slice(-4);
+                    inner = `<span class="igk-link" data-igk="${code}"
+                        style="color:var(--orange);cursor:pointer;text-decoration:underline">${code}</span>`;
+                } else {
+                    inner = fmt(val, col.format);
+                }
+                html += `<td class="${col.format ? 'text-end' : ''}">${inner}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+        container.querySelectorAll('.igk-link').forEach(el => {
+            el.addEventListener('click', () => openDetail(el.dataset.igk));
+        });
+    } catch(e) {
+        container.innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
+    }
+}
+
+loadMain();
+</script>
+{% endblock %}

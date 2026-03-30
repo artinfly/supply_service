@@ -1,0 +1,121 @@
+{% extends 'reports/base.html' %}
+{% block title %}Договоры по контрагенту{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h5>Договоры по контрагенту</h5>
+</div>
+
+<div class="filter-panel mb-3">
+    <div class="d-flex flex-wrap gap-3 align-items-end">
+        <div class="filter-group">
+            <label class="filter-label">Год</label>
+            <select id="year-select" class="filter-select">
+                {% for y in years %}
+                <option value="{{ y }}">{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Контрагент</label>
+            <input type="text" id="agent-input" class="filter-input"
+                   placeholder="Начните вводить..." list="agent-list" style="width:300px">
+            <datalist id="agent-list">
+                {% for agent in agents %}
+                <option value="{{ agent }}">
+                {% endfor %}
+            </datalist>
+        </div>
+        <div class="filter-group" style="flex-direction:row;align-items:flex-end;gap:0.4rem">
+            <button id="btn-search" class="btn-orange">Найти</button>
+            <button id="btn-export" class="btn-ghost">Скачать xlsx</button>
+        </div>
+    </div>
+</div>
+
+<div class="row-count-label mb-2" id="row-count-wrap" style="display:none">
+    Показано: <strong id="row-count">0</strong> записей
+</div>
+<div class="table-container" id="table-wrapper" style="display:none"></div>
+<div id="page-data" data-api-url="{% url 'api_contracts_by_agent' %}" style="display:none"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const COLS = [
+    { field: 'igk',          title: 'ИГК' },
+    { field: 'c_agent',      title: 'Контрагент' },
+    { field: 'contract',     title: 'Договор' },
+    { field: 'status',       title: 'Состояние' },
+    { field: 'payment_type', title: 'Тип платежа' },
+    { field: 'item',         title: 'Предмет' },
+    { field: 'order',        title: 'Заказ' },
+    { field: 'stage',        title: 'Этап' },
+    { field: 'plan',         title: 'План, руб.',    format: 'number' },
+    { field: 'fact',         title: 'Факт, руб.',    format: 'number' },
+    { field: 'remain',       title: 'Остаток, руб.', format: 'number' },
+];
+
+const apiUrl = document.getElementById('page-data').dataset.apiUrl;
+
+function getParams() {
+    return {
+        agent: document.getElementById('agent-input').value.trim(),
+        year:  document.getElementById('year-select').value,
+    };
+}
+
+async function loadData() {
+    const { agent, year } = getParams();
+    if (!agent) { alert('Введите контрагента'); return; }
+
+    const container = document.getElementById('table-wrapper');
+    container.style.display = 'block';
+    document.getElementById('row-count-wrap').style.display = 'none';
+    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div>Загрузка...</div>';
+
+    try {
+        const resp = await fetch(`${apiUrl}?year=${year}&agent=${encodeURIComponent(agent)}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        if (!data.length) {
+            container.innerHTML = '<div class="p-4 text-muted text-center">Нет данных по заданным фильтрам</div>';
+            return;
+        }
+
+        document.getElementById('row-count').textContent = data.length;
+        document.getElementById('row-count-wrap').style.display = '';
+
+        let html = '<table class="report-table"><thead><tr>';
+        COLS.forEach(col => { html += `<th>${col.title}</th>`; });
+        html += '</tr></thead><tbody>';
+        data.forEach(row => {
+            html += '<tr>';
+            COLS.forEach(col => {
+                let val = row[col.field] ?? '';
+                if (col.field === 'igk' && val !== '')      val = String(val).slice(-4);
+                else if (col.format === 'number' && val !== '')
+                    val = parseFloat(val).toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2});
+                const align = col.format ? 'text-end' : '';
+                const wrap  = !col.format ? 'wrap' : '';
+                html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${val}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    } catch(e) {
+        container.innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
+    }
+}
+
+document.getElementById('btn-search').addEventListener('click', loadData);
+document.getElementById('agent-input').addEventListener('keydown', e => { if (e.key === 'Enter') loadData(); });
+document.getElementById('btn-export').addEventListener('click', () => {
+    const { agent, year } = getParams();
+    if (!agent) { alert('Введите контрагента'); return; }
+    window.location.href = `/reports/export/contracts/${year}/?agent=${encodeURIComponent(agent)}`;
+});
+</script>
+{% endblock %}

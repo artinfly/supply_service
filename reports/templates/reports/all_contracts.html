@@ -1,0 +1,219 @@
+{% extends 'reports/base.html' %}
+{% block title %}Все договоры{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h5>Все договоры</h5>
+</div>
+
+<div class="filter-panel mb-3">
+    <div class="d-flex flex-wrap gap-3 align-items-end">
+        <div class="filter-group">
+            <label class="filter-label">Контрагент</label>
+            <input type="text" id="filter-agent" class="filter-input" placeholder="Поиск...">
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">ИГК</label>
+            <select id="filter-igk" class="filter-select">
+                <option value="">Все</option>
+                {% for igk in igk_list %}
+                <option value="{{ igk }}">{{ igk }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Год</label>
+            <div class="d-flex gap-1">
+                <button class="btn-year active" data-year="all">Все</button>
+                {% for y, yc in year_cols %}
+                <button class="btn-year" data-year="{{ y }}">{{ y }}</button>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Состояние</label>
+            <div class="d-flex gap-2 flex-wrap">
+                <label class="status-check"><input type="checkbox" id="cb-concluded" checked> Заключённые</label>
+                <label class="status-check"><input type="checkbox" id="cb-not-concluded"> Незаключённые</label>
+                <label class="status-check"><input type="checkbox" id="cb-terminated"> Расторгнутые</label>
+            </div>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Строк</label>
+            <select id="page-size" class="filter-select">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="200">200</option>
+                <option value="0">Все</option>
+            </select>
+        </div>
+        <div class="filter-group" style="flex-direction:row;align-items:flex-end;gap:0.4rem">
+            <button id="btn-search" class="btn-orange">Найти</button>
+            <button id="btn-reset" class="btn-ghost">Сбросить</button>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-2">
+    <span class="row-count-label">Показано: <strong id="row-count">0</strong> записей</span>
+    <div id="pagination-top"></div>
+</div>
+
+<div class="table-container" id="table-wrapper"></div>
+<div id="pagination-bot" class="mt-2 d-flex justify-content-end"></div>
+<div id="page-data" data-api-url="{% url 'api_all_contracts' %}" style="display:none"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CONCLUDED_STATUSES  = {{ concluded_statuses|safe }};
+const NOT_CONCL_STATUSES  = {{ not_concl_statuses|safe }};
+const TERMINATED_STATUSES = {{ terminated_statuses|safe }};
+
+const COLS = [
+    { field: 'igk',        title: 'ИГК' },
+    { field: 'c_agent',    title: 'Контрагент' },
+    { field: 'contract',   title: 'Договор' },
+    { field: 'status',     title: 'Состояние' },
+    { field: 'payment_type', title: 'Тип платежа' },
+    { field: 'item',       title: 'Предмет' },
+    { field: 'order',      title: 'Заказ' },
+    { field: 'stage',      title: 'Этап' },
+    { field: 'spec_sum',   title: 'Сумма спец., руб.',  format: 'number' },
+    { field: 'pp_sum',     title: 'Сумма АП, руб.',     format: 'number' },
+    { field: 'pp_fact',    title: 'Факт АП, руб.',      format: 'number' },
+    { field: 'pp_remain',  title: 'Остаток АП, руб.',   format: 'number' },
+];
+
+const apiUrl    = document.getElementById('page-data').dataset.apiUrl;
+let loadedData  = [];
+let currentPage = 1;
+let activeYear  = 'all';
+
+function pageSize() {
+    const v = parseInt(document.getElementById('page-size').value);
+    return v === 0 ? Infinity : v;
+}
+
+function buildUrl() {
+    const params = new URLSearchParams();
+    const agent  = document.getElementById('filter-agent').value.trim();
+    const igk    = document.getElementById('filter-igk').value.trim();
+    if (agent) params.append('agent', agent);
+    if (igk)   params.append('igk', igk);
+    if (document.getElementById('cb-concluded').checked)
+        CONCLUDED_STATUSES.forEach(s => params.append('status', s));
+    if (document.getElementById('cb-not-concluded').checked)
+        NOT_CONCL_STATUSES.forEach(s => params.append('status', s));
+    if (document.getElementById('cb-terminated').checked)
+        TERMINATED_STATUSES.forEach(s => params.append('status', s));
+    if (activeYear !== 'all') params.append('year', activeYear);
+    const qs = params.toString();
+    return apiUrl + (qs ? '?' + qs : '');
+}
+
+function renderPagination(total, ps, cur, id) {
+    const el = document.getElementById(id);
+    if (!isFinite(ps) || total <= ps) { el.innerHTML = ''; return; }
+    const pages = Math.ceil(total / ps);
+    const d = 2;
+    let html = '<div class="d-flex gap-1 flex-wrap align-items-center">';
+    html += `<button class="pgn-btn" data-p="1" ${cur === 1 ? 'disabled' : ''}>«</button>`;
+    html += `<button class="pgn-btn" data-p="${cur - 1}" ${cur === 1 ? 'disabled' : ''}>‹</button>`;
+    for (let p = 1; p <= pages; p++) {
+        if (p === 1 || p === pages || (p >= cur - d && p <= cur + d))
+            html += `<button class="pgn-btn${p === cur ? ' pgn-active' : ''}" data-p="${p}">${p}</button>`;
+        else if (p === cur - d - 1 || p === cur + d + 1)
+            html += '<span style="padding:0 4px;color:#999">…</span>';
+    }
+    html += `<button class="pgn-btn" data-p="${cur + 1}" ${cur === pages ? 'disabled' : ''}>›</button>`;
+    html += `<button class="pgn-btn" data-p="${pages}" ${cur === pages ? 'disabled' : ''}>»</button>`;
+    html += `<span class="row-count-label ms-2">стр. ${cur} из ${pages}</span></div>`;
+    el.innerHTML = html;
+    el.querySelectorAll('.pgn-btn:not([disabled])').forEach(btn => {
+        btn.addEventListener('click', () => { currentPage = parseInt(btn.dataset.p); renderPage(); });
+    });
+}
+
+function renderPage() {
+    const ps    = pageSize();
+    const start = isFinite(ps) ? (currentPage - 1) * ps : 0;
+    const slice = isFinite(ps) ? loadedData.slice(start, start + ps) : loadedData;
+    document.getElementById('row-count').textContent = loadedData.length;
+    renderPagination(loadedData.length, ps, currentPage, 'pagination-top');
+    renderPagination(loadedData.length, ps, currentPage, 'pagination-bot');
+
+    const container = document.getElementById('table-wrapper');
+    if (!slice.length) {
+        container.innerHTML = '<div class="p-4 text-muted text-center">Нет данных по заданным фильтрам</div>';
+        return;
+    }
+
+    let html = '<table class="report-table"><thead><tr>';
+    COLS.forEach(col => { html += `<th>${col.title}</th>`; });
+    html += '</tr></thead><tbody>';
+
+    slice.forEach(row => {
+        const cls = row.is_subtotal === 1 ? 'row-subtotal' : '';
+        html += `<tr class="${cls}">`;
+        COLS.forEach(col => {
+            let val = row[col.field] ?? '';
+            if (col.field === 'payment_type' && row.is_subtotal === 1)
+                val = 'ИТОГО';
+            else if (col.field === 'igk' && val !== '')
+                val = String(val).slice(-4);
+            else if (col.field === 'stage' && val !== '')
+                val = String(val).trim();
+            else if (col.format === 'number' && val !== '')
+                val = parseFloat(val).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const align = col.format ? 'text-end' : '';
+            const wrap  = !col.format ? 'wrap' : '';
+            html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${val}</td>`;
+        });
+        html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+async function loadData() {
+    document.getElementById('table-wrapper').innerHTML =
+        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div>Загрузка...</div>';
+    try {
+        const resp = await fetch(buildUrl());
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        loadedData  = await resp.json();
+        currentPage = 1;
+        renderPage();
+    } catch (e) {
+        document.getElementById('table-wrapper').innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
+    }
+}
+
+document.querySelectorAll('.btn-year').forEach(btn => {
+    btn.addEventListener('click', function () {
+        document.querySelectorAll('.btn-year').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        activeYear = this.dataset.year;
+    });
+});
+
+document.getElementById('page-size').addEventListener('change', () => { currentPage = 1; renderPage(); });
+document.getElementById('filter-agent').addEventListener('keydown', e => { if (e.key === 'Enter') loadData(); });
+document.getElementById('btn-search').addEventListener('click', loadData);
+document.getElementById('btn-reset').addEventListener('click', () => {
+    document.getElementById('filter-agent').value       = '';
+    document.getElementById('filter-igk').value         = '';
+    document.getElementById('cb-concluded').checked     = true;
+    document.getElementById('cb-not-concluded').checked = false;
+    document.getElementById('cb-terminated').checked    = false;
+    document.querySelectorAll('.btn-year').forEach(b => b.classList.remove('active'));
+    document.querySelector('.btn-year[data-year="all"]').classList.add('active');
+    activeYear = 'all';
+    loadData();
+});
+
+loadData();
+</script>
+{% endblock %}

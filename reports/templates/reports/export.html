@@ -1,0 +1,111 @@
+{% extends 'reports/base.html' %}
+{% block title %}Формирование отчётов{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h5>Формирование отчётов</h5>
+</div>
+
+<div style="max-width:640px;display:flex;flex-direction:column;gap:0.75rem">
+
+    <div class="index-card">
+        <div class="index-card-title">ИГК — Авансовые платежи</div>
+        <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">
+            Сводная таблица по ИГК: контрагент, ЦФО, договор, состояние, суммы аванса
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+            {% for y in years %}
+            <a href="{% url 'export_advances' y|stringformat:'s' %}" class="btn-index">ИГК {{ y }} ↓</a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="index-card">
+        <div class="index-card-title">КДР — Заключение договоров</div>
+        <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">
+            По каждому ИГК и ЦФО: договоры, суммы, % контрактации, авансирование
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+            {% for y in years %}
+            <a href="{% url 'export_kdr' y|stringformat:'s' %}" class="btn-index">КДР {{ y }} ↓</a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="index-card">
+        <div class="index-card-title">Договоры по контрагенту</div>
+        <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">
+            Все договора выбранного контрагента за год
+        </p>
+        <div class="filter-group mb-2">
+            <label class="filter-label">Контрагент</label>
+            <input type="text" id="agent-input" class="filter-input"
+                   list="agent-list" style="width:100%"
+                   placeholder="▼ Нажмите для выбора или введите название">
+            <datalist id="agent-list">
+                {% for agent in agents %}
+                <option value="{{ agent }}">
+                {% endfor %}
+            </datalist>
+            <small style="color:#aaa;font-size:0.75rem">Начните вводить — появится список</small>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            {% for y in years %}
+            <button class="btn-index" onclick="downloadAgent('{{ y }}')">{{ y }} ↓</button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="index-card">
+        <div class="index-card-title">История изменений статусов</div>
+        <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">
+            Все зафиксированные изменения статусов договоров
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'export_history_status' %}" class="btn-index">Скачать xlsx ↓</a>
+        </div>
+    </div>
+
+    <div class="index-card">
+        <div class="index-card-title">История изменений плана и факта</div>
+        <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">
+            Изменения плановых и фактических сумм по договорам
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'export_history_plan' %}" class="btn-index">План ↓</a>
+            <a href="{% url 'export_history_fact' %}" class="btn-index">Факт ↓</a>
+        </div>
+    </div>
+
+    <div class="index-card">
+        <div class="index-card-title">Дубликаты договоров</div>
+        <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">
+            Записи с одинаковой комбинацией полей — ИГК, договор, предмет, заказ, этап
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'export_contract_dupes' %}" class="btn-index">Скачать xlsx ↓</a>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const agentInput  = document.getElementById('agent-input');
+const defaultHint = '▼ Нажмите для выбора или введите название';
+
+agentInput.addEventListener('focus', () => { agentInput.placeholder = 'Введите название контрагента...'; });
+agentInput.addEventListener('blur',  () => { if (!agentInput.value) agentInput.placeholder = defaultHint; });
+
+function downloadAgent(year) {
+    const agent = agentInput.value.trim();
+    if (!agent) {
+        alert('Введите или выберите контрагента из списка');
+        agentInput.focus();
+        return;
+    }
+    window.location.href = `/reports/export/contracts/${year}/?agent=${encodeURIComponent(agent)}`;
+}
+</script>
+{% endblock %}

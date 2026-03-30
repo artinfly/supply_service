@@ -1,0 +1,51 @@
+{% extends 'reports/base.html' %}
+{% block title %}Загрузка данных{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h5>Загрузка данных</h5>
+</div>
+
+<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);padding:1.5rem;max-width:480px;">
+
+    {% if messages %}
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} mb-3" style="font-size:0.82rem">{{ msg }}</div>
+    {% endfor %}
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" onsubmit="return checkFile()">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label class="filter-label">Excel файл (.xlsx)</label>
+            <input type="file" name="excel_file" accept=".xlsx" class="form-control mt-1" style="font-size:0.82rem">
+        </div>
+        <button type="submit" class="btn-orange">Загрузить и нормализовать</button>
+        <div id="file-error" style="display:none;color:#c0392b;font-size:0.8rem;margin-top:0.5rem">
+            Файл не прикреплён — выберите .xlsx файл перед загрузкой
+        </div>
+    </form>
+
+    {% if result %}
+    <div class="mt-3 p-3" style="background:#f5f5f5;border-radius:6px;font-size:0.8rem;font-family:monospace">
+        {{ result|linebreaksbr }}
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function checkFile() {
+    const input = document.querySelector('input[name="excel_file"]');
+    const err   = document.getElementById('file-error');
+    if (!input.files || !input.files.length) {
+        err.style.display = 'block';
+        return false;
+    }
+    err.style.display = 'none';
+    return true;
+}
+</script>
+{% endblock %}
