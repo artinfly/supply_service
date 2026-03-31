@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="page-header">
-    <h5>МТО — Материально-техническое обеспечение</h5>
+    <h5>МТО — Материально-техническое обеспечение УВЗ</h5>
 </div>
 
 <div class="idx-grid">
@@ -13,17 +13,29 @@
         <img src="{% static 'reports/img/tank.png' %}" alt="УВЗ">
     </div>
 
-    <div class="idx-card">
-        <div class="idx-label">КДР — Заключение договоров</div>
+    <div class="idx-card idx-card-accent">
+        <div class="idx-label">КДР — Контроль договорной работы</div>
+        <div class="idx-desc">По каждому ИГК и ЦФО: договоры, суммы, % контрактации, авансирование</div>
+        <div class="idx-dates">
+            <div class="idx-date-group">
+                <label class="idx-date-label">С</label>
+                <input type="date" id="idx-kdr-start" class="filter-input" style="width:145px">
+            </div>
+            <div class="idx-date-group">
+                <label class="idx-date-label">По</label>
+                <input type="date" id="idx-kdr-end" class="filter-input" style="width:145px">
+            </div>
+            <button class="btn-ghost" onclick="document.getElementById('idx-kdr-start').value='';document.getElementById('idx-kdr-end').value=''" style="padding:0.2rem 0.6rem;font-size:0.75rem">Сбросить</button>
+        </div>
         <div class="idx-row">
             {% for y in years %}
-            <a href="{% url 'kdr_table' y|stringformat:'s' %}" class="idx-btn">{{ y }}</a>
+            <button class="idx-btn" onclick="downloadIdxKDR('{{ y }}')">КДР {{ y }} ↓</button>
             {% endfor %}
         </div>
     </div>
 
     <div class="idx-card">
-        <div class="idx-label">ИГК — Заключённые</div>
+        <div class="idx-label">ИГК — Заключённые договоры</div>
         <div class="idx-row">
             {% for y in years %}
             <a href="{% url 'igk_concluded_table' y|stringformat:'s' %}" class="idx-btn">{{ y }}</a>
@@ -51,6 +63,7 @@
 
     <div class="idx-card">
         <div class="idx-label">Все договоры</div>
+        <div class="idx-desc">Фильтрация по контрагенту, ИГК, году, статусу</div>
         <div class="idx-row">
             <a href="{% url 'all_contracts_table' %}" class="idx-btn">Открыть</a>
         </div>
@@ -59,7 +72,7 @@
     <div class="idx-card">
         <div class="idx-label">История изменений</div>
         <div class="idx-row">
-            <a href="{% url 'history_status_table' %}" class="idx-btn">Статус</a>
+            <a href="{% url 'history_status_table' %}" class="idx-btn">Статусы</a>
             <a href="{% url 'history_plan_table' %}" class="idx-btn">План</a>
             <a href="{% url 'history_fact_table' %}" class="idx-btn">Факт</a>
         </div>
@@ -67,6 +80,7 @@
 
     <div class="idx-card">
         <div class="idx-label">Контроль качества</div>
+        <div class="idx-desc">Дубликаты по комбинации ИГК + договор + предмет + заказ + этап</div>
         <div class="idx-row">
             <a href="{% url 'contract_dupes_table' %}" class="idx-btn">Дубли договоров</a>
         </div>
@@ -78,20 +92,22 @@
             {% if is_operator %}
             <a href="{% url 'upload_excel' %}" class="idx-btn">Загрузить Excel</a>
             {% else %}
-            <span style="font-size:0.78rem;color:#bbb">Недостаточно прав</span>
+            <span class="idx-disabled">Недостаточно прав</span>
             {% endif %}
         </div>
     </div>
 
-    <div class="idx-card idx-card-wide">
-        <div class="idx-label">Формирование отчётов</div>
+    <div class="idx-card idx-card-wide idx-card-accent">
+        <div class="idx-label">Скачивание отчётов</div>
         <div class="idx-row">
+            <span class="idx-group-label">ИГК авансы</span>
             {% for y in years %}
-            <a href="{% url 'export_advances' y|stringformat:'s' %}" class="idx-btn">ИГК {{ y }} ↓</a>
+            <a href="{% url 'export_advances' y|stringformat:'s' %}" class="idx-btn">{{ y }} ↓</a>
             {% endfor %}
             <span class="idx-sep"></span>
+            <span class="idx-group-label">КДР</span>
             {% for y in years %}
-            <a href="{% url 'export_kdr' y|stringformat:'s' %}" class="idx-btn">КДР {{ y }} ↓</a>
+            <a href="{% url 'export_kdr' y|stringformat:'s' %}" class="idx-btn">{{ y }} ↓</a>
             {% endfor %}
             <span class="idx-sep"></span>
             <a href="{% url 'export_page' %}" class="idx-btn idx-btn-dashed">Все отчёты →</a>
@@ -99,63 +115,23 @@
     </div>
 
 </div>
+{% endblock %}
 
-<style>
-.idx-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.6rem;
+{% block extra_js %}
+<script>
+function downloadIdxKDR(year) {
+    var start = document.getElementById('idx-kdr-start').value;
+    var end = document.getElementById('idx-kdr-end').value;
+    if ((start && !end) || (!start && end)) {
+        alert('Укажите обе даты или оставьте оба поля пустыми');
+        return;
+    }
+    var url = '/reports/export/kdr/' + year + '/';
+    var params = new URLSearchParams();
+    if (start) params.append('start', start);
+    if (end) params.append('end', end);
+    if (params.toString()) url += '?' + params.toString();
+    window.location.href = url;
 }
-.idx-banner {
-    grid-column: 1 / -1;
-    border-radius: 8px;
-    overflow: hidden;
-    height: 150px;
-    background: var(--header-bg);
-}
-.idx-banner img {
-    width: 100%; height: 100%;
-    object-fit: cover; object-position: center 40%;
-    opacity: 0.55; display: block;
-}
-.idx-card-wide { grid-column: 1 / -1; }
-.idx-card {
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    border-top: 3px solid var(--orange);
-    padding: 0.7rem 0.9rem;
-    min-height: 80px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
-.idx-label {
-    font-size: 0.66rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.07em;
-    color: #aaa; margin-bottom: 0.45rem;
-}
-.idx-row { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
-.idx-btn {
-    padding: 0.25rem 0.65rem;
-    border-radius: 5px;
-    font-size: 0.78rem;
-    text-decoration: none;
-    color: var(--orange);
-    border: 1px solid var(--orange);
-    background: #fff;
-    white-space: nowrap;
-    transition: background 0.12s, color 0.12s;
-}
-.idx-btn:hover { background: var(--orange); color: #fff; }
-.idx-btn-dashed { border-style: dashed; }
-.idx-sep { width: 1px; height: 20px; background: #e0e0e0; margin: 0 2px; }
-@media (max-width: 900px) {
-    .idx-grid { grid-template-columns: repeat(2, 1fr); }
-    .idx-card-wide { grid-column: 1 / -1; }
-}
-@media (max-width: 560px) {
-    .idx-grid { grid-template-columns: 1fr; }
-}
-</style>
+</script>
 {% endblock %}

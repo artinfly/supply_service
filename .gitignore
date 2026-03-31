@@ -11,4 +11,4 @@ media/
 *.log
 local_settings.py
 .env
-setup_db.sql
+*.xlsx

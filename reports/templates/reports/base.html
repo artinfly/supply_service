@@ -5,243 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}МТО{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'reports/bootstrap/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'reports/vendor/bootstrap.min.css' %}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --orange:      #e07b2a;
-            --orange-dark: #c96a1e;
-            --orange-soft: #f5e6d6;
-            --sidebar-bg:  #1e1e1e;
-            --sidebar-sec: #272727;
-            --header-bg:   #2e2e2e;
-            --total-bg:    #fde9d4;
-            --subtotal-bg: #fff5ec;
-            --border:      #e8e8e8;
-            --text:        #1e1e1e;
-            --text-muted:  #888;
-        }
-
-        *, *::before, *::after { box-sizing: border-box; }
-
-        body {
-            font-family: 'Golos Text', sans-serif;
-            font-size: 0.875rem;
-            background: #f2f2f2;
-            color: var(--text);
-            margin: 0;
-        }
-
-        .sidebar {
-            position: fixed; top: 0; left: 0;
-            height: 100vh; width: 240px;
-            background: var(--sidebar-bg);
-            overflow-y: auto; z-index: 100;
-            display: flex; flex-direction: column;
-            scrollbar-width: thin;
-            scrollbar-color: #444 transparent;
-        }
-        .sidebar::-webkit-scrollbar { width: 4px; }
-        .sidebar::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
-
-        .sidebar-logo {
-            padding: 1rem 1.1rem 0.85rem;
-            border-bottom: 1px solid #333;
-            display: flex; align-items: center; gap: 0.6rem;
-        }
-        .sidebar-logo-icon {
-            width: 28px; height: 28px; border-radius: 6px;
-            background: var(--orange);
-            display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0;
-        }
-        .sidebar-logo-icon svg { width: 16px; height: 16px; fill: #fff; }
-        .sidebar-logo-text {
-            font-size: 0.82rem; font-weight: 700;
-            color: #fff; line-height: 1.2; letter-spacing: 0.01em;
-        }
-        .sidebar-logo-text span { display: block; font-weight: 400; color: #777; font-size: 0.72rem; }
-
-        .sidebar-logout {
-            margin-top: auto; padding: 0.75rem 1.1rem;
-            border-top: 1px solid #333;
-        }
-        .sidebar-logout a {
-            display: flex; align-items: center; gap: 0.5rem;
-            color: #666; font-size: 0.78rem; text-decoration: none;
-            transition: color 0.15s;
-        }
-        .sidebar-logout a:hover { color: #fff; }
-
-        .nav-section {
-            padding: 0.9rem 1.1rem 0.25rem;
-            font-size: 0.64rem; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 0.1em;
-            color: #555;
-        }
-        .nav-link, .nav-sub-link {
-            display: flex; align-items: center; gap: 0.4rem;
-            padding: 0.3rem 1.1rem 0.3rem 1.4rem;
-            color: #aaa; font-size: 0.8rem;
-            text-decoration: none;
-            transition: background 0.12s, color 0.12s;
-            border-left: 3px solid transparent;
-        }
-        .nav-link { padding-left: 1.1rem; font-weight: 500; }
-        .nav-link:hover, .nav-sub-link:hover { background: var(--sidebar-sec); color: #fff; }
-        .nav-link.active, .nav-sub-link.active {
-            background: var(--sidebar-sec);
-            color: var(--orange);
-            border-left-color: var(--orange);
-        }
-
-        .main-content { margin-left: 240px; padding: 1.5rem 1.75rem; min-height: 100vh; }
-
-        .page-header {
-            display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 1.25rem; padding-bottom: 0.75rem;
-            border-bottom: 2px solid var(--orange-soft);
-        }
-        .page-header h5 { margin: 0; font-size: 1rem; font-weight: 700; color: var(--text); }
-
-        .filter-panel {
-            background: #fff; border: 1px solid var(--border);
-            border-radius: 8px; padding: 0.85rem 1.1rem;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-        }
-        .filter-group { display: flex; flex-direction: column; gap: 0.2rem; }
-        .filter-label {
-            font-size: 0.67rem; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 0.07em;
-            color: var(--text-muted); margin: 0;
-        }
-        .filter-input, .filter-select {
-            border: 1px solid #ddd; border-radius: 5px;
-            padding: 0.28rem 0.6rem;
-            font-size: 0.8rem; font-family: inherit;
-            background: #fff; color: var(--text);
-            outline: none; transition: border-color 0.15s, box-shadow 0.15s;
-        }
-        .filter-input { width: 200px; }
-        .filter-select { width: 110px; }
-        .filter-input:focus, .filter-select:focus {
-            border-color: var(--orange);
-            box-shadow: 0 0 0 3px rgba(224,123,42,0.12);
-        }
-
-        .btn-orange {
-            background: var(--orange); color: #fff;
-            border: none; border-radius: 5px;
-            padding: 0.3rem 1rem; font-size: 0.8rem;
-            font-family: inherit; font-weight: 600;
-            cursor: pointer; transition: background 0.15s;
-        }
-        .btn-orange:hover { background: var(--orange-dark); }
-
-        .btn-ghost {
-            background: #fff; color: #555;
-            border: 1px solid #ddd; border-radius: 5px;
-            padding: 0.3rem 0.9rem; font-size: 0.8rem;
-            font-family: inherit; cursor: pointer;
-            transition: border-color 0.15s, color 0.15s;
-        }
-        .btn-ghost:hover { border-color: var(--orange); color: var(--orange); }
-
-        .btn-year {
-            background: #fff; border: 1px solid #ddd;
-            color: #666; font-size: 0.76rem;
-            font-family: inherit; font-weight: 500;
-            padding: 0.22rem 0.7rem; border-radius: 4px;
-            cursor: pointer; transition: all 0.12s;
-        }
-        .btn-year:hover { border-color: var(--orange); color: var(--orange); }
-        .btn-year.active { background: var(--orange); border-color: var(--orange); color: #fff; }
-
-        .status-check {
-            display: flex; align-items: center; gap: 0.3rem;
-            font-size: 0.79rem; cursor: pointer; white-space: nowrap; color: var(--text);
-        }
-        .status-check input { accent-color: var(--orange); }
-
-        .table-container {
-            background: #fff; border-radius: 8px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-            overflow: auto; max-height: calc(100vh - 180px);
-            border: 1px solid var(--border);
-        }
-        .report-table { border-collapse: separate; border-spacing: 0; width: 100%; margin: 0; }
-        .report-table thead th {
-            background: var(--header-bg); color: #e8e8e8;
-            position: sticky; top: 0; z-index: 10;
-            font-size: 0.72rem; font-weight: 600;
-            white-space: nowrap; padding: 0.55rem 0.85rem;
-            border-right: 1px solid #444;
-            border-bottom: 2px solid var(--orange);
-            letter-spacing: 0.01em;
-        }
-        .report-table thead th:last-child { border-right: none; }
-        .report-table tbody td {
-            font-size: 0.79rem; padding: 0.3rem 0.85rem;
-            white-space: nowrap;
-            border-bottom: 1px solid #f0f0f0;
-            border-right: 1px solid #f5f5f5;
-        }
-        .report-table tbody td.wrap {
-            white-space: normal; word-break: break-word;
-            line-height: 1.4; min-width: 160px; max-width: 520px;
-        }
-        .report-table tbody td:last-child { border-right: none; }
-        .report-table tbody tr:hover td { background: #fafafa; }
-        .row-total td {
-            background: var(--total-bg) !important;
-            font-weight: 700; border-top: 2px solid var(--orange);
-        }
-        .row-subtotal td {
-            background: var(--subtotal-bg) !important;
-            font-weight: 600;
-            border-top: 1px solid #e0c9b5;
-            border-bottom: 1px solid #d4a97a;
-        }
-
-        .pgn-btn {
-            border: 1px solid #ddd; background: #fff;
-            border-radius: 4px; padding: 0.18rem 0.55rem;
-            cursor: pointer; font-size: 0.78rem; font-family: inherit;
-            color: var(--text); transition: all 0.12s;
-        }
-        .pgn-btn:hover:not([disabled]) { border-color: var(--orange); color: var(--orange); }
-        .pgn-btn[disabled] { opacity: 0.35; cursor: default; }
-        .pgn-active { background: var(--orange) !important; color: #fff !important; border-color: var(--orange) !important; }
-
-        .index-card {
-            background: #fff; border-radius: 8px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-            padding: 1.1rem 1.25rem;
-            border-top: 3px solid var(--orange);
-        }
-        .index-card-title {
-            font-size: 0.7rem; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 0.08em;
-            color: var(--text-muted); margin-bottom: 0.75rem;
-        }
-        .btn-index {
-            display: block; padding: 0.35rem 0.75rem;
-            border-radius: 5px; font-size: 0.8rem;
-            text-decoration: none; font-family: inherit;
-            color: var(--orange); border: 1px solid var(--orange);
-            background: #fff; transition: background 0.15s, color 0.15s;
-            text-align: center;
-        }
-        .btn-index:hover { background: var(--orange); color: #fff; }
-
-        .loading-spinner {
-            display: flex; align-items: center; justify-content: center;
-            padding: 3rem; color: #999; font-size: 0.85rem; gap: 0.5rem;
-        }
-        .error-msg { padding: 1rem; color: #c0392b; font-size: 0.85rem; }
-        .row-count-label { font-size: 0.75rem; color: var(--text-muted); }
-    </style>
+    <link rel="stylesheet" href="{% static 'reports/css/style.css' %}">
 </head>
 <body>
 
@@ -254,7 +21,7 @@
     </div>
 
     <div class="nav-section">Главная</div>
-    <a href="{% url 'index' %}" class="nav-link">Обзор</a>
+    <a href="{% url 'root' %}" class="nav-link">Обзор</a>
 
     <div class="nav-section">КДР — статистика</div>
     {% for y in years %}
@@ -295,7 +62,7 @@
     {% endif %}
 
     <div class="sidebar-logout">
-        <a href="/logout/">
+        <a href="{% url 'logout' %}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
             </svg>
@@ -308,7 +75,7 @@
     {% block content %}{% endblock %}
 </div>
 
-<script src="{% static 'reports/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+<script src="{% static 'reports/vendor/bootstrap.bundle.min.js' %}"></script>
 <script>
 function fmt(val, format) {
     if (val === null || val === undefined || val === '') return '';

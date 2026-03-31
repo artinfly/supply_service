@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.db import connection
+from datetime import date
 
 
 def to_float(val):
@@ -11,9 +12,9 @@ def to_float(val):
         return None
 
 
-def year_flags(dataplan):
+def year_flags(god_igk):
     try:
-        y = int(str(dataplan).strip()[:4])
+        y = int(str(god_igk).strip()[:4])
         return y == 2025, y == 2026, y == 2027
     except Exception:
         return False, False, False
@@ -29,6 +30,11 @@ def floats_equal(a, b):
     if a is None or b is None:
         return False
     return round(float(a), 2) == round(float(b), 2)
+
+
+CONCLUDED = ('Исполняется', 'Возвращен на уточнение', 'На согласовании', 'Подписан', 'На утверждении')
+CONCLUDED_SQL = ', '.join(f"'{s}'" for s in CONCLUDED)
+YEAR_MAP = [('y25', 2025), ('y26', 2026), ('y27', 2027)]
 
 
 class Command(BaseCommand):
@@ -53,19 +59,19 @@ class Command(BaseCommand):
             cur.execute("""
                 SELECT igk, kontragent, cfo, dogovor, sostoyanie,
                        tip_platezha, predmet, zakaz, plan, fakt,
-                       tol, etap_grafika, dataplan, sozdan
+                       tol, etap_grafika, dataplan, sozdan, god_igk
                 FROM staging_excel
             """)
             staging_rows = cur.fetchall()
 
             new_data = []
             for r in staging_rows:
-                y25, y26, y27 = year_flags(r[12])
+                y25, y26, y27 = year_flags(r[14])
                 new_data.append((
-                    norm(r[0]),  norm(r[1]),  norm(r[2]),  norm(r[3]),
-                    norm(r[4]),  norm(r[5]) or None,
-                    norm(r[6]),  norm(r[7]),
-                    to_float(r[8]),  to_float(r[9]),  to_float(r[10]),
+                    norm(r[0]), norm(r[1]), norm(r[2]), norm(r[3]),
+                    norm(r[4]), norm(r[5]) or None,
+                    norm(r[6]), norm(r[7]),
+                    to_float(r[8]), to_float(r[9]), to_float(r[10]),
                     norm(r[11]), y25, y26, y27, False,
                     norm(r[12]), norm(r[13])
                 ))
@@ -93,7 +99,7 @@ class Command(BaseCommand):
                 for r in new_data
             }
 
-            today = __import__('datetime').date.today()
+            today = date.today()
             history = []
             for key, new_vals in new_lookup.items():
                 if key not in old_lookup:
@@ -104,8 +110,8 @@ class Command(BaseCommand):
                 new_status, new_plan, new_fact = new_vals
 
                 status_changed = old_status != new_status
-                plan_changed   = not floats_equal(old_plan, new_plan)
-                fact_changed   = not floats_equal(old_fact, new_fact)
+                plan_changed = not floats_equal(old_plan, new_plan)
+                fact_changed = not floats_equal(old_fact, new_fact)
 
                 if not (status_changed or plan_changed or fact_changed):
                     continue
@@ -143,5 +149,23 @@ class Command(BaseCommand):
                      y25, y26, y27, is_deleted, plan_date, c_date)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, new_data)
+
+            for year_col, year_val in YEAR_MAP:
+                cur.execute(f"""
+                    INSERT INTO contract_counts_snapshot (upload_date, igk, cfo, year_col, concluded_count)
+                    SELECT
+                        %s,
+                        RIGHT(igk, 4),
+                        cfo,
+                        %s,
+                        COUNT(DISTINCT contract)
+                    FROM igk_stat_data
+                    WHERE {year_col}=TRUE
+                      AND status IN ({CONCLUDED_SQL})
+                      AND contract IS NOT NULL AND TRIM(contract) != ''
+                      AND igk IS NOT NULL AND TRIM(igk) != ''
+                      AND cfo IS NOT NULL AND TRIM(cfo) != ''
+                    GROUP BY RIGHT(igk, 4), cfo
+                """, [today, year_col])
 
         self.stdout.write(f'done: {len(new_data)} rows, {len(history)} changes')

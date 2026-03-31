@@ -23,11 +23,23 @@
     <div class="index-card">
         <div class="index-card-title">КДР — Заключение договоров</div>
         <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">
-            По каждому ИГК и ЦФО: договоры, суммы, % контрактации, авансирование
+            По каждому ИГК и ЦФО: договоры, суммы, % контрактации, авансирование.
+            Укажите период — в отчёт добавится столбец «Заключено за период, шт.»
         </p>
+        <div class="d-flex gap-3 flex-wrap align-items-end mb-2">
+            <div class="filter-group">
+                <label class="filter-label">С</label>
+                <input type="date" id="kdr-start" class="filter-input" style="width:155px">
+            </div>
+            <div class="filter-group">
+                <label class="filter-label">По</label>
+                <input type="date" id="kdr-end" class="filter-input" style="width:155px">
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" onclick="clearKdrDates()" style="height:32px">✕ Сбросить</button>
+        </div>
         <div class="d-flex gap-2 flex-wrap">
             {% for y in years %}
-            <a href="{% url 'export_kdr' y|stringformat:'s' %}" class="btn-index">КДР {{ y }} ↓</a>
+            <button class="btn-index" onclick="downloadKDR('{{ y }}')">КДР {{ y }} ↓</button>
             {% endfor %}
         </div>
     </div>
@@ -106,6 +118,26 @@ function downloadAgent(year) {
         return;
     }
     window.location.href = `/reports/export/contracts/${year}/?agent=${encodeURIComponent(agent)}`;
+}
+
+function clearKdrDates() {
+    document.getElementById('kdr-start').value = '';
+    document.getElementById('kdr-end').value = '';
+}
+
+function downloadKDR(year) {
+    const start = document.getElementById('kdr-start').value;
+    const end = document.getElementById('kdr-end').value;
+    if ((start && !end) || (!start && end)) {
+        alert('Укажите обе даты или оставьте оба поля пустыми');
+        return;
+    }
+    let url = `/reports/export/kdr/${year}/`;
+    const params = new URLSearchParams();
+    if (start) params.append('start', start);
+    if (end) params.append('end', end);
+    if (params.toString()) url += '?' + params.toString();
+    window.location.href = url;
 }
 </script>
 {% endblock %}

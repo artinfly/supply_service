@@ -18,6 +18,7 @@ COLUMN_MAP = {
     'Этап графика':   'etap_grafika',
     'ДатаПЛАН':       'dataplan',
     'Создан':         'sozdan',
+    'ГодИГК':         'god_igk',
 }
 
 DB_FIELDS    = list(COLUMN_MAP.values())
