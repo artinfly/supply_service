@@ -128,8 +128,8 @@ function clearKdrDates() {
 function downloadKDR(year) {
     const start = document.getElementById('kdr-start').value;
     const end = document.getElementById('kdr-end').value;
-    if ((start && !end) || (!start && end)) {
-        alert('Укажите обе даты или оставьте оба поля пустыми');
+    if (!start || !end) {
+        alert('Для формирования КДР необходимо выбрать обе даты периода');
         return;
     }
     let url = `/reports/export/kdr/${year}/`;

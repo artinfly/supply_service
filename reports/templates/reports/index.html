@@ -16,6 +16,9 @@
     <div class="idx-card idx-card-accent">
         <div class="idx-label">КДР — Контроль договорной работы</div>
         <div class="idx-desc">По каждому ИГК и ЦФО: договоры, суммы, % контрактации, авансирование</div>
+        <div class="idx-desc" style="color:#e07b00;font-size:0.75rem;margin-bottom:0.5rem">
+            * Укажите период - он обязателен для столбца "Заключено за период"
+        </div>
         <div class="idx-dates">
             <div class="idx-date-group">
                 <label class="idx-date-label">С</label>
@@ -105,11 +108,6 @@
             <a href="{% url 'export_advances' y|stringformat:'s' %}" class="idx-btn">{{ y }} ↓</a>
             {% endfor %}
             <span class="idx-sep"></span>
-            <span class="idx-group-label">КДР</span>
-            {% for y in years %}
-            <a href="{% url 'export_kdr' y|stringformat:'s' %}" class="idx-btn">{{ y }} ↓</a>
-            {% endfor %}
-            <span class="idx-sep"></span>
             <a href="{% url 'export_page' %}" class="idx-btn idx-btn-dashed">Все отчёты →</a>
         </div>
     </div>
@@ -122,8 +120,8 @@
 function downloadIdxKDR(year) {
     var start = document.getElementById('idx-kdr-start').value;
     var end = document.getElementById('idx-kdr-end').value;
-    if ((start && !end) || (!start && end)) {
-        alert('Укажите обе даты или оставьте оба поля пустыми');
+    if (!start || !end) {
+        alert('Для формирования КДР необходимо выбрать обе даты периода');
         return;
     }
     var url = '/reports/export/kdr/' + year + '/';

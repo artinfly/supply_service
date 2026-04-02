@@ -20,7 +20,10 @@
             <label class="filter-label">Excel файл (.xlsx)</label>
             <input type="file" name="excel_file" accept=".xlsx" class="form-control mt-1" style="font-size:0.82rem">
         </div>
-        <button type="submit" class="btn-orange">Загрузить и нормализовать</button>
+        <button type="submit" class="btn-orange" id ="upload-btn">Загрузить и нормализовать</button>
+        <div id="upload-progress" style="display:none;margin-top:0.75rem;font-size:0.82rem;color:#555">
+            Идёт загрузка и обработка файла, подождите...
+        </div>
         <div id="file-error" style="display:none;color:#c0392b;font-size:0.8rem;margin-top:0.5rem">
             Файл не прикреплён — выберите .xlsx файл перед загрузкой
         </div>
@@ -45,6 +48,9 @@ function checkFile() {
         return false;
     }
     err.style.display = 'none';
+    document.getElementById('upload-btn').disabled = true;
+    document.getElementById('upload-btn').textContent = 'Загрузка...';
+    document.getElementById('upload-btn').style.display = 'block';
     return true;
 }
 </script>
