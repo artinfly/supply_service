@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load custom_filters %}
+{% block title %}ЗНП (SAP){% endblock %}
+
+{% block content %}
+    <div class="page-header">
+        <h5>Заявки на платёж (SAP)</h5>
+        <form method="get" class="d-flex gap-2 align-items-center" id='options'>
+            <select class="form-select form-select-sm" name="igk" onchange="this.form.submit()" style="width:auto">
+                {% for i in available_igk %}
+                <option value="{{ i }}" {% if selected_igk == i %}selected{% endif %}>{{ i }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+
+    {% if not has_data %}
+        {% include "_no_data.html" %}
+    {% else %}
+
+    <div class="row g-3 mb-4">
+        <div class="card-block">
+            <div class="dash-row">
+                <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(37,99,235,.12);color:#2563eb">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: black;">Всего ЗНП (SAP): {{ all.total_count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">на сумму {{ all.total_sum|floatformat:2|intspace }} млн. &#8381</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(190,12,12,.12);color:#be0c0c">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/><path d="M13 3l5 5h-5V3z"/><circle cx="17" cy="17" r="4"/><path d="M17 15.3v1.9l1.3 1"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #be0c0c;">На согласовании: {{ all.waiting_agreement.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ all.waiting_agreement.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.waiting_agreement.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_sap_list_table' %}?statuses=sent_18" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(190,12,12,.12);color:#be0c0c">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h6"/><path d="M13 3l5 5h-5V3z"/><path d="M14 15h7"/><path d="M18 12l3 3-3 3"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #be0c0c;">Передано в 18 отдел: {{ all.sent_18.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ all.sent_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.sent_18.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="dash-row">
+                <a href="{% url 'znp_sap_list_table' %}?statuses=confirmed_18" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(37,99,235,.12);color:#2563eb">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/><path d="M13 3l5 5h-5V3z"/><path d="M9 14l2 2 4-4"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #2563eb;">Подтверждено 18 отделом: {{ all.confirmed_18.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ all.confirmed_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.confirmed_18.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_sap_list_table' %}?statuses=paid" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(22,163,74,.12);color:#16a34a">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #16a34a;">Оплачено: {{ all.paid.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ all.paid.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.paid.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="igk-stat-card">
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th rowspan="2">ЦФО</th>
+                    <th rowspan="2">Всего ЗНП, шт.</th>
+                    <th rowspan="2">Сумма всех ЗНП, млн.руб.</th>
+                    {% for stage in stage_names %}
+                    <th colspan="2">{{ stage }}</th>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    {% for stage in stage_names %}
+                    <th>шт.</th>
+                    <th>млн.руб.</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in cfo_table %}
+                <tr>
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ row.cfo }}</div>
+                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid"></a>
+                    </td>
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ row.total_count }}</div>
+                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid"></a>
+                    </td>
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ row.total_sum|floatformat:2|intspace }}</div>
+                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid"></a>
+                    </td>
+                    {% for cell in row.cells %}
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ cell.count }}</div>
+                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses={{ cell.status_param }}"></a>
+                    </td>
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ cell.sum|floatformat:2|intspace }}</div>
+                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses={{ cell.status_param }}"></a>
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+                <tr class="row-total">
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ cfo_total_row.cfo }}</div>
+                        <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid"></a>
+                    </td>
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ cfo_total_row.total_count }}</div>
+                        <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid"></a>
+                    </td>
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ cfo_total_row.total_sum|floatformat:2|intspace }}</div>
+                        <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid"></a>
+                    </td>
+                    {% for cell in cfo_total_row.cells %}
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ cell.count }}</div>
+                        <a href="{% url 'znp_sap_list_table' %}?statuses={{ cell.status_param }}"></a>
+                    </td>
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ cell.sum|floatformat:2|intspace }}</div>
+                        <a href="{% url 'znp_sap_list_table' %}?statuses={{ cell.status_param }}"></a>
+                    </td>
+                    {% endfor %}
+                </tr>
+            </tbody>
+        </table>
+        {% if not cfo_table %}
+        <div class="p-4 text-muted text-center">
+            По выбранному ИГК заявок нет.
+        </div>
+        {% endif %}
+    </div>
+
+
+    <div class="table-container" style="padding:18px 20px 22px;margin-bottom:18px">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 style="margin:0;font-size:14px;font-weight:700">Прохождение этапов по месяцам</h6>
+            <select class="form-select form-select-sm" id="chart-year"
+                    style="width:auto" onchange="drawChart()">
+                {% for y in years %}
+                <option value="{{ y }}" {% if y|stringformat:"s" == current_year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="position:relative;height:300px">
+            <canvas id="chart-znp-sap"></canvas>
+        </div>
+    </div>
+    {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'vendor/chart.umd.min.js' %}"></script>
+<script src="{% static 'vendor/chartjs-plugin-datalabels.min.js' %}"></script>
+<script src="{% static 'js/charts.js' %}"></script>
+<script>
+// у страницы SAP нет общего переключателя года, поэтому свой — рядом с графиком
+function drawChart() {
+    const params = new URLSearchParams({
+        igk:  '{{ selected_igk|escapejs }}',
+        year: document.getElementById('chart-year').value,
+    });
+    loadChart('chart-znp-sap', '{% url "api_chart_znp_sap" %}?' + params);
+}
+drawChart();
+</script>
+{% endblock %}
