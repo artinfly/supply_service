@@ -1,0 +1,176 @@
+{% extends 'base.html' %}
+{% block title %}Все ЗНП (SAP){% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h5>Все ЗНП (SAP)</h5>
+</div>
+
+<div class="filter-panel mb-3">
+    <div class="d-flex flex-wrap gap-3 align-items-end">
+        <div class="filter-group">
+            <label class="filter-label">Контрагент / рег. номер</label>
+            <input type="text" id="filter-agent" class="filter-input" placeholder="Поиск...">
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">ИГК</label>
+            <input type="text" id="filter-igk" class="filter-input" placeholder="Поиск...">
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">ЦФО</label>
+            <input type="text" id="filter-cfo" class="filter-input" style="width:100px" placeholder="Поиск...">
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Этап согласования</label>
+            <div class="d-flex gap-2 flex-wrap">
+                <label class="status-check"><input type="checkbox" id="cb-waiting-agreement" checked> На согласовании</label>
+                <label class="status-check"><input type="checkbox" id="cb-sent-18" checked> Передано в 18 отдел</label>
+                <label class="status-check"><input type="checkbox" id="cb-confirmed-18" checked> Подтверждено 18 отделом</label>
+                <label class="status-check"><input type="checkbox" id="cb-paid" checked> Оплачено</label>
+            </div>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Строк</label>
+            <select id="page-size" class="filter-select">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="200">200</option>
+            </select>
+        </div>
+        <div class="filter-group" style="flex-direction:row;align-items:flex-end;gap:0.4rem">
+            <button id="btn-search" class="btn-orange">Найти</button>
+            <button id="btn-reset" class="btn-ghost">Сбросить</button>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-2">
+    <span class="row-count-label">Показано: <strong id="row-count">0</strong> записей</span>
+    <div id="pagination-top"></div>
+</div>
+
+<div class="table-container" id="table-wrapper"></div>
+<div id="pagination-bot" class="mt-2 d-flex justify-content-end"></div>
+<div id="page-data" data-api-url="{% url 'api_znp_sap_list' %}" style="display:none"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const COLS = [
+    { field: 'igk',               title: 'ИГК',                 style: 'style="width: 90px;"' },
+    { field: 'cfo',                title: 'ЦФО',                 style: 'style="width: 70px;"' },
+    { field: 'c_agent',           title: 'Контрагент' },
+    { field: 'reg_num',           title: 'Рег. номер' },
+    { field: 'items',             title: 'Текст' },
+    { field: 'sap_status',        title: 'Этап',                style: 'style="width: 160px;"' },
+    { field: 'bank_name',         title: 'Банк' },
+    { field: 'stage_e',           title: 'Передано в 18 отдел', style: 'style="width: 110px;"' },
+    { field: 'stage_f',           title: 'Подтверждено 18 отделом', style: 'style="width: 110px;"' },
+    { field: 'normalize_doc_num', title: 'Документ выравнивания', style: 'style="width: 130px;"' },
+    { field: 'vv_sum',            title: 'Сумма во ВВ, руб.',   format: 'number' },
+];
+
+const apiUrl = document.getElementById('page-data').dataset.apiUrl;
+let loadedData  = [];
+let currentPage = 1;
+
+function buildUrl() {
+    const params = new URLSearchParams();
+    const agent = document.getElementById('filter-agent').value.trim();
+    const igk   = document.getElementById('filter-igk').value.trim();
+    const cfo   = document.getElementById('filter-cfo').value.trim();
+    if (agent) params.append('agent', agent);
+    if (igk)   params.append('igk', igk);
+    if (cfo)   params.append('cfo', cfo);
+    if (document.getElementById('cb-waiting-agreement').checked) params.append('status', 'waiting_agreement');
+    if (document.getElementById('cb-sent-18').checked)           params.append('status', 'sent_18');
+    if (document.getElementById('cb-confirmed-18').checked)      params.append('status', 'confirmed_18');
+    if (document.getElementById('cb-paid').checked)              params.append('status', 'paid');
+    const qs = params.toString();
+    return apiUrl + (qs ? '?' + qs : '');
+}
+
+function renderPage() {
+    const ps    = pageSize();
+    const start = isFinite(ps) ? (currentPage - 1) * ps : 0;
+    const slice = isFinite(ps) ? loadedData.slice(start, start + ps) : loadedData;
+    document.getElementById('row-count').textContent = loadedData.length;
+    renderPagination(loadedData.length, ps, currentPage, 'pagination-top');
+    renderPagination(loadedData.length, ps, currentPage, 'pagination-bot');
+
+    const container = document.getElementById('table-wrapper');
+    if (!slice.length) {
+        container.innerHTML = '<div class="p-4 text-muted text-center">Нет данных по заданным фильтрам</div>';
+        return;
+    }
+
+    let html = '<table class="report-table" style="table-layout: auto;"><thead><tr>';
+    COLS.forEach(col => { html += `<th ${col.style}>${col.title}</th>`; });
+    html += '</tr></thead><tbody>';
+
+    slice.forEach(row => {
+        html += '<tr>';
+        COLS.forEach(col => {
+            let val = row[col.field] ?? '';
+            if (col.format === 'number' && val !== '')
+                val = parseFloat(val).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const align = col.format ? 'text-end' : '';
+            const wrap  = (!col.format && !col.style) ? 'wrap' : '';
+            html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${esc(val)}</td>`;
+        });
+        html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function loadFiltersFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('agent'))
+        document.getElementById('filter-agent').value = params.get('agent');
+    if (params.has('igk'))
+        document.getElementById('filter-igk').value = params.get('igk');
+    if (params.has('cfo'))
+        document.getElementById('filter-cfo').value = params.get('cfo');
+    if (params.has('statuses')) {
+        const statusesParams = params.get('statuses').split(',');
+        document.getElementById('cb-waiting-agreement').checked = statusesParams.includes('waiting_agreement');
+        document.getElementById('cb-sent-18').checked           = statusesParams.includes('sent_18');
+        document.getElementById('cb-confirmed-18').checked      = statusesParams.includes('confirmed_18');
+        document.getElementById('cb-paid').checked              = statusesParams.includes('paid');
+    }
+}
+
+async function loadData() {
+    document.getElementById('table-wrapper').innerHTML =
+        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div>Загрузка...</div>';
+    try {
+        const resp = await fetch(buildUrl());
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        loadedData  = await resp.json();
+        currentPage = 1;
+        renderPage();
+    } catch (e) {
+        document.getElementById('table-wrapper').innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
+    }
+}
+
+document.getElementById('page-size').addEventListener('change', () => { currentPage = 1; renderPage(); });
+document.getElementById('filter-agent').addEventListener('keydown', e => { if (e.key === 'Enter') loadData(); });
+document.getElementById('btn-search').addEventListener('click', loadData);
+document.getElementById('btn-reset').addEventListener('click', () => {
+    document.getElementById('filter-agent').value = '';
+    document.getElementById('filter-igk').value   = '';
+    document.getElementById('filter-cfo').value   = '';
+    document.getElementById('cb-waiting-agreement').checked = true;
+    document.getElementById('cb-sent-18').checked           = true;
+    document.getElementById('cb-confirmed-18').checked      = true;
+    document.getElementById('cb-paid').checked              = true;
+    loadData();
+});
+
+loadFiltersFromURL();
+loadData();
+</script>
+{% endblock %}

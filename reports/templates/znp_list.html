@@ -1,0 +1,215 @@
+{% extends 'base.html' %}
+{% block title %}Все ЗНП (ФЗД){% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h5>Все ЗНП (ФЗД)</h5>
+</div>
+
+<div class="filter-panel mb-3">
+    <div class="d-flex flex-wrap gap-3 align-items-end">
+        <div class="filter-group">
+            <label class="filter-label">Контрагент</label>
+            <input type="text" id="filter-agent" class="filter-input" placeholder="Поиск...">
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">ИГК</label>
+            <select id="filter-igk" class="filter-select">
+                <option value="">Все</option>
+                {% for igk in igk_list %}
+                <option value="{{ igk }}">{{ igk }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Год</label>
+            <div class="d-flex gap-1">
+                <button class="btn-year active" data-year="all">Все</button>
+                {% for y, yc in year_cols %}
+                <button class="btn-year" data-year="{{ y }}">{{ y }}</button>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Статус ЗНП</label>
+            <div class="d-flex gap-2 flex-wrap">
+                <label class="status-check"><input type="checkbox" id="cb-not-issued" checked> Не оформлена</label>
+                <label class="status-check"><input type="checkbox" id="cb-advance" checked> Аванс</label>
+                <label class="status-check"><input type="checkbox" id="cb-advance-paid" checked> Оплачен аванс</label>
+                <label class="status-check"><input type="checkbox" id="cb-postpayment" checked> Постоплата</label>
+                <label class="status-check"><input type="checkbox" id="cb-postpayment-paid" checked> Оплачена постоплата</label>
+            </div>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Строк</label>
+            <select id="page-size" class="filter-select">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="200">200</option>
+            </select>
+        </div>
+        <div class="filter-group" style="flex-direction:row;align-items:flex-end;gap:0.4rem">
+            <button id="btn-search" class="btn-orange">Найти</button>
+            <button id="btn-reset" class="btn-ghost">Сбросить</button>
+        </div>
+        <input type="hidden" id="filter-cfo" value="">
+    </div>
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-2">
+    <span class="row-count-label">Показано: <strong id="row-count">0</strong> записей</span>
+    <div id="pagination-top"></div>
+</div>
+
+<div class="table-container" id="table-wrapper"></div>
+<div id="pagination-bot" class="mt-2 d-flex justify-content-end"></div>
+<div id="page-data" data-api-url="{% url 'api_znp_list' %}" style="display:none"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const COLS = [
+    { field: 'igk',              title: 'ИГК договора',           style: 'style="width: 80px;"' },
+    { field: 'znp_igk',          title: 'ИГК оплаты',             style: 'style="width: 80px;"' },
+    { field: 'c_agent',          title: 'Контрагент' },
+    { field: 'contract',         title: 'Договор' },
+    { field: 'cfo',              title: 'ЦФО',                    style: 'style="width: 80px;"' },
+    { field: 'payment_type',     title: 'Тип платежа',            style: 'style="width: 100px;"' },
+    { field: 'znp_status',       title: 'Статус ЗНП',             style: 'style="width: 130px;"' },
+    { field: 'plan_doc',         title: 'Документ планирования' },
+    { field: 'payment_purpose',  title: 'Назначение платежа' },
+    { field: 'plan_payment_date', title: 'Дата оплаты (план)',    style: 'style="width: 110px;"' },
+    { field: 'fact_payment_date', title: 'Дата оплаты (факт)',    style: 'style="width: 110px;"' },
+    { field: 'position_sum',     title: 'Сумма позиции, руб.',    format: 'number' },
+    { field: 'znp_plan_sum',     title: 'Сумма ЗНП план, руб.',   format: 'number' },
+    { field: 'znp_fact_sum',     title: 'Сумма ЗНП факт, руб.',   format: 'number' },
+];
+
+const apiUrl    = document.getElementById('page-data').dataset.apiUrl;
+let loadedData  = [];
+let currentPage = 1;
+let activeYear  = 'all';
+
+function buildUrl() {
+    const params = new URLSearchParams();
+    const agent  = document.getElementById('filter-agent').value.trim();
+    const igk    = document.getElementById('filter-igk').value.trim();
+    const cfo    = document.getElementById('filter-cfo').value.trim();
+    if (agent) params.append('agent', agent);
+    if (igk)   params.append('igk', igk);
+    if (cfo)   params.append('cfo', cfo);
+    if (document.getElementById('cb-not-issued').checked)       params.append('status', 'not_issued');
+    if (document.getElementById('cb-advance').checked)          params.append('status', 'advance');
+    if (document.getElementById('cb-advance-paid').checked)     params.append('status', 'advance_paid');
+    if (document.getElementById('cb-postpayment').checked)      params.append('status', 'postpayment');
+    if (document.getElementById('cb-postpayment-paid').checked) params.append('status', 'postpayment_paid');
+    if (activeYear !== 'all') params.append('year', activeYear);
+    const qs = params.toString();
+    return apiUrl + (qs ? '?' + qs : '');
+}
+
+function renderPage() {
+    const ps    = pageSize();
+    const start = isFinite(ps) ? (currentPage - 1) * ps : 0;
+    const slice = isFinite(ps) ? loadedData.slice(start, start + ps) : loadedData;
+    document.getElementById('row-count').textContent = loadedData.length;
+    renderPagination(loadedData.length, ps, currentPage, 'pagination-top');
+    renderPagination(loadedData.length, ps, currentPage, 'pagination-bot');
+
+    const container = document.getElementById('table-wrapper');
+    if (!slice.length) {
+        container.innerHTML = '<div class="p-4 text-muted text-center">Нет данных по заданным фильтрам</div>';
+        return;
+    }
+
+    let html = '<table class="report-table" style="table-layout: auto;"><thead><tr>';
+    COLS.forEach(col => { html += `<th ${col.style}>${col.title}</th>`; });
+    html += '</tr></thead><tbody>';
+
+    slice.forEach(row => {
+        html += '<tr>';
+        COLS.forEach(col => {
+            let val = row[col.field] ?? '';
+            if ((col.field === 'igk' || col.field === 'znp_igk') && val !== '')
+                val = String(val).slice(-4);
+            else if (col.format === 'number' && val !== '')
+                val = parseFloat(val).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const align = col.format ? 'text-end' : '';
+            const wrap  = (!col.format && !col.style) ? 'wrap' : '';
+            html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${esc(val)}</td>`;
+        });
+        html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function loadFiltersFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('agent'))
+        document.getElementById('filter-agent').value = params.get('agent');
+    if (params.has('igk'))
+        document.getElementById('filter-igk').value = params.get('igk');
+    if (params.has('cfo'))
+        document.getElementById('filter-cfo').value = params.get('cfo');
+    if (params.has('year')) {
+        const year = params.get('year');
+        const btn = document.querySelector(`.btn-year[data-year="${year}"]`)
+        if (btn)
+            btn.click();
+    }
+    if (params.has('statuses')) {
+        const statusesParams = params.get('statuses').split(',');
+        document.getElementById('cb-not-issued').checked       = statusesParams.includes('not_issued');
+        document.getElementById('cb-advance').checked          = statusesParams.includes('advance');
+        document.getElementById('cb-advance-paid').checked     = statusesParams.includes('advance_paid');
+        document.getElementById('cb-postpayment').checked      = statusesParams.includes('postpayment');
+        document.getElementById('cb-postpayment-paid').checked = statusesParams.includes('postpayment_paid');
+    }
+}
+
+async function loadData() {
+    document.getElementById('table-wrapper').innerHTML =
+        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div>Загрузка...</div>';
+    try {
+        const resp = await fetch(buildUrl());
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        loadedData  = await resp.json();
+        currentPage = 1;
+        renderPage();
+    } catch (e) {
+        document.getElementById('table-wrapper').innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
+    }
+}
+
+document.querySelectorAll('.btn-year').forEach(btn => {
+    btn.addEventListener('click', function () {
+        document.querySelectorAll('.btn-year').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        activeYear = this.dataset.year;
+    });
+});
+
+document.getElementById('page-size').addEventListener('change', () => { currentPage = 1; renderPage(); });
+document.getElementById('filter-agent').addEventListener('keydown', e => { if (e.key === 'Enter') loadData(); });
+document.getElementById('btn-search').addEventListener('click', loadData);
+document.getElementById('btn-reset').addEventListener('click', () => {
+    document.getElementById('filter-agent').value      = '';
+    document.getElementById('filter-igk').value        = '';
+    document.getElementById('filter-cfo').value        = '';
+    document.getElementById('cb-not-issued').checked       = true;
+    document.getElementById('cb-advance').checked          = true;
+    document.getElementById('cb-advance-paid').checked     = true;
+    document.getElementById('cb-postpayment').checked      = true;
+    document.getElementById('cb-postpayment-paid').checked = true;
+    document.querySelectorAll('.btn-year').forEach(b => b.classList.remove('active'));
+    document.querySelector('.btn-year[data-year="all"]').classList.add('active');
+    activeYear = 'all';
+    loadData();
+});
+
+loadFiltersFromURL();
+loadData();
+</script>
+{% endblock %}

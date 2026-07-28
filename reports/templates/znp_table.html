@@ -1,0 +1,301 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load custom_filters %}
+{% block title %}ЗНП (ФЗД){% endblock %}
+
+{% block content %}
+    <div class="page-header">
+        <h5>Заявки на платёж (ФЗД)</h5>
+        <form method="get" class="d-flex gap-2 align-items-center" id='options'>
+            <select class="form-select form-select-sm" name="year" onchange="this.form.submit()" style="width:auto">
+                {% for y in available_years %}
+                <option value="{{ y }}" {% if selected_year == y|stringformat:"s" %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+            <select class="form-select form-select-sm" name="igk" onchange="this.form.submit()" style="width:auto">
+                {% for i in available_igk %}
+                <option value="{{ i }}" {% if selected_igk == i|stringformat:"s" %}selected{% endif %}>{{ i }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+
+    {% if not has_data %}
+        {% include "_no_data.html" %}
+    {% else %}
+
+    <div class="row g-3 mb-4">
+        <div class="card-block">
+            <div class="dash-row">
+                <a href="{% url 'znp_list_table' %}?year=all&statuses=not_issued,advance,postpayment" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(37,99,235,.12);color:#2563eb">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: black;">Всего ЗНП: {{ all.total_count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">на сумму {{ all.total_sum|floatformat:2|intspace }} млн. &#8381</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_list_table' %}?year=all&statuses=advance,postpayment" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(22,163,74,.12);color:#16a34a">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #16a34a;">Оформлено: {{ all.issued.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ all.issued.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.issued.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_list_table' %}?year=all&statuses=not_issued" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(190,12,12,.12);color:#be0c0c">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/><path d="M13 3l5 5h-5V3z"/><circle cx="17" cy="17" r="4"/><path d="M17 15.3v1.9l1.3 1"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #be0c0c;">Не оформлено: {{ all.not_issued.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ all.not_issued.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.not_issued.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="dash-row">
+                <a href="{% url 'znp_list_table' %}?year=all&statuses=advance" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(37,99,235,.12);color:#2563eb">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M16 12h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3a2 2 0 0 1 0-4z"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #2563eb;">Оформлено (Аванс): {{ all.advance.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ all.advance.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.advance.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_list_table' %}?year=all&statuses=advance_paid" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(22,163,74,.12);color:#16a34a">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M2 10h20" stroke-opacity="0.5"/><path d="M14.5 16.5l1.6 1.6 3-3.2"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #16a34a;">Оплачено (Аванс): {{ all.advance_paid.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ all.advance_paid.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.advance_paid.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_list_table' %}?year=all&statuses=postpayment" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(37,99,235,.12);color:#2563eb">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4M16 3v4"/><circle cx="15.5" cy="15.5" r="3.2"/><path d="M15.5 14v1.6l1.1.8"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #2563eb;">Оформлено (Постоплата): {{ all.postpayment.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ all.postpayment.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.postpayment.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_list_table' %}?year=all&statuses=postpayment_paid" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(22,163,74,.12);color:#16a34a">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18" stroke-opacity="0.5"/><path d="M8 3v4M16 3v4" stroke-opacity="0.5"/><path d="M11.8 16.3l1.6 1.6 3-3.2"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #16a34a;">Оплачено (Постоплата): {{ all.postpayment_paid.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ all.postpayment_paid.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.postpayment_paid.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <div class="card-block">
+            <div class="dash-row">
+                <a href="{% url 'znp_list_table' %}?year={{ selected_year }}&statuses=not_issued,advance,postpayment" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(37,99,235,.12);color:#2563eb">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: black;">Всего ЗНП за {{ selected_year }}г.: {{ year.total_count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">на сумму {{ year.total_sum|floatformat:2|intspace }} млн. &#8381</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_list_table' %}?year={{ selected_year }}&statuses=advance,postpayment" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(22,163,74,.12);color:#16a34a">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #16a34a;">Оформлено: {{ year.issued.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ year.issued.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ year.issued.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_list_table' %}?year={{ selected_year }}&statuses=not_issued" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(190,12,12,.12);color:#be0c0c">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/><path d="M13 3l5 5h-5V3z"/><circle cx="17" cy="17" r="4"/><path d="M17 15.3v1.9l1.3 1"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #be0c0c;">Не оформлено: {{ year.not_issued.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ year.not_issued.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ year.not_issued.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="dash-row">
+                <a href="{% url 'znp_list_table' %}?year={{ selected_year }}&statuses=advance" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(37,99,235,.12);color:#2563eb">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M16 12h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3a2 2 0 0 1 0-4z"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #2563eb;">Оформлено (Аванс): {{ year.advance.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ year.advance.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ year.advance.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_list_table' %}?year={{ selected_year }}&statuses=advance_paid" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(22,163,74,.12);color:#16a34a">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M2 10h20" stroke-opacity="0.5"/><path d="M14.5 16.5l1.6 1.6 3-3.2"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #16a34a;">Оплачено (Аванс): {{ year.advance_paid.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ year.advance_paid.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ year.advance_paid.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_list_table' %}?year={{ selected_year }}&statuses=postpayment" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(37,99,235,.12);color:#2563eb">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4M16 3v4"/><circle cx="15.5" cy="15.5" r="3.2"/><path d="M15.5 14v1.6l1.1.8"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #2563eb;">Оформлено (Постоплата): {{ year.postpayment.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ year.postpayment.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ year.postpayment.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_list_table' %}?year={{ selected_year }}&statuses=postpayment_paid" class="text-decoration-none">
+                    <div class="dash-card">
+                        <div class="dash-card-icon" style="background:rgba(22,163,74,.12);color:#16a34a">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18" stroke-opacity="0.5"/><path d="M8 3v4M16 3v4" stroke-opacity="0.5"/><path d="M11.8 16.3l1.6 1.6 3-3.2"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #16a34a;">Оплачено (Постоплата): {{ year.postpayment_paid.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ year.postpayment_paid.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ year.postpayment_paid.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="igk-stat-card">
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th rowspan="2">ЦФО</th>
+                    <th rowspan="2">Всего ЗНП, шт.</th>
+                    <th rowspan="2">Сумма всех ЗНП, млн.руб.</th>
+                    {% for stage in stage_names %}
+                    <th colspan="2">{{ stage }}</th>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    {% for stage in stage_names %}
+                    <th>шт.</th>
+                    <th>млн.руб.</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in cfo_table %}
+                <tr>
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ row.cfo }}</div>
+                        <a href="{% url 'znp_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&cfo={{ row.cfo }}&statuses=not_issued,advance,postpayment"></a>
+                    </td>
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ row.total_count }}</div>
+                        <a href="{% url 'znp_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&cfo={{ row.cfo }}&statuses=not_issued,advance,postpayment"></a>
+                    </td>
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ row.total_sum|floatformat:2|intspace }}</div>
+                        <a href="{% url 'znp_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&cfo={{ row.cfo }}&statuses=not_issued,advance,postpayment"></a>
+                    </td>
+                    {% for cell in row.cells %}
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ cell.count }}</div>
+                        <a href="{% url 'znp_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&cfo={{ row.cfo }}&statuses={{ cell.status_param }}"></a>
+                    </td>
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ cell.sum|floatformat:2|intspace }}</div>
+                        <a href="{% url 'znp_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&cfo={{ row.cfo }}&statuses={{ cell.status_param }}"></a>
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+                <tr class="row-total">
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ cfo_total_row.cfo }}</div>
+                        <a href="{% url 'znp_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&statuses=not_issued,advance,postpayment"></a>
+                    </td>
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ cfo_total_row.total_count }}</div>
+                        <a href="{% url 'znp_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&statuses=not_issued,advance,postpayment"></a>
+                    </td>
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ cfo_total_row.total_sum|floatformat:2|intspace }}</div>
+                        <a href="{% url 'znp_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&statuses=not_issued,advance,postpayment"></a>
+                    </td>
+                    {% for cell in cfo_total_row.cells %}
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ cell.count }}</div>
+                        <a href="{% url 'znp_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&statuses={{ cell.status_param }}"></a>
+                    </td>
+                    <td class="clickable-cell">
+                        <div class="cell-content">{{ cell.sum|floatformat:2|intspace }}</div>
+                        <a href="{% url 'znp_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&statuses={{ cell.status_param }}"></a>
+                    </td>
+                    {% endfor %}
+                </tr>
+            </tbody>
+        </table>
+        {% if not cfo_table %}
+        <div class="p-4 text-muted text-center">
+            Для выбранного ИГК нет ни одной позиции заключённого договора.
+        </div>
+        {% endif %}
+    </div>
+
+
+    <div class="table-container" style="padding:18px 20px 22px;margin-bottom:18px">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 style="margin:0;font-size:14px;font-weight:700">Заявки на платёж по месяцам: план и оплата</h6>
+        </div>
+        <div style="position:relative;height:300px">
+            <canvas id="chart-znp"></canvas>
+        </div>
+    </div>
+    {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'vendor/chart.umd.min.js' %}"></script>
+<script src="{% static 'vendor/chartjs-plugin-datalabels.min.js' %}"></script>
+<script src="{% static 'js/charts.js' %}"></script>
+<script>
+function drawChart() {
+    const params = new URLSearchParams({
+        igk:  '{{ selected_igk|escapejs }}',
+        year: '{{ selected_year|escapejs }}',
+    });
+    loadChart('chart-znp', '{% url "api_chart_znp" %}?' + params);
+}
+drawChart();
+</script>
+{% endblock %}

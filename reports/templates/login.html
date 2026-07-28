@@ -1,0 +1,44 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход — МТО УВЗ</title>
+    <link rel="stylesheet" href="{% static 'vendor/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body class="login-page">
+<div class="login-wrap">
+    <div class="login-box">
+        <div class="login-top">
+            <div class="login-icon">
+                <svg viewBox="0 0 24 24"><path d="M3 3h18v4H3zm0 6h11v4H3zm0 6h14v4H3z"/></svg>
+            </div>
+            <div class="login-title">
+                МТО УВЗ
+                <span>Введите учётные данные</span>
+            </div>
+        </div>
+        <div class="login-body">
+            {% if error %}
+            <div class="login-error">Неверный логин или пароль</div>
+            {% endif %}
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label">Логин</label>
+                    <input type="text" name="username" class="form-control" autofocus autocomplete="username">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Пароль</label>
+                    <input type="password" name="password" class="form-control" autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn-login">Войти</button>
+            </form>
+        </div>
+        <div class="login-footer">МТО УВЗ</div>
+    </div>
+</div>
+</body>
+</html>

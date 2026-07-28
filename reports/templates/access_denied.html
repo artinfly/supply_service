@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Доступ запрещён{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-md-5">
+    <div class="card" style="border-color:rgba(239,68,68,.3);text-align:center;padding:48px 32px">
+        <div style="font-size:56px;margin-bottom:16px">🔒</div>
+        <h2 style="font-size:20px;font-weight:700;color:var(--text-primary);margin-bottom:8px">
+            Недостаточно прав
+        </h2>
+        <p style="color:var(--text-secondary);font-size:14px;margin-bottom:28px">
+            У вашей роли нет доступа к этой странице.<br>
+            Обратитесь к администратору если считаете это ошибкой.
+        </p>
+    </div>
+</div>
+</div>
+{% endblock %}
