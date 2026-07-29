@@ -79,10 +79,6 @@
 
 <script src="{% static 'vendor/bootstrap.bundle.min.js' %}"></script>
 <script>
-// данные из реестров приходят из загружаемых Excel-файлов и вставляются в
-// innerHTML — без экранирования значение вроде `<img src=x onerror=...>`
-// в поле "Контрагент"/"Предмет" выполнилось бы как код в браузере любого,
-// кто откроет реестр
 const _ESC_MAP = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
 function esc(val) {
     if (val === null || val === undefined) return '';

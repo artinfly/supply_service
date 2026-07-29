@@ -1,16 +1,3 @@
-/* Общий слой над Chart.js: палитра, форматы, единый вид всех графиков.
- *
- * Подключается только на страницах с графиками — 220 КБ библиотеки не должны
- * грузиться там, где графиков нет.
- *
- * Цвета не подбирать на глаз: набор проверен на различимость, в том числе
- * при дальтонизме, и на контраст к белой подложке карточек.
- *   - две серии (план/факт) — синий и оранжевый, это разные сущности;
- *   - этапы SAP упорядочены, поэтому одноцветная шкала от светлого к тёмному,
- *     а не радуга: порядок читается сам собой.
- * Фирменный оранжевый интерфейса (#e07b2a) в сериях намеренно не участвует,
- * иначе график спорит с кнопками и меню.
- */
 (function () {
   "use strict";
 
@@ -24,8 +11,6 @@
   const CATEGORICAL = ["#2a78d6", "#eb6834"];
   const ORDINAL = ["#86b6ef", "#2a78d6", "#104281"];
 
-  // своё экранирование, а не esc() из base.html: модуль должен работать и там,
-  // где базовый шаблон не подключён
   const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   function escape(value) {
     if (value === null || value === undefined) return "";
@@ -45,8 +30,6 @@
       "'Golos Text', system-ui, -apple-system, 'Segoe UI', sans-serif";
     Chart.defaults.font.size = 12;
     Chart.defaults.color = INK_2;
-    // подписи значений включаются точечно: число над каждым столбцом
-    // превращает график в мусор и перестаёт читаться
     if (window.ChartDataLabels) {
       Chart.defaults.set("plugins.datalabels", { display: false });
     }
@@ -81,16 +64,12 @@
     return unit === "шт" ? nf0.format(value) : nf1.format(value);
   }
 
-  /* Рисует столбчатый график по ответу /api/chart/... */
   function renderBars(canvasId, payload) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return null;
 
     const unit = payload.unit || "";
     const ordinal = Boolean(payload.ordinal);
-    // стопка — только когда ряды складываются в целое (заключено + не
-    // заключено = сумма месяца). Оформлено/оплачено считаются по разным датам
-    // и в целое не складываются, там ряды идут рядом
     const stacked = Boolean(payload.stacked);
     const colors = ordinal ? ORDINAL : CATEGORICAL;
 
@@ -148,7 +127,6 @@
               label: function (ctx) {
                 let text =
                   ctx.dataset.label + ": " + fmt(ctx.parsed.y, unit) + " " + unit;
-                // у SAP по оси количество, а сумма нужна как справка
                 const amounts = ctx.dataset.amounts;
                 if (amounts && amounts[ctx.dataIndex]) {
                   text += " (" + nf1.format(amounts[ctx.dataIndex]) + " млн ₽)";
@@ -162,7 +140,6 @@
     });
   }
 
-  /* Забирает данные и рисует. url уже содержит нужные igk и year. */
   async function loadChart(canvasId, url) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;

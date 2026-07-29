@@ -215,7 +215,6 @@ def upload_excel(request):
 
 
 def _resolve_year(request):
-    # мусор в ?year= и год без y-поля на модели не должны ронять страницу
     try:
         year = int(request.GET.get("year", ""))
     except (TypeError, ValueError):
@@ -234,7 +233,6 @@ def _percent(part, whole):
 
 
 def _filter_by_year(queryset, year, field_prefix=""):
-    # field_prefix — для фильтра через связанную модель, например "parent__"
     field_name = f"{field_prefix}y{str(year)[-2:]}"
     return queryset.filter(**{field_name: True})
 
@@ -254,7 +252,6 @@ _EMPTY_CFO_STATS = {
     "curr_fact": None,
 }
 
-# складываются в строке «ИТОГО»; проценты пересчитываются от сумм, а не складываются
 _CFO_SUMMED = (
     "all_count",
     "all_sum",
@@ -272,7 +269,6 @@ _CFO_SUMMED = (
 
 
 def _cfo_row(label, s):
-    """Строка таблицы по ЦФО из посчитанных агрегатов."""
     row = {
         "cfo": label,
         "all_count": s["all_count"],
@@ -329,8 +325,6 @@ def dashboard(request):
     year_q = Q(**{year_field: True})
     advance_q = Q(payment_type="Аванс")
 
-    # карточки сверху: два запроса с условными агрегатами вместо шести выборок
-    # с досчётом в Python
     totals_all = (
         IgkStatData.objects.filter(contract__isnull=False)
         .exclude(order="")
@@ -363,7 +357,6 @@ def dashboard(request):
         .order_by("cfo")
     )
 
-    # один запрос с группировкой по cfo вместо запроса на каждый ЦФО
     cfo_stats = {
         row["cfo"]: row
         for row in (
@@ -471,13 +464,7 @@ _EMPTY_ZNP = {
 
 
 def _breakdown_from_stats(ni, zs):
-    """Собирает карточки этапов ЗНП из уже посчитанных чисел.
-
-    Единственное место, где живёт эта арифметика: и сводка по всем ЗНП, и строки
-    по ЦФО приходят сюда с одинаковым набором полей. Раньше расчёт был написан
-    дважды и успел разойтись.
-    """
-    to_mln = lambda v: (v or 0) / 1000000  # noqa: E731
+    to_mln = lambda v: (v or 0) / 1000000
 
     not_issued_count = ni["count"] or 0
     not_issued_sum = to_mln(ni["plan_sum"])
@@ -641,7 +628,6 @@ def znp_table(request):
             ],
         }
 
-    # два запроса с группировкой по cfo вместо шести на каждый ЦФО
     pos_advance_q = Q(payment_type="Аванс")
     pos_postpayment_q = Q(payment_type="Постоплата")
     not_issued_stats = {
@@ -721,10 +707,6 @@ SAP_STAGE_PARAMS = list(SAP_STAGE_LABELS.keys())
 
 
 def _sap_cards(total_row, status_rows):
-    """Карточки этапов SAP из готовых чисел — единственное место расчёта.
-
-    Сюда одинаково приходят и сводка по всем заявкам, и строка одного ЦФО.
-    """
     total = (total_row or {}).get("total") or 0
     total_sum = ((total_row or {}).get("total_sum") or 0) / 1000000
 
@@ -799,7 +781,6 @@ def znp_sap_table(request):
             ],
         }
 
-    # два запроса с группировкой вместо пары на каждый ЦФО
     cfo_totals = {
         row["cfo"]: row
         for row in cfo_qs.values("cfo").annotate(
@@ -829,7 +810,6 @@ def znp_sap_table(request):
             "cfo_table": cfo_table,
             "cfo_total_row": cfo_total_row,
             "has_data": all_breakdown["total_count"] > 0,
-            # у страницы нет общего переключателя года — он нужен только графику
             "current_year": str(_resolve_year(request)),
             "no_data_hint": (
                 "Заявки на платёж из SAP ещё не загружены. "

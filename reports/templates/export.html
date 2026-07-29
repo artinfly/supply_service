@@ -98,16 +98,12 @@
 
 {% block extra_js %}
 <script>
-const agentInput  = document.getElementById('agent-input');
-const defaultHint = '▼ Нажмите для выбора или введите название';
-
-agentInput.addEventListener('focus', () => { agentInput.placeholder = 'Введите название контрагента...'; });
-agentInput.addEventListener('blur',  () => { if (!agentInput.value) agentInput.placeholder = defaultHint; });
+const agentInput = document.getElementById('agent-input');
 
 function downloadAgent(year) {
     const agent = agentInput.value.trim();
     if (!agent) {
-        alert('Введите или выберите контрагента из списка');
+        alert('Введите контрагента');
         agentInput.focus();
         return;
     }

@@ -156,11 +156,6 @@ def contract_dupes():
 
 
 def contract_dupes_by_order():
-    """Второй разрез дубликатов: один заказ по одному предмету внутри ИГК.
-
-    Здесь договор и контрагент намеренно не участвуют в группировке — ищутся
-    случаи, когда один и тот же заказ проходит по нескольким договорам.
-    """
     return """
         SELECT RIGHT(igk, 4) AS igk, item, "order",
                COUNT(*) AS rows_count,
@@ -300,7 +295,6 @@ def kdr_delta(yc, start_date, end_date):
 
 
 def contracts_by_agent_filter(yc, agent):
-    """Условия отбора для страницы и для выгрузки — общие, чтобы не разошлись."""
     conditions = [
         f"{yc}=TRUE",
         "is_deleted=FALSE",
@@ -351,8 +345,6 @@ def distinct_agents():
     """
 
 
-# CASE ниже должен совпадать с api.py::ZNP_STATUS_CONDITIONS — там те же условия
-# используются как SQL-фильтр, здесь как отображаемый статус
 def znp_list(where):
     return f"""
         SELECT

@@ -7,8 +7,6 @@ SECRET_KEY = "django-insecure-local-dev-key-change-in-production"
 
 
 def _env_flag(name, default):
-    # os.getenv возвращает строку, а сравнение строки с булевым True всегда
-    # ложно — из-за этого DEBUG молча оставался выключенным
     return os.getenv(name, default).strip().lower() in ("1", "true", "yes", "on")
 
 
@@ -70,14 +68,6 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "root")
 
 
 def _pick_db_host():
-    """Рабочий сервер, если он отвечает, иначе локальная база.
-
-    Один и тот же файл работает и на работе, и дома: ни переменных окружения,
-    ни файлов настройки не нужно. Проверяется именно подключение к PostgreSQL,
-    а не открытый порт — дома 10.10.10.37:5432 отвечает на TCP (сетевое
-    оборудование), но базы за ним нет, и проверка по порту давала бы ложное «да».
-    Явно заданный DB_HOST всегда сильнее автоопределения.
-    """
     forced = os.getenv("DB_HOST", "").strip()
     if forced:
         return forced
@@ -126,8 +116,6 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "reports" / "static"]
-# STATICFILES_STORAGE удалён из Django в 5.1 и молча игнорируется — сжатие
-# whitenoise при нём фактически не работает. Настраивается только через STORAGES
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {

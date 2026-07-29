@@ -56,7 +56,6 @@ class IgkStatData(models.Model):
         db_table = "igk_stat_data"
         verbose_name = "Позиция договора"
         verbose_name_plural = "Позиции договоров"
-        # поля фильтрации дашборда, реестров и связки с ЗНП
         indexes = [
             models.Index(fields=["crc32_hash"]),
             models.Index(fields=["igk"]),
@@ -148,7 +147,6 @@ class ZnpData(models.Model):
         db_table = "znp_data"
         verbose_name = "Заявка на платёж"
         verbose_name_plural = "Заявки на платёж"
-        # ключ, по которому relink_znp_parents() пересобирает связь с договорами
         indexes = [models.Index(fields=["crc32_hash"])]
 
     def __str__(self):
@@ -223,7 +221,6 @@ class ContractsHistory(models.Model):
         db_table = "contracts_history"
         verbose_name = "Изменение договора"
         verbose_name_plural = "Изменения договоров"
-        # join истории с позициями договоров идёт по hash (см. queries.py)
         indexes = [models.Index(fields=["hash"])]
 
     def __str__(self):
@@ -234,7 +231,6 @@ class ContractCountsSnapshot(models.Model):
     id = models.AutoField(primary_key=True)
     upload_date = models.DateField()
     igk = models.CharField(max_length=10)
-    # согласовано с igk_stat_data.cfo: снимок заполняется из него
     cfo = models.CharField(max_length=500)
     year_col = models.CharField(max_length=5)
     concluded_count = models.IntegerField(default=0)
@@ -244,8 +240,6 @@ class ContractCountsSnapshot(models.Model):
         db_table = "contract_counts_snapshot"
         verbose_name = "Снимок количества договоров"
         verbose_name_plural = "Снимки количества договоров"
-        # повторная загрузка за день не должна плодить снимки: kdr_delta
-        # размножит строки на full outer join
         constraints = [
             models.UniqueConstraint(
                 fields=["upload_date", "igk", "cfo", "year_col"],
