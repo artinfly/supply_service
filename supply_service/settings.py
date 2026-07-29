@@ -13,7 +13,13 @@ def _env_flag(name, default):
 
 
 DEBUG = _env_flag("DEBUG", "True")
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "10.109.42.67", "10.10.10.37"]
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.getenv(
+        "ALLOWED_HOSTS", "localhost,127.0.0.1,10.109.42.67,10.10.10.37"
+    ).split(",")
+    if h.strip()
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",

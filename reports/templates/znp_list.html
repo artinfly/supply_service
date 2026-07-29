@@ -10,7 +10,13 @@
     <div class="d-flex flex-wrap gap-3 align-items-end">
         <div class="filter-group">
             <label class="filter-label">Контрагент</label>
-            <input type="text" id="filter-agent" class="filter-input" placeholder="Поиск...">
+            <input type="text" id="filter-agent" class="filter-input"
+                   placeholder="Часть названия" autocomplete="off">
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Договор</label>
+            <input type="text" id="filter-contract" class="filter-input"
+                   placeholder="Часть номера" autocomplete="off">
         </div>
         <div class="filter-group">
             <label class="filter-label">ИГК</label>
@@ -22,13 +28,22 @@
             </select>
         </div>
         <div class="filter-group">
-            <label class="filter-label">Год</label>
-            <div class="d-flex gap-1">
-                <button class="btn-year active" data-year="all">Все</button>
-                {% for y, yc in year_cols %}
-                <button class="btn-year" data-year="{{ y }}">{{ y }}</button>
+            <label class="filter-label">ЦФО</label>
+            <select id="filter-cfo" class="filter-select">
+                <option value="">Все</option>
+                {% for cfo in cfo_list %}
+                <option value="{{ cfo }}">{{ cfo }}</option>
                 {% endfor %}
-            </div>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Год</label>
+            <select id="filter-year" class="filter-select">
+                <option value="all">Все</option>
+                {% for y, yc in year_cols %}
+                <option value="{{ y }}">{{ y }}</option>
+                {% endfor %}
+            </select>
         </div>
         <div class="filter-group">
             <label class="filter-label">Статус ЗНП</label>
@@ -52,7 +67,6 @@
             <button id="btn-search" class="btn-orange">Найти</button>
             <button id="btn-reset" class="btn-ghost">Сбросить</button>
         </div>
-        <input type="hidden" id="filter-cfo" value="">
     </div>
 </div>
 
@@ -88,14 +102,15 @@ const COLS = [
 const apiUrl    = document.getElementById('page-data').dataset.apiUrl;
 let loadedData  = [];
 let currentPage = 1;
-let activeYear  = 'all';
 
 function buildUrl() {
     const params = new URLSearchParams();
-    const agent  = document.getElementById('filter-agent').value.trim();
+    const agent    = document.getElementById('filter-agent').value.trim();
+    const contract = document.getElementById('filter-contract').value.trim();
     const igk    = document.getElementById('filter-igk').value.trim();
     const cfo    = document.getElementById('filter-cfo').value.trim();
-    if (agent) params.append('agent', agent);
+    if (agent)    params.append('agent', agent);
+    if (contract) params.append('contract', contract);
     if (igk)   params.append('igk', igk);
     if (cfo)   params.append('cfo', cfo);
     if (document.getElementById('cb-not-issued').checked)       params.append('status', 'not_issued');
@@ -103,7 +118,8 @@ function buildUrl() {
     if (document.getElementById('cb-advance-paid').checked)     params.append('status', 'advance_paid');
     if (document.getElementById('cb-postpayment').checked)      params.append('status', 'postpayment');
     if (document.getElementById('cb-postpayment-paid').checked) params.append('status', 'postpayment_paid');
-    if (activeYear !== 'all') params.append('year', activeYear);
+    const year = document.getElementById('filter-year').value;
+    if (year !== 'all') params.append('year', year);
     const qs = params.toString();
     return apiUrl + (qs ? '?' + qs : '');
 }
@@ -153,12 +169,10 @@ function loadFiltersFromURL() {
         document.getElementById('filter-igk').value = params.get('igk');
     if (params.has('cfo'))
         document.getElementById('filter-cfo').value = params.get('cfo');
-    if (params.has('year')) {
-        const year = params.get('year');
-        const btn = document.querySelector(`.btn-year[data-year="${year}"]`)
-        if (btn)
-            btn.click();
-    }
+    if (params.has('year'))
+        document.getElementById('filter-year').value = params.get('year');
+    if (params.has('contract'))
+        document.getElementById('filter-contract').value = params.get('contract');
     if (params.has('statuses')) {
         const statusesParams = params.get('statuses').split(',');
         document.getElementById('cb-not-issued').checked       = statusesParams.includes('not_issued');
@@ -183,19 +197,16 @@ async function loadData() {
     }
 }
 
-document.querySelectorAll('.btn-year').forEach(btn => {
-    btn.addEventListener('click', function () {
-        document.querySelectorAll('.btn-year').forEach(b => b.classList.remove('active'));
-        this.classList.add('active');
-        activeYear = this.dataset.year;
+document.getElementById('page-size').addEventListener('change', () => { currentPage = 1; renderPage(); });
+['filter-agent', 'filter-contract'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => {
+        if (e.key === 'Enter') loadData();
     });
 });
-
-document.getElementById('page-size').addEventListener('change', () => { currentPage = 1; renderPage(); });
-document.getElementById('filter-agent').addEventListener('keydown', e => { if (e.key === 'Enter') loadData(); });
 document.getElementById('btn-search').addEventListener('click', loadData);
 document.getElementById('btn-reset').addEventListener('click', () => {
     document.getElementById('filter-agent').value      = '';
+    document.getElementById('filter-contract').value   = '';
     document.getElementById('filter-igk').value        = '';
     document.getElementById('filter-cfo').value        = '';
     document.getElementById('cb-not-issued').checked       = true;
@@ -203,9 +214,7 @@ document.getElementById('btn-reset').addEventListener('click', () => {
     document.getElementById('cb-advance-paid').checked     = true;
     document.getElementById('cb-postpayment').checked      = true;
     document.getElementById('cb-postpayment-paid').checked = true;
-    document.querySelectorAll('.btn-year').forEach(b => b.classList.remove('active'));
-    document.querySelector('.btn-year[data-year="all"]').classList.add('active');
-    activeYear = 'all';
+    document.getElementById('filter-year').value = 'all';
     loadData();
 });
 

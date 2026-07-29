@@ -19,6 +19,7 @@ from ..services.queries import (
     TERMINATED,
     YEARS,
     distinct_agents,
+    distinct_cfo,
     distinct_igk_suffixes,
 )
 from ..services.sap_status import sap_status_expr
@@ -105,15 +106,23 @@ def igk_terminated_table(request, year):
     return render(request, "igk_table.html", ctx)
 
 
-@login_required
-def all_contracts_table(request):
+def _igk_and_cfo_lists():
     with connection.cursor() as cur:
         cur.execute(distinct_igk_suffixes())
         igk_list = [r[0] for r in cur.fetchall()]
+        cur.execute(distinct_cfo())
+        cfo_list = [r[0] for r in cur.fetchall()]
+    return igk_list, cfo_list
+
+
+@login_required
+def all_contracts_table(request):
+    igk_list, cfo_list = _igk_and_cfo_lists()
     ctx = _ctx(request)
     ctx.update(
         {
             "igk_list": igk_list,
+            "cfo_list": cfo_list,
             "concluded_statuses": list(CONCLUDED),
             "not_concl_statuses": list(NOT_CONCL),
             "terminated_statuses": list(TERMINATED),
@@ -124,13 +133,9 @@ def all_contracts_table(request):
 
 @login_required
 def znp_list_table(request):
-    if not request.user.is_superuser:
-        return render(request, "access_denied.html", _ctx(request))
-    with connection.cursor() as cur:
-        cur.execute(distinct_igk_suffixes())
-        igk_list = [r[0] for r in cur.fetchall()]
+    igk_list, cfo_list = _igk_and_cfo_lists()
     ctx = _ctx(request)
-    ctx["igk_list"] = igk_list
+    ctx.update({"igk_list": igk_list, "cfo_list": cfo_list})
     return render(request, "znp_list.html", ctx)
 
 
@@ -434,7 +439,8 @@ def dashboard(request):
 
 
 ZNP_STAGE_LABELS = {
-    "not_issued": "Не оформлено ЗнП",
+    "not_issued_advance": "Не оформлено (Аванс)",
+    "not_issued_postpayment": "Не оформлено (Постоплата)",
     "advance": "Оформлено ЗнП (Аванс)",
     "advance_paid": "Оплачено ЗнП (Аванс)",
     "postpayment": "Оформлено ЗнП (Постоплата)",
@@ -442,7 +448,14 @@ ZNP_STAGE_LABELS = {
 }
 ZNP_STAGE_NAMES = list(ZNP_STAGE_LABELS.values())
 
-_EMPTY_NOT_ISSUED = {"count": 0, "plan_sum": None}
+_EMPTY_NOT_ISSUED = {
+    "count": 0,
+    "plan_sum": None,
+    "advance_count": 0,
+    "advance_sum": None,
+    "postpayment_count": 0,
+    "postpayment_sum": None,
+}
 _EMPTY_ZNP = {
     "issued_count": 0,
     "issued_sum": None,
@@ -468,6 +481,8 @@ def _breakdown_from_stats(ni, zs):
 
     not_issued_count = ni["count"] or 0
     not_issued_sum = to_mln(ni["plan_sum"])
+    not_issued_advance_count = ni["advance_count"] or 0
+    not_issued_postpayment_count = ni["postpayment_count"] or 0
 
     issued_count = zs["issued_count"] or 0
     issued_sum = to_mln(zs["issued_sum"])
@@ -493,6 +508,16 @@ def _breakdown_from_stats(ni, zs):
         "total_count": total,
         "total_sum": not_issued_sum + issued_sum,
         "not_issued": _card(not_issued_count, not_issued_sum, "not_issued"),
+        "not_issued_advance": _card(
+            not_issued_advance_count,
+            to_mln(ni["advance_sum"]),
+            "not_issued_advance",
+        ),
+        "not_issued_postpayment": _card(
+            not_issued_postpayment_count,
+            to_mln(ni["postpayment_sum"]),
+            "not_issued_postpayment",
+        ),
         "issued": _card(issued_count, issued_sum, "advance,postpayment"),
         "advance": _card(
             advance_count,
@@ -559,8 +584,15 @@ def znp_table(request):
     year_znp_qs = _filter_by_year(all_znp_qs, year, field_prefix="parent__")
 
     def _breakdown(not_issued_qs, znp_qs):
+        pos_advance_q = Q(payment_type="Аванс")
+        pos_postpayment_q = Q(payment_type="Постоплата")
         not_issued_agg = not_issued_qs.aggregate(
-            count=Count("pp_id"), plan_sum=Sum("plan")
+            count=Count("pp_id"),
+            plan_sum=Sum("plan"),
+            advance_count=Count("pp_id", filter=pos_advance_q),
+            advance_sum=Sum("plan", filter=pos_advance_q),
+            postpayment_count=Count("pp_id", filter=pos_postpayment_q),
+            postpayment_sum=Sum("plan", filter=pos_postpayment_q),
         )
         advance_q = Q(parent__payment_type="Аванс")
         postpayment_q = Q(parent__payment_type="Постоплата")
@@ -610,10 +642,17 @@ def znp_table(request):
         }
 
     # два запроса с группировкой по cfo вместо шести на каждый ЦФО
+    pos_advance_q = Q(payment_type="Аванс")
+    pos_postpayment_q = Q(payment_type="Постоплата")
     not_issued_stats = {
         row["cfo"]: row
         for row in igk_not_issued_qs.values("cfo").annotate(
-            count=Count("pp_id"), plan_sum=Sum("plan")
+            count=Count("pp_id"),
+            plan_sum=Sum("plan"),
+            advance_count=Count("pp_id", filter=pos_advance_q),
+            advance_sum=Sum("plan", filter=pos_advance_q),
+            postpayment_count=Count("pp_id", filter=pos_postpayment_q),
+            postpayment_sum=Sum("plan", filter=pos_postpayment_q),
         )
     }
 

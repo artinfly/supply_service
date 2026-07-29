@@ -155,6 +155,29 @@ def contract_dupes():
     """
 
 
+def contract_dupes_by_order():
+    """Второй разрез дубликатов: один заказ по одному предмету внутри ИГК.
+
+    Здесь договор и контрагент намеренно не участвуют в группировке — ищутся
+    случаи, когда один и тот же заказ проходит по нескольким договорам.
+    """
+    return """
+        SELECT RIGHT(igk, 4) AS igk, item, "order",
+               COUNT(*) AS rows_count,
+               COUNT(DISTINCT contract) AS contracts_count,
+               STRING_AGG(DISTINCT contract, ', ') AS contracts,
+               STRING_AGG(DISTINCT c_agent, ', ') AS agents,
+               ROUND(CAST(SUM(plan) AS numeric), 2) AS plan_sum
+        FROM igk_stat_data
+        WHERE igk IS NOT NULL AND TRIM(igk) != ''
+          AND item IS NOT NULL AND TRIM(item) != ''
+          AND "order" IS NOT NULL AND TRIM("order") != ''
+        GROUP BY RIGHT(igk, 4), item, "order"
+        HAVING COUNT(*) > 1
+        ORDER BY COUNT(DISTINCT contract) DESC, igk, item
+    """
+
+
 def igk_detail(year, igk, statuses):
     yc = YEAR_COL.get(str(year))
     sl = _sl(statuses)
@@ -312,6 +335,14 @@ def distinct_igk_suffixes():
     """
 
 
+def distinct_cfo():
+    return """
+        SELECT DISTINCT cfo FROM igk_stat_data
+        WHERE cfo IS NOT NULL AND TRIM(cfo) != ''
+        ORDER BY cfo
+    """
+
+
 def distinct_agents():
     return """
         SELECT DISTINCT c_agent FROM igk_stat_data
@@ -332,6 +363,10 @@ def znp_list(where):
             z.plan_sum AS znp_plan_sum, z.fact_sum AS znp_fact_sum,
             z.znp_igk,
             CASE
+                WHEN z.id IS NULL AND i.payment_type = 'Аванс'
+                    THEN 'Не оформлено (Аванс)'
+                WHEN z.id IS NULL AND i.payment_type = 'Постоплата'
+                    THEN 'Не оформлено (Постоплата)'
                 WHEN z.id IS NULL THEN 'Не оформлено ЗнП'
                 WHEN i.payment_type = 'Аванс' AND z.fact_sum IS NOT NULL THEN 'Оплачено ЗнП (Аванс)'
                 WHEN i.payment_type = 'Аванс' THEN 'Оформлено ЗнП (Аванс)'
