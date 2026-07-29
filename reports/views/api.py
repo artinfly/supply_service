@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import date as _date
+from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
 from django.db import connection
@@ -68,8 +69,8 @@ def _json_rows(cur):
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     for row in rows:
         for k, v in row.items():
-            if hasattr(v, "__float__"):
-                row[k] = float(v)
+            if isinstance(v, Decimal):
+                row[k] = int(v) if v == v.to_integral_value() else float(v)
     return rows
 
 

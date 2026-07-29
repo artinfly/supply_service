@@ -159,19 +159,18 @@ def contract_dupes():
 
 def contract_dupes_by_order():
     return """
-        SELECT RIGHT(igk, 4) AS igk, item, "order",
+        SELECT RIGHT(igk, 4) AS igk, c_agent, contract, item, "order",
+               payment_type,
                COUNT(*) AS rows_count,
-               COUNT(DISTINCT contract) AS contracts_count,
-               STRING_AGG(DISTINCT contract, ', ') AS contracts,
-               STRING_AGG(DISTINCT c_agent, ', ') AS agents,
+               COUNT(DISTINCT TRIM(stage)) AS stages_count,
                ROUND(CAST(SUM(plan) AS numeric), 2) AS plan_sum
         FROM igk_stat_data
         WHERE igk IS NOT NULL AND TRIM(igk) != ''
           AND item IS NOT NULL AND TRIM(item) != ''
           AND "order" IS NOT NULL AND TRIM("order") != ''
-        GROUP BY RIGHT(igk, 4), item, "order"
+        GROUP BY RIGHT(igk, 4), c_agent, contract, item, "order", payment_type
         HAVING COUNT(*) > 1
-        ORDER BY COUNT(DISTINCT contract) DESC, igk, item
+        ORDER BY COUNT(*) - COUNT(DISTINCT TRIM(stage)) DESC, COUNT(*) DESC, igk
     """
 
 
