@@ -81,6 +81,11 @@ urlpatterns = [
     path("api/history-fact/", api.api_history_fact, name="api_history_fact"),
     path("api/contract-dupes/", api.api_contract_dupes, name="api_contract_dupes"),
     path(
+        "api/contract-dupes-by-order/",
+        api.api_contract_dupes_by_order,
+        name="api_contract_dupes_by_order",
+    ),
+    path(
         "api/igk-detail/<str:year>/<str:igk>/",
         api.api_igk_detail,
         name="api_igk_detail",

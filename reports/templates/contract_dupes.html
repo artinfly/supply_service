@@ -5,24 +5,55 @@
 <div class="page-header">
     <h5>Дубликаты договоров</h5>
 </div>
-<p class="row-count-label mb-2">
-    Записи с совпадающей комбинацией: ИГК + Контрагент + Договор + Предмет + Заказ + Этап + Дата плана
-</p>
-<div class="table-container" id="table-wrapper"></div>
-<div id="page-data" data-api-url="{% url 'api_contract_dupes' %}" style="display:none"></div>
+
+<div class="table-container mb-4" style="padding:18px 20px 22px">
+    <h6 style="margin:0 0 2px;font-size:14px;font-weight:700">Полные повторы строк</h6>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+        Совпадает вся комбинация: ИГК + контрагент + договор + предмет + заказ + этап + дата плана
+    </div>
+    <div id="wrap-full"></div>
+</div>
+
+<div class="table-container mb-4" style="padding:18px 20px 22px">
+    <h6 style="margin:0 0 2px;font-size:14px;font-weight:700">Один заказ в нескольких договорах</h6>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+        Совпадает ИГК + предмет + заказ, а договор и контрагент — разные.
+        Сверху те, где договоров больше всего
+    </div>
+    <div id="wrap-order"></div>
+</div>
+
+<div id="page-data"
+     data-full-url="{% url 'api_contract_dupes' %}"
+     data-order-url="{% url 'api_contract_dupes_by_order' %}"
+     style="display:none"></div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-const COLS = [
-    { field: 'c_agent',     title: 'Контрагент' },
-    { field: 'contract',    title: 'Договор' },
-    { field: 'item',        title: 'Предмет' },
-    { field: 'order',       title: 'Заказ' },
-    { field: 'stage',       title: 'Этап' },
-    { field: 'plan_date',   title: 'Дата плана' },
-    { field: 'hash',        title: 'Хеш'},
+const COLS_FULL = [
+    { field: 'c_agent',   title: 'Контрагент' },
+    { field: 'contract',  title: 'Договор' },
+    { field: 'item',      title: 'Предмет' },
+    { field: 'order',     title: 'Заказ' },
+    { field: 'stage',     title: 'Этап' },
+    { field: 'plan_date', title: 'Дата плана' },
+    { field: 'hash',      title: 'Хеш' },
 ];
-loadTable(document.getElementById('page-data').dataset.apiUrl, 'table-wrapper', COLS);
+
+const COLS_ORDER = [
+    { field: 'igk',             title: 'ИГК' },
+    { field: 'item',            title: 'Предмет' },
+    { field: 'order',           title: 'Заказ' },
+    { field: 'contracts_count', title: 'Договоров', format: 'int' },
+    { field: 'rows_count',      title: 'Строк',     format: 'int' },
+    { field: 'contracts',       title: 'Какие договоры' },
+    { field: 'agents',          title: 'Контрагенты' },
+    { field: 'plan_sum',        title: 'Сумма плана, руб.', format: 'number' },
+];
+
+const data = document.getElementById('page-data').dataset;
+loadTable(data.fullUrl,  'wrap-full',  COLS_FULL);
+loadTable(data.orderUrl, 'wrap-order', COLS_ORDER);
 </script>
 {% endblock %}

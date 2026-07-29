@@ -521,3 +521,24 @@ body.login-page {
     z-index: 1;
     pointer-events: none;
 }
+/* Компактные плашки: на странице ЗНП их семь, в обычном размере они
+   вытесняли таблицу за пределы экрана */
+.dash-card-sm {
+    padding: 12px 14px;
+    gap: 10px;
+}
+.dash-row > a .dash-card-sm,
+.dash-row > div .dash-card-sm {
+    min-height: 74px;
+}
+.dash-card-sm .dash-card-num {
+    font-size: 15px;
+}
+.dash-card-sm .dash-card-lbl {
+    font-size: 11px;
+}
+.dash-card-sm .dash-card-icon {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+}
