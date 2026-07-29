@@ -152,13 +152,6 @@ python -m venv .venv
 pip install --no-index --find-links=wheels -r requirements.txt
 ```
 
-### Дома
-
-Настраивать ничего не нужно — по умолчанию берётся локальная база
-`supply_service_test` / `root` / `root` / `localhost`.
-
-Если базы ещё нет:
-
 ```sql
 CREATE ROLE root WITH LOGIN SUPERUSER PASSWORD 'root';
 CREATE DATABASE supply_service_test OWNER root;
@@ -175,29 +168,6 @@ python manage.py runserver
 
 Открыть `http://127.0.0.1:8000`.
 
-### На работе
-
-Отличается только адрес базы. Он задаётся в файле
-`%USERPROFILE%\.supply_service.env`:
-
-```text
-DB_HOST=10.10.10.37
-```
-
-Файл лежит **вне папки проекта** намеренно: папку возят между машинами, и
-настройка внутри неё была бы затёрта при копировании.
-
-Что ещё можно там задать: `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_PORT`,
-`DEBUG`, `ALLOWED_HOSTS` (через запятую). Переменная, выставленная в консоли,
-перекрывает файл.
-
-При `DEBUG=False` обязателен `python manage.py collectstatic` — статика отдаётся
-через WhiteNoise с манифестом, без него страницы упадут.
-
-Расширение `pgcrypto` обязательно: на нём построены история изменений и поиск
-дубликатов.
-
----
 
 ## Миграции
 

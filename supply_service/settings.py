@@ -5,40 +5,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = "django-insecure-local-dev-key-change-in-production"
 
-# Настройки машины лежат в домашнем каталоге, а не в проекте: папку возят
-# между работой и домом, и файл внутри неё был бы затёрт при копировании.
-# Формат — строки КЛЮЧ=значение.
-LOCAL_ENV_FILE = Path.home() / ".supply_service.env"
-
-
-def _load_local_env(path=LOCAL_ENV_FILE):
-    if not path.exists():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        # setdefault: переменная из консоли должна побеждать файл
-        os.environ.setdefault(key.strip(), value.strip())
-
-
-_load_local_env()
-
 
 def _env_flag(name, default):
-    # сравнение строки из окружения с булевым True всегда ложно
+    # os.getenv возвращает строку, а сравнение строки с булевым True всегда
+    # ложно — из-за этого DEBUG молча оставался выключенным
     return os.getenv(name, default).strip().lower() in ("1", "true", "yes", "on")
 
 
 DEBUG = _env_flag("DEBUG", "True")
-ALLOWED_HOSTS = [
-    h.strip()
-    for h in os.getenv(
-        "ALLOWED_HOSTS", "localhost,127.0.0.1,10.109.42.67,10.10.10.37"
-    ).split(",")
-    if h.strip()
-]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "10.109.42.67", "10.10.10.37"]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -81,15 +56,49 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "supply_service.wsgi.application"
 
-# По умолчанию — локальная база. Рабочий сервер задаётся в ~/.supply_service.env
+WORK_DB_HOST = "10.10.10.37"
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = os.getenv("DB_NAME", "supply_service_test")
+DB_USER = os.getenv("DB_USER", "root")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "root")
+
+
+def _pick_db_host():
+    """Рабочий сервер, если он отвечает, иначе локальная база.
+
+    Один и тот же файл работает и на работе, и дома: ни переменных окружения,
+    ни файлов настройки не нужно. Проверяется именно подключение к PostgreSQL,
+    а не открытый порт — дома 10.10.10.37:5432 отвечает на TCP (сетевое
+    оборудование), но базы за ним нет, и проверка по порту давала бы ложное «да».
+    Явно заданный DB_HOST всегда сильнее автоопределения.
+    """
+    forced = os.getenv("DB_HOST", "").strip()
+    if forced:
+        return forced
+    try:
+        import psycopg2
+
+        psycopg2.connect(
+            host=WORK_DB_HOST,
+            port=DB_PORT,
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            connect_timeout=1,
+        ).close()
+        return WORK_DB_HOST
+    except Exception:
+        return "localhost"
+
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME", "supply_service_test"),
-        "USER": os.getenv("DB_USER", "root"),
-        "PASSWORD": os.getenv("DB_PASSWORD", "root"),
-        "HOST": os.getenv("DB_HOST", "localhost"),
-        "PORT": os.getenv("DB_PORT", "5432"),
+        "NAME": DB_NAME,
+        "USER": DB_USER,
+        "PASSWORD": DB_PASSWORD,
+        "HOST": _pick_db_host(),
+        "PORT": DB_PORT,
         "OPTIONS": {"client_encoding": "UTF8"},
     }
 }
@@ -111,14 +120,12 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "reports" / "static"]
-# STATICFILES_STORAGE удалён из Django в версии 5.1 и молча игнорировался —
-# сжатие whitenoise фактически не работало. Настраивается только через STORAGES
+# STATICFILES_STORAGE удалён из Django в 5.1 и молча игнорируется — сжатие
+# whitenoise при нём фактически не работает. Настраивается только через STORAGES
 STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
     },
 }
 
