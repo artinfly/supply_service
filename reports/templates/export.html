@@ -52,14 +52,8 @@
         <div class="filter-group mb-2">
             <label class="filter-label">Контрагент</label>
             <input type="text" id="agent-input" class="filter-input"
-                   list="agent-list" style="width:100%"
-                   placeholder="▼ Нажмите для выбора или введите название">
-            <datalist id="agent-list">
-                {% for agent in agents %}
-                <option value="{{ agent }}">
-                {% endfor %}
-            </datalist>
-            <small style="color:#aaa;font-size:0.75rem">Начните вводить — появится список</small>
+                   style="width:100%" autocomplete="off"
+                   placeholder="Часть названия контрагента">
         </div>
         <div class="d-flex gap-2 flex-wrap">
             {% for y in years %}

@@ -15,6 +15,7 @@ from ..services.queries import (
     YEARS,
     all_contracts,
     contract_dupes,
+    contract_dupes_by_order,
     history_fact,
     history_plan,
     history_status,
@@ -145,6 +146,11 @@ def api_contract_dupes(request):
 
 
 @login_required
+def api_contract_dupes_by_order(request):
+    return _json_response(contract_dupes_by_order())
+
+
+@login_required
 def api_igk_detail(request, year, igk):
     yc = YEAR_COL.get(year)
     if not yc:
@@ -159,6 +165,7 @@ def api_igk_detail(request, year, igk):
 @login_required
 def api_all_contracts(request):
     agent = request.GET.get("agent", "").strip()
+    contract_filter = request.GET.get("contract", "").strip()
     igk_filter = request.GET.get("igk", "").strip()
     statuses = request.GET.getlist("status")
     year_filter = request.GET.get("year", "").strip()
@@ -176,6 +183,9 @@ def api_all_contracts(request):
     if cfo_filter:
         conditions.append("cfo LIKE %s")
         params.append(f"%{_escape_like(cfo_filter)}")
+    if contract_filter:
+        conditions.append("contract ILIKE %s")
+        params.append(f"%{contract_filter}%")
     if statuses:
         conditions.append(f"status IN ({','.join(['%s'] * len(statuses))})")
         params.extend(statuses)
@@ -211,6 +221,8 @@ def api_all_contracts(request):
 
 ZNP_STATUS_CONDITIONS = {
     "not_issued": "z.id IS NULL",
+    "not_issued_advance": "(z.id IS NULL AND i.payment_type = 'Аванс')",
+    "not_issued_postpayment": "(z.id IS NULL AND i.payment_type = 'Постоплата')",
     "advance": "(z.id IS NOT NULL AND i.payment_type = 'Аванс')",
     "advance_paid": "(z.id IS NOT NULL AND i.payment_type = 'Аванс' AND z.fact_sum IS NOT NULL)",
     "postpayment": "(z.id IS NOT NULL AND i.payment_type = 'Постоплата')",
@@ -221,6 +233,7 @@ ZNP_STATUS_CONDITIONS = {
 @login_required
 def api_znp_list(request):
     agent = request.GET.get("agent", "").strip()
+    contract_filter = request.GET.get("contract", "").strip()
     igk_filter = request.GET.get("igk", "").strip()
     cfo_filter = request.GET.get("cfo", "").strip()
     year_filter = request.GET.get("year", "").strip()
@@ -238,6 +251,9 @@ def api_znp_list(request):
     if cfo_filter:
         conditions.append("i.cfo LIKE %s")
         params.append(f"%{_escape_like(cfo_filter)}")
+    if contract_filter:
+        conditions.append("i.contract ILIKE %s")
+        params.append(f"%{contract_filter}%")
     if year_filter in YEAR_COL:
         conditions.append(f"i.{YEAR_COL[year_filter]} = TRUE")
     status_conditions = [
