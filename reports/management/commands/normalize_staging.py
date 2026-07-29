@@ -5,7 +5,7 @@ from django.core.management.base import BaseCommand
 from django.db import connection, transaction
 
 from reports.services.hashing import contract_hash
-from reports.services.queries import CONCLUDED, YEARS
+from reports.services.queries import ADVANCE, CONCLUDED, POSTPAYMENT, YEARS
 from reports.services.znp_linking import relink_znp_parents
 
 
@@ -19,7 +19,6 @@ def to_float(val):
 
 
 def year_flags(god_igk):
-    # длина кортежа обязана совпадать с числом y-полей на IgkStatData
     try:
         y = int(str(god_igk).strip()[:4])
     except Exception:
@@ -44,8 +43,6 @@ YEAR_MAP = [(f"y{str(y)[2:]}", y) for y in YEARS]
 
 
 def _indexed_lookup(rows, key_fn, value_fn):
-    # источник шлёт полные дубли строк без ID: номер повтора в ключе не даёт
-    # им схлопнуться и потерять изменения
     counts = defaultdict(int)
     result = {}
     for r in rows:
@@ -59,7 +56,6 @@ def _indexed_lookup(rows, key_fn, value_fn):
 class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
-        # между TRUNCATE и вставкой база неконсистентна — только одной транзакцией
         with transaction.atomic(), connection.cursor() as cur:
             cur.execute("""
                 INSERT INTO nsi_cfo (cfo)
@@ -75,13 +71,16 @@ class Command(BaseCommand):
                 ON CONFLICT DO NOTHING
             """)
 
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT igk, kontragent, cfo, dogovor, sostoyanie,
                        tip_platezha, predmet, zakaz, plan, fakt,
                        tol, etap_grafika, dataplan, sozdan, god_igk
                 FROM staging_excel
-                WHERE tip_platezha IN ('Аванс', 'Постоплата')
-            """)
+                WHERE tip_platezha IN (%s, %s)
+                """,
+                [ADVANCE, POSTPAYMENT],
+            )
             staging_rows = cur.fetchall()
 
             new_data = []
@@ -164,8 +163,6 @@ class Command(BaseCommand):
 
                 history.append(
                     (
-                        # без номера повтора: хеш должен совпасть с digest()
-                        # из queries.py::_HISTORY_JOIN
                         "".join(key[:-1]),
                         old_status if status_changed else None,
                         new_status if status_changed else None,
@@ -194,7 +191,6 @@ class Command(BaseCommand):
                     history,
                 )
 
-            # без CASCADE: он вычистил бы znp_data вместе с договорами
             cur.execute("TRUNCATE igk_stat_data RESTART IDENTITY")
             cur.executemany(
                 """
@@ -207,7 +203,6 @@ class Command(BaseCommand):
                 new_data,
             )
 
-            # иначе повторная загрузка за тот же день дублирует снимок
             cur.execute(
                 "DELETE FROM contract_counts_snapshot WHERE upload_date = %s", [today]
             )
@@ -232,8 +227,6 @@ class Command(BaseCommand):
                     [today, year_col],
                 )
 
-            # обязательно: TRUNCATE сбросил pp_id, и без пересборки связи ЗНП
-            # молча окажутся привязаны к чужим договорам
             relink_znp_parents()
 
         self.stdout.write(f"done: {len(new_data)} rows, {len(history)} changes")

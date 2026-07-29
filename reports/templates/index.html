@@ -148,7 +148,7 @@ function downloadIdxKDR(year) {
         alert('Для формирования КДР необходимо выбрать обе даты периода');
         return;
     }
-    var url = '/reports/export/kdr/' + year + '/';
+    var url = '{% url "export_kdr" 0 %}'.replace('/0/', '/' + year + '/');
     var params = new URLSearchParams();
     if (start) params.append('start', start);
     if (end) params.append('end', end);
