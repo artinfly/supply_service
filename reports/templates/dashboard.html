@@ -182,35 +182,27 @@
             <tbody>
                 {% for r in igk_table %}
                     <tr class="{% if forloop.last %} row-total{% endif %}" style="width: auto;">
-                        {% for key, value in r.items %}
-                            <td class="clickable-cell">
-                                <div class="cell-content">{{ key }}</div>
-                                {% if key == 'ИТОГО' %}
-                                    <a href="{% url 'all_contracts_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&statuses=none" 
-                                        class="text-decoration-none">
-                                    </a>
-                                {% else %}
-                                    <a href="{% url 'all_contracts_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&statuses=none&cfo={{ key }}" 
-                                        class="text-decoration-none">
-                                    </a>
-                                {% endif %}
-                            </td>
-                            <td>{{ value.0 }}</td>
-                            <td>{{ value.1|floatformat:2|intspace }}</td>
-                            <td>{{ value.2 }}</td>
-                            <td>{{ value.3|floatformat:2|intspace }}</td>
-                            <td>{{ value.4 }}</td>
-                            <td>{{ value.5|floatformat:2|intspace }}</td>
-                            <td>{{ value.6 }}</td>
-                            <td>{{ value.7|floatformat:2 }}</td>
-                            <td>{{ value.8|floatformat:2|intspace }}</td>
-                            <td>{{ value.9|floatformat:2 }}</td>
-                            <td>{{ value.10 }}</td>
-                            <td>{{ value.11|floatformat:2|intspace }}</td>
-                            <td>{{ value.12|floatformat:2|intspace }}</td>
-                            <td>{{ value.13|floatformat:2|intspace }}</td>
-                            <td>{{ value.14|floatformat:2 }}</td>
-                        {% endfor %}
+                        <td class="clickable-cell">
+                            <div class="cell-content">{{ r.cfo }}</div>
+                            <a href="{% url 'all_contracts_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&statuses=none{% if r.cfo != 'ИТОГО' %}&cfo={{ r.cfo }}{% endif %}"
+                                class="text-decoration-none">
+                            </a>
+                        </td>
+                        <td>{{ r.all_count }}</td>
+                        <td>{{ r.all_sum|floatformat:2|intspace }}</td>
+                        <td>{{ r.all_concluded_count }}</td>
+                        <td>{{ r.all_concluded_sum|floatformat:2|intspace }}</td>
+                        <td>{{ r.year_count }}</td>
+                        <td>{{ r.year_sum|floatformat:2|intspace }}</td>
+                        <td>{{ r.year_concluded_count }}</td>
+                        <td>{{ r.year_concluded_percent|floatformat:2 }}</td>
+                        <td>{{ r.year_concluded_sum|floatformat:2|intspace }}</td>
+                        <td>{{ r.year_concluded_sum_percent|floatformat:2 }}</td>
+                        <td>{{ r.year_not_concluded_count }}</td>
+                        <td>{{ r.year_not_concluded_sum|floatformat:2|intspace }}</td>
+                        <td>{{ r.advance_plan|floatformat:2|intspace }}</td>
+                        <td>{{ r.advance_fact|floatformat:2|intspace }}</td>
+                        <td>{{ r.advance_percent|floatformat:2 }}</td>
                     </tr>
                 {% endfor %}
             </tbody>
