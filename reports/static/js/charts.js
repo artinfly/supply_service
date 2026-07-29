@@ -88,6 +88,10 @@
 
     const unit = payload.unit || "";
     const ordinal = Boolean(payload.ordinal);
+    // стопка — только когда ряды складываются в целое (заключено + не
+    // заключено = сумма месяца). Оформлено/оплачено считаются по разным датам
+    // и в целое не складываются, там ряды идут рядом
+    const stacked = Boolean(payload.stacked);
     const colors = ordinal ? ORDINAL : CATEGORICAL;
 
     const empty = payload.datasets.every((d) =>
@@ -123,9 +127,10 @@
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
         scales: {
-          x: axis({ grid: { display: false } }),
+          x: axis({ grid: { display: false }, stacked: stacked }),
           y: axis({
             beginAtZero: true,
+            stacked: stacked,
             ticks: {
               color: MUTED,
               padding: 8,

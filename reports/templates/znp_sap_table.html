@@ -163,14 +163,9 @@
 
 
     <div class="table-container" style="padding:18px 20px 22px;margin-bottom:18px">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h6 style="margin:0;font-size:14px;font-weight:700">Прохождение этапов по месяцам</h6>
-            <select class="form-select form-select-sm" id="chart-year"
-                    style="width:auto" onchange="drawChart()">
-                {% for y in years %}
-                <option value="{{ y }}" {% if y|stringformat:"s" == current_year %}selected{% endif %}>{{ y }}</option>
-                {% endfor %}
-            </select>
+        <h6 style="margin:0 0 2px;font-size:14px;font-weight:700">Прохождение этапов по месяцам</h6>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+            Сколько заявок прошло каждый этап согласования — те же этапы, что на карточках выше
         </div>
         <div style="position:relative;height:300px">
             <canvas id="chart-znp-sap"></canvas>
@@ -184,14 +179,12 @@
 <script src="{% static 'vendor/chartjs-plugin-datalabels.min.js' %}"></script>
 <script src="{% static 'js/charts.js' %}"></script>
 <script>
-// у страницы SAP нет общего переключателя года, поэтому свой — рядом с графиком
-function drawChart() {
-    const params = new URLSearchParams({
-        igk:  '{{ selected_igk|escapejs }}',
-        year: document.getElementById('chart-year').value,
-    });
-    loadChart('chart-znp-sap', '{% url "api_chart_znp_sap" %}?' + params);
-}
-drawChart();
+// у заявок SAP нет привязки к ГодИГК, поэтому и года на странице нет:
+// разрез идёт по датам самих этапов за весь доступный период
+loadChart(
+    'chart-znp-sap',
+    '{% url "api_chart_znp_sap" %}?' +
+        new URLSearchParams({ igk: '{{ selected_igk|escapejs }}' })
+);
 </script>
 {% endblock %}
