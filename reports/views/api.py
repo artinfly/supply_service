@@ -8,8 +8,10 @@ from django.http import JsonResponse
 
 from ..models import ZnpDataSAP
 from ..services.queries import (
+    ADVANCE,
     CONCLUDED,
     NOT_CONCL,
+    POSTPAYMENT,
     TERMINATED,
     YEAR_COL,
     YEARS,
@@ -45,11 +47,6 @@ MONTHS = [
 
 
 def _month_axis(keys):
-    """Непрерывный ряд год-месяцев от первого до последнего из keys.
-
-    Дыры внутри диапазона заполняются: без этого соседние столбцы оказались бы
-    рядом, хотя между ними полгода. Ключ — "ГГГГ.ММ", подпись — "мес ГГ".
-    """
     parsed = sorted({k for k in keys if k and len(k) == 7})
     if not parsed:
         return [], []
@@ -85,7 +82,6 @@ def _json_response(sql, params=None):
 
 
 def _escape_like(value):
-    # без экранирования % и _ в значении фильтра работают как маски LIKE
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
@@ -103,7 +99,6 @@ def _igk_response(year, statuses):
 
 @login_required
 def api_kdr(request, year):
-    # без проверки неизвестный год превращается в "None=TRUE" внутри SQL
     yc = YEAR_COL.get(year)
     if not yc:
         return JsonResponse({"error": "invalid year"}, status=400)
@@ -221,12 +216,18 @@ def api_all_contracts(request):
 
 ZNP_STATUS_CONDITIONS = {
     "not_issued": "z.id IS NULL",
-    "not_issued_advance": "(z.id IS NULL AND i.payment_type = 'Аванс')",
-    "not_issued_postpayment": "(z.id IS NULL AND i.payment_type = 'Постоплата')",
-    "advance": "(z.id IS NOT NULL AND i.payment_type = 'Аванс')",
-    "advance_paid": "(z.id IS NOT NULL AND i.payment_type = 'Аванс' AND z.fact_sum IS NOT NULL)",
-    "postpayment": "(z.id IS NOT NULL AND i.payment_type = 'Постоплата')",
-    "postpayment_paid": "(z.id IS NOT NULL AND i.payment_type = 'Постоплата' AND z.fact_sum IS NOT NULL)",
+    "not_issued_advance": f"(z.id IS NULL AND i.payment_type = '{ADVANCE}')",
+    "not_issued_postpayment": f"(z.id IS NULL AND i.payment_type = '{POSTPAYMENT}')",
+    "advance": f"(z.id IS NOT NULL AND i.payment_type = '{ADVANCE}')",
+    "advance_paid": (
+        f"(z.id IS NOT NULL AND i.payment_type = '{ADVANCE}'"
+        " AND z.fact_sum IS NOT NULL)"
+    ),
+    "postpayment": f"(z.id IS NOT NULL AND i.payment_type = '{POSTPAYMENT}')",
+    "postpayment_paid": (
+        f"(z.id IS NOT NULL AND i.payment_type = '{POSTPAYMENT}'"
+        " AND z.fact_sum IS NOT NULL)"
+    ),
 }
 
 
@@ -287,8 +288,6 @@ def api_znp_sap_list(request):
     for s in statuses:
         if s in SAP_STATUS_CONDITIONS:
             status_q |= SAP_STATUS_CONDITIONS[s]
-    # проверяем сам status_q, а не statuses: при неизвестном значении фильтра
-    # statuses непустой, но условий в нём нет — фильтровать нечем
     if status_q:
         qs = qs.filter(status_q)
 
@@ -319,7 +318,6 @@ def api_znp_sap_list(request):
 
 
 def _resolve_chart_year(request):
-    """Год из селектора страницы; мусор в ?year= не должен ронять график."""
     try:
         year = int(request.GET.get("year", ""))
     except (TypeError, ValueError):
@@ -335,7 +333,6 @@ def _chart_response(labels, datasets, extra=None):
 
 
 def _two_series(sql, params, first, second, unit, title, stacked=False):
-    """Два ряда сумм в млн рублей по общей оси год-месяцев."""
     with connection.cursor() as cur:
         cur.execute(sql, params)
         rows = cur.fetchall()
@@ -360,7 +357,6 @@ def _two_series(sql, params, first, second, unit, title, stacked=False):
 
 @login_required
 def api_chart_contracts(request):
-    """Контрактация по месяцам графика платежей: заключено и незаключённое."""
     year = _resolve_chart_year(request)
     igk = request.GET.get("igk", "").strip()
     if not igk:
@@ -379,7 +375,6 @@ def api_chart_contracts(request):
 
 @login_required
 def api_chart_znp(request):
-    """ЗНП (ФЗД) по месяцам: оформлено и оплачено."""
     year = _resolve_chart_year(request)
     igk = request.GET.get("igk", "").strip()
     if not igk:
@@ -395,8 +390,6 @@ def api_chart_znp(request):
     )
 
 
-# порядок важен: этапы идут по возрастанию, график красится одноцветной
-# шкалой от светлого к тёмному
 SAP_CHART_STAGES = [
     ("stage_e", "Передано в 18 отдел"),
     ("stage_f", "Подтверждено 18 отделом"),
@@ -406,7 +399,6 @@ SAP_CHART_STAGES = [
 
 @login_required
 def api_chart_znp_sap(request):
-    """ЗНП (SAP) по месяцам: сколько заявок прошло каждый этап согласования."""
     igk = request.GET.get("igk", "").strip()
     sql, params = znp_sap_monthly(igk)
     with connection.cursor() as cur:

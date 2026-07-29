@@ -5,8 +5,6 @@ from django.db import connection, transaction
 class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
-        # TRUNCATE + повторная вставка одной транзакцией: падение на середине
-        # иначе оставит таблицу пустой
         with transaction.atomic(), connection.cursor() as cur:
             cur.execute("""
                 SELECT

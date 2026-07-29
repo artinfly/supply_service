@@ -1,7 +1,5 @@
 from django.db.models import Case, CharField, Q, Value, When
 
-# Единственный источник логики статуса ЗНП (SAP): выражение для ORM и функция
-# для построчной подписи в JSON обязаны оставаться согласованными.
 SAP_STATUS_CONDITIONS = {
     "waiting_agreement": Q(stage_e__isnull=True),
     "sent_18": Q(stage_e__isnull=False, stage_f__isnull=True),
