@@ -220,10 +220,88 @@ def _resolve_year(request):
     return year
 
 
+def _mln(value):
+    return (value or 0) / 1000000
+
+
+def _percent(part, whole):
+    return (part / whole * 100) if whole else 0
+
+
 def _filter_by_year(queryset, year, field_prefix=""):
     # field_prefix — для фильтра через связанную модель, например "parent__"
     field_name = f"{field_prefix}y{str(year)[-2:]}"
     return queryset.filter(**{field_name: True})
+
+
+_EMPTY_CFO_STATS = {
+    "all_count": 0,
+    "all_sum": None,
+    "all_concluded_count": 0,
+    "all_concluded_sum": None,
+    "curr_count": 0,
+    "curr_sum": None,
+    "curr_concluded_count": 0,
+    "curr_concluded_sum": None,
+    "curr_not_concluded_count": 0,
+    "curr_not_concluded_sum": None,
+    "curr_plan": None,
+    "curr_fact": None,
+}
+
+# складываются в строке «ИТОГО»; проценты пересчитываются от сумм, а не складываются
+_CFO_SUMMED = (
+    "all_count",
+    "all_sum",
+    "all_concluded_count",
+    "all_concluded_sum",
+    "year_count",
+    "year_sum",
+    "year_concluded_count",
+    "year_concluded_sum",
+    "year_not_concluded_count",
+    "year_not_concluded_sum",
+    "advance_plan",
+    "advance_fact",
+)
+
+
+def _cfo_row(label, s):
+    """Строка таблицы по ЦФО из посчитанных агрегатов."""
+    row = {
+        "cfo": label,
+        "all_count": s["all_count"],
+        "all_sum": _mln(s["all_sum"]),
+        "all_concluded_count": s["all_concluded_count"],
+        "all_concluded_sum": _mln(s["all_concluded_sum"]),
+        "year_count": s["curr_count"],
+        "year_sum": _mln(s["curr_sum"]),
+        "year_concluded_count": s["curr_concluded_count"],
+        "year_concluded_sum": _mln(s["curr_concluded_sum"]),
+        "year_not_concluded_count": s["curr_not_concluded_count"],
+        "year_not_concluded_sum": _mln(s["curr_not_concluded_sum"]),
+        "advance_plan": _mln(s["curr_plan"]),
+        "advance_fact": _mln(s["curr_fact"]),
+    }
+    return _with_cfo_percents(row)
+
+
+def _with_cfo_percents(row):
+    row["year_concluded_percent"] = _percent(
+        row["year_concluded_count"], row["year_count"]
+    )
+    row["year_concluded_sum_percent"] = _percent(
+        row["year_concluded_sum"], row["year_sum"]
+    )
+    row["advance_percent"] = _percent(row["advance_fact"], row["advance_plan"])
+    return row
+
+
+def _cfo_totals_row(rows):
+    totals = {"cfo": "ИТОГО"}
+    for key in _CFO_SUMMED:
+        totals[key] = sum(r[key] for r in rows)
+    return _with_cfo_percents(totals)
 
 
 @login_required
@@ -240,86 +318,36 @@ def dashboard(request):
 
     ctx = _ctx(request)
 
-    all_contracts_stats = (
-        IgkStatData.objects.filter(
-            contract__isnull=False,
-        )
+    year_field = f"y{str(year)[-2:]}"
+    concluded_q = Q(status__in=CONCLUDED)
+    not_concl_q = Q(status__in=NOT_CONCL)
+    year_q = Q(**{year_field: True})
+    advance_q = Q(payment_type="Аванс")
+
+    # карточки сверху: два запроса с условными агрегатами вместо шести выборок
+    # с досчётом в Python
+    totals_all = (
+        IgkStatData.objects.filter(contract__isnull=False)
         .exclude(order="")
-        .values("contract")
-        .annotate(
-            count=Count("pp_id"),
-            contract_sum=Sum("plan"),
+        .aggregate(
+            count=Count("contract", distinct=True),
+            plan_sum=Sum("plan"),
+            concluded_count=Count("contract", filter=concluded_q, distinct=True),
+            concluded_plan=Sum("plan", filter=concluded_q),
+            not_concluded_count=Count("contract", filter=not_concl_q, distinct=True),
+            not_concluded_plan=Sum("plan", filter=not_concl_q),
         )
     )
-
-    all_concluded_stats = (
-        IgkStatData.objects.filter(
-            contract__isnull=False,
-            status__in=CONCLUDED,
-        )
-        .exclude(order="")
-        .values("contract")
-        .annotate(
-            count=Count("pp_id"),
-            contract_sum=Sum("plan"),
-        )
-    )
-
-    all_not_concluded_stats = (
-        IgkStatData.objects.filter(
-            contract__isnull=False,
-            status__in=NOT_CONCL,
-        )
-        .exclude(order="")
-        .values("contract")
-        .annotate(
-            count=Count("pp_id"),
-            contract_sum=Sum("plan"),
-        )
-    )
-
-    curr_year_contracts_stats = (
-        IgkStatData.objects.exclude(
-            status="Расторгнут",
-        )
-        .filter(contract__isnull=False, order__isnull=False)
-        .values("contract")
-        .annotate(
-            count=Count("pp_id"),
-            contract_sum=Sum("plan"),
-        )
-    )
-
-    curr_year_concluded_stats = (
-        IgkStatData.objects.exclude(
-            status="Расторгнут",
-        )
-        .filter(
-            contract__isnull=False,
-            order__isnull=False,
-            status__in=CONCLUDED,
-        )
-        .values("contract")
-        .annotate(
-            count=Count("pp_id"),
-            contract_sum=Sum("plan"),
-        )
-    )
-
-    curr_year_sums = (
-        IgkStatData.objects.exclude(
-            status="Расторгнут",
-        )
-        .filter(
-            contract__isnull=False,
-            order__isnull=False,
-            payment_type="Аванс",
-        )
-        .values("contract")
-        .annotate(
-            count=Count("pp_id"),
-            plan=Sum("plan"),
-            fact=Sum("fact"),
+    totals_year = (
+        IgkStatData.objects.exclude(status="Расторгнут")
+        .filter(contract__isnull=False, order__isnull=False, **{year_field: True})
+        .aggregate(
+            count=Count("contract", distinct=True),
+            plan_sum=Sum("plan"),
+            concluded_count=Count("contract", filter=concluded_q, distinct=True),
+            concluded_plan=Sum("plan", filter=concluded_q),
+            advance_plan=Sum("plan", filter=advance_q),
+            advance_fact=Sum("fact", filter=advance_q),
         )
     )
 
@@ -331,12 +359,6 @@ def dashboard(request):
     )
 
     # один запрос с группировкой по cfo вместо запроса на каждый ЦФО
-    year_field = f"y{str(year)[-2:]}"
-    concluded_q = Q(status__in=CONCLUDED)
-    not_concl_q = Q(status__in=NOT_CONCL)
-    year_q = Q(**{year_field: True})
-    advance_q = Q(payment_type="Аванс")
-
     cfo_stats = {
         row["cfo"]: row
         for row in (
@@ -365,139 +387,17 @@ def dashboard(request):
             )
         )
     }
-    _empty_cfo_stats = {
-        "all_count": 0,
-        "all_sum": None,
-        "all_concluded_count": 0,
-        "all_concluded_sum": None,
-        "curr_count": 0,
-        "curr_sum": None,
-        "curr_concluded_count": 0,
-        "curr_concluded_sum": None,
-        "curr_not_concluded_count": 0,
-        "curr_not_concluded_sum": None,
-        "curr_plan": None,
-        "curr_fact": None,
-    }
+    igk_table = [
+        _cfo_row(cfo, cfo_stats.get(cfo, _EMPTY_CFO_STATS)) for cfo in available_cfo
+    ]
+    igk_table.append(_cfo_totals_row(igk_table))
 
-    igk_table = []
-
-    for ac in available_cfo:
-        s = cfo_stats.get(ac, _empty_cfo_stats)
-        all_sum = s["all_sum"] or 0
-        all_concluded_sum = s["all_concluded_sum"] or 0
-        curr_sum = s["curr_sum"] or 0
-        curr_concluded_sum = s["curr_concluded_sum"] or 0
-        curr_not_concluded_sum = s["curr_not_concluded_sum"] or 0
-        curr_year_plan_cfo = s["curr_plan"] or 0
-        curr_year_fact_cfo = s["curr_fact"] or 0
-        concluded_percent_sum = curr_concluded_sum / curr_sum if curr_sum != 0 else 0
-
-        igk_table.append(
-            {
-                ac: (
-                    s["all_count"],
-                    all_sum / 1000000,
-                    s["all_concluded_count"],
-                    all_concluded_sum / 1000000,
-                    s["curr_count"],
-                    curr_sum / 1000000,
-                    s["curr_concluded_count"],
-                    (
-                        (s["curr_concluded_count"] / s["curr_count"]) * 100
-                        if s["curr_count"] != 0
-                        else 0
-                    ),
-                    curr_concluded_sum / 1000000,
-                    concluded_percent_sum * 100,
-                    s["curr_not_concluded_count"],
-                    curr_not_concluded_sum / 1000000,
-                    curr_year_plan_cfo / 1000000,
-                    curr_year_fact_cfo / 1000000,
-                    (
-                        (curr_year_fact_cfo / curr_year_plan_cfo) * 100
-                        if curr_year_plan_cfo != 0
-                        else 0
-                    ),
-                )
-            }
-        )
-
-    summed_indices = [0, 1, 2, 3, 4, 5, 6, 8, 10, 11, 12, 13]
-    totals = {i: 0 for i in summed_indices}
-    for row in igk_table:
-        values = next(iter(row.values()))
-        for i in summed_indices:
-            totals[i] += values[i]
-
-    contracts_count = totals[0]
-    contracts_sum = totals[1]
-    concluded_contracts_count = totals[2]
-    concluded_contracts_sum = totals[3]
-    curr_year_contracts = totals[4]
-    curr_year_contracts_sum_cfo = totals[5]
-    curr_year_concluded_contracts = totals[6]
-    curr_year_concluded_contracts_sum = totals[8]
-    curr_year_not_concluded_contracts = totals[10]
-    curr_year_not_concluded_contracts_sum = totals[11]
-    curr_year_plan_cfo_summary = totals[12]
-    curr_year_fact_cfo_summary = totals[13]
-
-    igk_table.append(
-        {
-            "ИТОГО": (
-                contracts_count,
-                contracts_sum,
-                concluded_contracts_count,
-                concluded_contracts_sum,
-                curr_year_contracts,
-                curr_year_contracts_sum_cfo,
-                curr_year_concluded_contracts,
-                (
-                    (curr_year_concluded_contracts / curr_year_contracts) * 100
-                    if curr_year_contracts != 0
-                    else 0
-                ),
-                curr_year_concluded_contracts_sum,
-                (
-                    (curr_year_concluded_contracts_sum / curr_year_contracts_sum_cfo)
-                    * 100
-                    if curr_year_contracts_sum_cfo != 0
-                    else 0
-                ),
-                curr_year_not_concluded_contracts,
-                curr_year_not_concluded_contracts_sum,
-                curr_year_plan_cfo_summary,
-                curr_year_fact_cfo_summary,
-                (
-                    (curr_year_fact_cfo_summary / curr_year_plan_cfo_summary) * 100
-                    if curr_year_plan_cfo_summary != 0
-                    else 0
-                ),
-            )
-        }
-    )
-
-    curr_year_contracts_stats = _filter_by_year(curr_year_contracts_stats, year)
-    curr_year_concluded_stats = _filter_by_year(curr_year_concluded_stats, year)
-    curr_year_sums = _filter_by_year(curr_year_sums, year)
-
-    all_contracts_sum = sum(item["contract_sum"] or 0 for item in all_contracts_stats)
-    all_concluded_sum = sum(item["contract_sum"] or 0 for item in all_concluded_stats)
-    all_not_concluded_sum = sum(
-        item["contract_sum"] or 0 for item in all_not_concluded_stats
-    )
-    curr_year_contracts_sum = sum(
-        item["contract_sum"] or 0 for item in curr_year_contracts_stats
-    )
-    curr_year_concluded_sum = sum(
-        item["contract_sum"] or 0 for item in curr_year_concluded_stats
-    )
-    curr_year_fact = sum(item["fact"] or 0 for item in curr_year_sums)
-    curr_year_plan = sum(item["plan"] or 0 for item in curr_year_sums)
-
-    curr_year_contracts_count = curr_year_contracts_stats.count()
-    curr_year_concluded_count = curr_year_concluded_stats.count()
+    year_count = totals_year["count"]
+    year_concluded_count = totals_year["concluded_count"]
+    year_plan = totals_year["plan_sum"] or 0
+    year_concluded_plan = totals_year["concluded_plan"] or 0
+    advance_plan = totals_year["advance_plan"] or 0
+    advance_fact = totals_year["advance_fact"] or 0
 
     ctx.update(
         {
@@ -505,37 +405,23 @@ def dashboard(request):
             "selected_year": str(year),
             "available_igk": available_igk,
             "selected_igk": selected_igk,
-            "all_contracts_count": all_contracts_stats.count(),
-            "all_contracts_sum": all_contracts_sum / 1000000,
-            "all_concluded_count": all_concluded_stats.count(),
-            "all_concluded_sum": all_concluded_sum / 1000000,
-            "all_not_concluded_count": all_not_concluded_stats.count(),
-            "all_not_concluded_sum": all_not_concluded_sum / 1000000,
-            "curr_year_contracts_count": curr_year_contracts_count,
-            "curr_year_contracts_sum": curr_year_contracts_sum / 1000000,
-            "curr_year_concluded_count": curr_year_concluded_count,
-            "curr_year_concluded_sum": curr_year_concluded_sum / 1000000,
-            "curr_year_not_concluded_count": curr_year_contracts_count
-            - curr_year_concluded_count,
-            "curr_year_not_concluded_sum": (
-                curr_year_contracts_sum - curr_year_concluded_sum
-            )
-            / 1000000,
-            "curr_year_fact": curr_year_fact / 1000000,
-            "curr_year_plan": curr_year_plan / 1000000,
-            "curr_year_percent_count": (
-                (curr_year_concluded_count / curr_year_contracts_count) * 100
-                if curr_year_contracts_count != 0
-                else 0
-            ),
-            "curr_year_percent_sum": (
-                (curr_year_concluded_sum / curr_year_contracts_sum) * 100
-                if curr_year_contracts_sum != 0
-                else 0
-            ),
-            "curr_year_percent_prepaid": (
-                (curr_year_fact / curr_year_plan) * 100 if curr_year_plan != 0 else 0
-            ),
+            "all_contracts_count": totals_all["count"],
+            "all_contracts_sum": _mln(totals_all["plan_sum"]),
+            "all_concluded_count": totals_all["concluded_count"],
+            "all_concluded_sum": _mln(totals_all["concluded_plan"]),
+            "all_not_concluded_count": totals_all["not_concluded_count"],
+            "all_not_concluded_sum": _mln(totals_all["not_concluded_plan"]),
+            "curr_year_contracts_count": year_count,
+            "curr_year_contracts_sum": _mln(year_plan),
+            "curr_year_concluded_count": year_concluded_count,
+            "curr_year_concluded_sum": _mln(year_concluded_plan),
+            "curr_year_not_concluded_count": year_count - year_concluded_count,
+            "curr_year_not_concluded_sum": _mln(year_plan - year_concluded_plan),
+            "curr_year_fact": _mln(advance_fact),
+            "curr_year_plan": _mln(advance_plan),
+            "curr_year_percent_count": _percent(year_concluded_count, year_count),
+            "curr_year_percent_sum": _percent(year_concluded_plan, year_plan),
+            "curr_year_percent_prepaid": _percent(advance_fact, advance_plan),
             "igk_table": igk_table,
             "has_data": IgkStatData.objects.exists(),
             "no_data_hint": (

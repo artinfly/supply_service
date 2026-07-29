@@ -12,6 +12,7 @@ from ..services.queries import (
     NOT_CONCL,
     TERMINATED,
     YEAR_COL,
+    YEARS,
     all_contracts,
     contract_dupes,
     history_fact,
@@ -40,7 +41,28 @@ MONTHS = [
     "ноя",
     "дек",
 ]
-MONTH_KEYS = [f"{m:02d}" for m in range(1, 13)]
+
+
+def _month_axis(keys):
+    """Непрерывный ряд год-месяцев от первого до последнего из keys.
+
+    Дыры внутри диапазона заполняются: без этого соседние столбцы оказались бы
+    рядом, хотя между ними полгода. Ключ — "ГГГГ.ММ", подпись — "мес ГГ".
+    """
+    parsed = sorted({k for k in keys if k and len(k) == 7})
+    if not parsed:
+        return [], []
+    start, end = parsed[0], parsed[-1]
+    y0, m0 = int(start[:4]), int(start[5:7])
+    y1, m1 = int(end[:4]), int(end[5:7])
+
+    axis = []
+    y, m = y0, m0
+    while (y, m) <= (y1, m1):
+        axis.append(f"{y}.{m:02d}")
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    labels = [f"{MONTHS[int(k[5:7]) - 1]} {k[2:4]}" for k in axis]
+    return axis, labels
 
 
 def _json_rows(cur):
@@ -281,77 +303,84 @@ def api_znp_sap_list(request):
 
 
 def _resolve_chart_year(request):
-    # мусор в ?year= не должен ронять страницу
+    """Год из селектора страницы; мусор в ?year= не должен ронять график."""
     try:
-        return int(request.GET.get("year", ""))
+        year = int(request.GET.get("year", ""))
     except (TypeError, ValueError):
-        return _date.today().year
+        year = _date.today().year
+    return year if year in YEARS else YEARS[-1]
 
 
-def _months_frame():
-    """Пустой каркас на 12 месяцев — чтобы график не съезжал на дырах."""
-    return {key: 0.0 for key in MONTH_KEYS}
-
-
-def _chart_response(datasets, extra=None):
-    payload = {"labels": MONTHS, "datasets": datasets}
+def _chart_response(labels, datasets, extra=None):
+    payload = {"labels": labels, "datasets": datasets}
     if extra:
         payload.update(extra)
     return JsonResponse(payload, json_dumps_params={"ensure_ascii": False})
 
 
-@login_required
-def api_chart_contracts(request):
-    """Авансы по месяцам: план и факт, в млн рублей."""
-    year = _resolve_chart_year(request)
-    igk = request.GET.get("igk", "").strip()
-    plan, fact = _months_frame(), _months_frame()
+def _two_series(sql, params, first, second, unit, title, stacked=False):
+    """Два ряда сумм в млн рублей по общей оси год-месяцев."""
+    with connection.cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
 
-    if igk:
-        sql, params = contracts_monthly(year, igk)
-        with connection.cursor() as cur:
-            cur.execute(sql, params)
-            for month, plan_sum, fact_sum in cur.fetchall():
-                if month in plan:
-                    plan[month] = float(plan_sum or 0) / 1000000
-                    fact[month] = float(fact_sum or 0) / 1000000
+    axis, labels = _month_axis(row[0] for row in rows)
+    a = dict.fromkeys(axis, 0.0)
+    b = dict.fromkeys(axis, 0.0)
+    for ym, first_sum, second_sum in rows:
+        if ym in a:
+            a[ym] = float(first_sum or 0) / 1000000
+            b[ym] = float(second_sum or 0) / 1000000
 
     return _chart_response(
+        labels,
         [
-            {"label": "План", "data": [plan[k] for k in MONTH_KEYS]},
-            {"label": "Факт", "data": [fact[k] for k in MONTH_KEYS]},
+            {"label": first, "data": [a[k] for k in axis]},
+            {"label": second, "data": [b[k] for k in axis]},
         ],
-        {"unit": "млн ₽", "title": f"Авансы по месяцам, {year}"},
+        {"unit": unit, "title": title, "stacked": stacked},
+    )
+
+
+@login_required
+def api_chart_contracts(request):
+    """Контрактация по месяцам графика платежей: заключено и незаключённое."""
+    year = _resolve_chart_year(request)
+    igk = request.GET.get("igk", "").strip()
+    if not igk:
+        return _chart_response([], [])
+    sql, params = contracts_monthly(YEAR_COL[str(year)], igk)
+    return _two_series(
+        sql,
+        params,
+        "Заключено",
+        "Не заключено",
+        "млн ₽",
+        f"Суммы договоров по месяцам графика платежей, ГодИГК {year}",
+        stacked=True,
     )
 
 
 @login_required
 def api_chart_znp(request):
-    """ЗНП (ФЗД) по месяцам: плановые платежи против прошедших, в млн рублей."""
+    """ЗНП (ФЗД) по месяцам: оформлено и оплачено."""
     year = _resolve_chart_year(request)
     igk = request.GET.get("igk", "").strip()
-    plan, fact = _months_frame(), _months_frame()
-
-    if igk:
-        sql, params = znp_monthly(year, igk)
-        with connection.cursor() as cur:
-            cur.execute(sql, params)
-            for month, plan_sum, fact_sum in cur.fetchall():
-                if month in plan:
-                    plan[month] = float(plan_sum or 0) / 1000000
-                    fact[month] = float(fact_sum or 0) / 1000000
-
-    return _chart_response(
-        [
-            {"label": "План платежа", "data": [plan[k] for k in MONTH_KEYS]},
-            {"label": "Оплачено", "data": [fact[k] for k in MONTH_KEYS]},
-        ],
-        {"unit": "млн ₽", "title": f"Заявки на платёж по месяцам, {year}"},
+    if not igk:
+        return _chart_response([], [])
+    sql, params = znp_monthly(YEAR_COL[str(year)], igk)
+    return _two_series(
+        sql,
+        params,
+        "Оформлено",
+        "Оплачено",
+        "млн ₽",
+        f"Заявки на платёж по месяцам, ГодИГК {year}",
     )
 
 
-# порядок важен: этапы идут по возрастанию, и график красится
-# одноцветной шкалой от светлого к тёмному
+# порядок важен: этапы идут по возрастанию, график красится одноцветной
+# шкалой от светлого к тёмному
 SAP_CHART_STAGES = [
     ("stage_e", "Передано в 18 отдел"),
     ("stage_f", "Подтверждено 18 отделом"),
@@ -361,29 +390,30 @@ SAP_CHART_STAGES = [
 
 @login_required
 def api_chart_znp_sap(request):
-    """ЗНП (SAP) по месяцам: сколько заявок прошло каждый этап."""
-    year = _resolve_chart_year(request)
+    """ЗНП (SAP) по месяцам: сколько заявок прошло каждый этап согласования."""
     igk = request.GET.get("igk", "").strip()
-
-    counts = {column: _months_frame() for column, _ in SAP_CHART_STAGES}
-    amounts = {column: _months_frame() for column, _ in SAP_CHART_STAGES}
-
-    sql, params = znp_sap_monthly(year, igk)
+    sql, params = znp_sap_monthly(igk)
     with connection.cursor() as cur:
         cur.execute(sql, params)
-        for month, stage, cnt, amount in cur.fetchall():
-            if stage in counts and month in counts[stage]:
-                counts[stage][month] = float(cnt or 0)
-                amounts[stage][month] = float(amount or 0) / 1000000
+        rows = cur.fetchall()
+
+    axis, labels = _month_axis(row[0] for row in rows)
+    counts = {column: dict.fromkeys(axis, 0.0) for column, _ in SAP_CHART_STAGES}
+    amounts = {column: dict.fromkeys(axis, 0.0) for column, _ in SAP_CHART_STAGES}
+    for ym, stage, cnt, amount in rows:
+        if stage in counts and ym in counts[stage]:
+            counts[stage][ym] = float(cnt or 0)
+            amounts[stage][ym] = float(amount or 0) / 1000000
 
     return _chart_response(
+        labels,
         [
             {
                 "label": label,
-                "data": [counts[column][k] for k in MONTH_KEYS],
-                "amounts": [amounts[column][k] for k in MONTH_KEYS],
+                "data": [counts[column][k] for k in axis],
+                "amounts": [amounts[column][k] for k in axis],
             }
             for column, label in SAP_CHART_STAGES
         ],
-        {"unit": "шт", "ordinal": True, "title": f"Этапы заявок по месяцам, {year}"},
+        {"unit": "шт", "ordinal": True, "title": "Этапы согласования по месяцам"},
     )

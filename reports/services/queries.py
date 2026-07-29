@@ -320,14 +320,6 @@ def distinct_agents():
     """
 
 
-def distinct_cfo():
-    return """
-        SELECT DISTINCT cfo FROM igk_stat_data
-        WHERE cfo IS NOT NULL AND TRIM(cfo) != ''
-        ORDER BY cfo
-    """
-
-
 # CASE ниже должен совпадать с api.py::ZNP_STATUS_CONDITIONS — там те же условия
 # используются как SQL-фильтр, здесь как отображаемый статус
 def znp_list(where):
