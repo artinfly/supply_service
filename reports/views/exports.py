@@ -8,7 +8,6 @@ from django.http import JsonResponse
 from ..services.excel import make_wb, xlsx_response
 from ..services.pivot import build_advances_xlsx
 from ..services.queries import (
-    CONCLUDED,
     YEAR_COL,
     advances,
     contract_dupes,
@@ -242,9 +241,9 @@ def export_kdr(request, year):
         f"Сумма заключенных договоров на {yy}г., млн.руб.",
         f"% контрактации {yy}г.",
         f"Заключено {period_text} шт.",
-        f"Не заключено, шт.",
-        f"Сумма не заключенных договоров, млн.руб.",
-        f"Плановая сумма аванаса в {yy}г., млн.руб.",
+        "Не заключено, шт.",
+        "Сумма не заключенных договоров, млн.руб.",
+        f"Плановая сумма аванса в {yy}г., млн.руб.",
         f"Фактическая сумма аванса на {yy}г., млн.руб.",
         f"% авансирования на {yy}г.",
         "Примечание",
