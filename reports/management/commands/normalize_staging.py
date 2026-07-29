@@ -5,7 +5,7 @@ from django.core.management.base import BaseCommand
 from django.db import connection, transaction
 
 from reports.services.hashing import contract_hash
-from reports.services.queries import CONCLUDED, YEARS
+from reports.services.queries import ADVANCE, CONCLUDED, POSTPAYMENT, YEARS
 from reports.services.znp_linking import relink_znp_parents
 
 
@@ -71,13 +71,16 @@ class Command(BaseCommand):
                 ON CONFLICT DO NOTHING
             """)
 
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT igk, kontragent, cfo, dogovor, sostoyanie,
                        tip_platezha, predmet, zakaz, plan, fakt,
                        tol, etap_grafika, dataplan, sozdan, god_igk
                 FROM staging_excel
-                WHERE tip_platezha IN ('Аванс', 'Постоплата')
-            """)
+                WHERE tip_platezha IN (%s, %s)
+                """,
+                [ADVANCE, POSTPAYMENT],
+            )
             staging_rows = cur.fetchall()
 
             new_data = []

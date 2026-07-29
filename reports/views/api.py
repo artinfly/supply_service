@@ -8,8 +8,10 @@ from django.http import JsonResponse
 
 from ..models import ZnpDataSAP
 from ..services.queries import (
+    ADVANCE,
     CONCLUDED,
     NOT_CONCL,
+    POSTPAYMENT,
     TERMINATED,
     YEAR_COL,
     YEARS,
@@ -214,12 +216,18 @@ def api_all_contracts(request):
 
 ZNP_STATUS_CONDITIONS = {
     "not_issued": "z.id IS NULL",
-    "not_issued_advance": "(z.id IS NULL AND i.payment_type = 'Аванс')",
-    "not_issued_postpayment": "(z.id IS NULL AND i.payment_type = 'Постоплата')",
-    "advance": "(z.id IS NOT NULL AND i.payment_type = 'Аванс')",
-    "advance_paid": "(z.id IS NOT NULL AND i.payment_type = 'Аванс' AND z.fact_sum IS NOT NULL)",
-    "postpayment": "(z.id IS NOT NULL AND i.payment_type = 'Постоплата')",
-    "postpayment_paid": "(z.id IS NOT NULL AND i.payment_type = 'Постоплата' AND z.fact_sum IS NOT NULL)",
+    "not_issued_advance": f"(z.id IS NULL AND i.payment_type = '{ADVANCE}')",
+    "not_issued_postpayment": f"(z.id IS NULL AND i.payment_type = '{POSTPAYMENT}')",
+    "advance": f"(z.id IS NOT NULL AND i.payment_type = '{ADVANCE}')",
+    "advance_paid": (
+        f"(z.id IS NOT NULL AND i.payment_type = '{ADVANCE}'"
+        " AND z.fact_sum IS NOT NULL)"
+    ),
+    "postpayment": f"(z.id IS NOT NULL AND i.payment_type = '{POSTPAYMENT}')",
+    "postpayment_paid": (
+        f"(z.id IS NOT NULL AND i.payment_type = '{POSTPAYMENT}'"
+        " AND z.fact_sum IS NOT NULL)"
+    ),
 }
 
 

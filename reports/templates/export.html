@@ -107,7 +107,8 @@ function downloadAgent(year) {
         agentInput.focus();
         return;
     }
-    window.location.href = `/reports/export/contracts/${year}/?agent=${encodeURIComponent(agent)}`;
+    const base = '{% url "export_contracts_by_agent" 0 %}'.replace('/0/', `/${year}/`);
+    window.location.href = `${base}?agent=${encodeURIComponent(agent)}`;
 }
 
 function clearKdrDates() {
@@ -122,7 +123,7 @@ function downloadKDR(year) {
         alert('Для формирования КДР необходимо выбрать обе даты периода');
         return;
     }
-    let url = `/reports/export/kdr/${year}/`;
+    let url = '{% url "export_kdr" 0 %}'.replace('/0/', `/${year}/`);
     const params = new URLSearchParams();
     if (start) params.append('start', start);
     if (end) params.append('end', end);

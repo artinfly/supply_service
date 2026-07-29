@@ -14,8 +14,10 @@ from django.shortcuts import redirect, render
 
 from ..models import IgkStatData, NsiIgk, ZnpData, ZnpDataSAP
 from ..services.queries import (
+    ADVANCE,
     CONCLUDED,
     NOT_CONCL,
+    POSTPAYMENT,
     TERMINATED,
     YEARS,
     distinct_agents,
@@ -323,7 +325,7 @@ def dashboard(request):
     concluded_q = Q(status__in=CONCLUDED)
     not_concl_q = Q(status__in=NOT_CONCL)
     year_q = Q(**{year_field: True})
-    advance_q = Q(payment_type="Аванс")
+    advance_q = Q(payment_type=ADVANCE)
 
     totals_all = (
         IgkStatData.objects.filter(contract__isnull=False)
@@ -571,8 +573,8 @@ def znp_table(request):
     year_znp_qs = _filter_by_year(all_znp_qs, year, field_prefix="parent__")
 
     def _breakdown(not_issued_qs, znp_qs):
-        pos_advance_q = Q(payment_type="Аванс")
-        pos_postpayment_q = Q(payment_type="Постоплата")
+        pos_advance_q = Q(payment_type=ADVANCE)
+        pos_postpayment_q = Q(payment_type=POSTPAYMENT)
         not_issued_agg = not_issued_qs.aggregate(
             count=Count("pp_id"),
             plan_sum=Sum("plan"),
@@ -581,8 +583,8 @@ def znp_table(request):
             postpayment_count=Count("pp_id", filter=pos_postpayment_q),
             postpayment_sum=Sum("plan", filter=pos_postpayment_q),
         )
-        advance_q = Q(parent__payment_type="Аванс")
-        postpayment_q = Q(parent__payment_type="Постоплата")
+        advance_q = Q(parent__payment_type=ADVANCE)
+        postpayment_q = Q(parent__payment_type=POSTPAYMENT)
         paid_q = Q(fact_sum__isnull=False)
         znp_agg = znp_qs.aggregate(
             issued_count=Count("id"),
@@ -628,8 +630,8 @@ def znp_table(request):
             ],
         }
 
-    pos_advance_q = Q(payment_type="Аванс")
-    pos_postpayment_q = Q(payment_type="Постоплата")
+    pos_advance_q = Q(payment_type=ADVANCE)
+    pos_postpayment_q = Q(payment_type=POSTPAYMENT)
     not_issued_stats = {
         row["cfo"]: row
         for row in igk_not_issued_qs.values("cfo").annotate(
@@ -642,8 +644,8 @@ def znp_table(request):
         )
     }
 
-    advance_q = Q(parent__payment_type="Аванс")
-    postpayment_q = Q(parent__payment_type="Постоплата")
+    advance_q = Q(parent__payment_type=ADVANCE)
+    postpayment_q = Q(parent__payment_type=POSTPAYMENT)
     paid_q = Q(fact_sum__isnull=False)
     znp_stats = {
         row["parent__cfo"]: row

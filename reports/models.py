@@ -172,6 +172,10 @@ class ZnpDataSAP(models.Model):
         db_table = "znp_data_sap"
         verbose_name = "Заявка на платёж(САП)"
         verbose_name_plural = "Заявки на платёж(САП)"
+        indexes = [
+            models.Index(fields=["cfo"]),
+            models.Index(fields=["igk"]),
+        ]
 
     def __str__(self):
         return f"{self.reg_num}"

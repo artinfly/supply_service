@@ -7,6 +7,8 @@ CONCLUDED = (
     "Исполнен",
 )
 NOT_CONCL = ("Черновик",)
+ADVANCE = "Аванс"
+POSTPAYMENT = "Постоплата"
 TERMINATED = ("Расторгнут",)
 YEARS = [2025, 2026, 2027]
 YEAR_COL = {str(y): f"y{str(y)[2:]}" for y in YEARS}
@@ -30,8 +32,8 @@ def kdr(year):
         ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS order_sum_curr_year,
         COUNT(DISTINCT contract) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status IN ({cl})) AS count_concluded_curr_year,
         ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status IN ({cl})), 0)/1e6 AS numeric), 2) AS concluded_order_sum_curr_year,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='Аванс' AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS pp_sum_plan,
-        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='Аванс' AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS pp_sum_fact,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS pp_sum_plan,
+        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS pp_sum_fact,
         COUNT(DISTINCT contract) FILTER (WHERE "order" != '' AND status IN ({nl}) AND {yc}=TRUE) AS count_not_concluded_curr_year,
         ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status IN ({nl})), 0)/1e6 AS numeric), 2) AS not_concluded_order_sum_curr_year,
         -- проценты ниже через CAST(... AS int) — усечение вниз, а не округление
@@ -44,9 +46,9 @@ def kdr(year):
              ELSE CAST(COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status IN ({cl})), 0) * 100.0
                   / NULLIF(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status!='Расторгнут'), 0) AS int)
         END AS order_sum_percent_curr_year,
-        CASE WHEN COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='Аванс' AND status!='Расторгнут'), 0) = 0 THEN 0
-             ELSE CAST(COALESCE(SUM(fact) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='Аванс' AND status!='Расторгнут'), 0)
-                  / NULLIF(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='Аванс' AND status!='Расторгнут'), 0) * 100 AS int)
+        CASE WHEN COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0) = 0 THEN 0
+             ELSE CAST(COALESCE(SUM(fact) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)
+                  / NULLIF(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0) * 100 AS int)
         END AS pp_percent
     FROM igk_stat_data
     GROUP BY igk ORDER BY igk
@@ -58,14 +60,14 @@ def igk_stat(yc, statuses):
     return f"""
     SELECT igk,
         ROUND(CAST(COALESCE(SUM(plan), 0) AS numeric), 2) AS spec_sum,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='Аванс'), 0) AS numeric), 2) AS pp_sum,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='Аванс'), 0)*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS pp_percent,
-        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE payment_type='Аванс'), 0) AS numeric), 2) AS pp_fact,
-        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE payment_type='Аванс'), 0)*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS fact_percent,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='Аванс' AND plan>=0), 0)
-                 - COALESCE(SUM(fact) FILTER (WHERE payment_type='Аванс' AND plan>=0), 0) AS numeric), 2) AS pp_remain,
-        ROUND(CAST((COALESCE(SUM(plan) FILTER (WHERE payment_type='Аванс'), 0)
-                  - COALESCE(SUM(fact) FILTER (WHERE payment_type='Аванс'), 0))*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS remain_percent,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}'), 0) AS numeric), 2) AS pp_sum,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}'), 0)*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS pp_percent,
+        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}'), 0) AS numeric), 2) AS pp_fact,
+        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}'), 0)*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS fact_percent,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}' AND plan>=0), 0)
+                 - COALESCE(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}' AND plan>=0), 0) AS numeric), 2) AS pp_remain,
+        ROUND(CAST((COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}'), 0)
+                  - COALESCE(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}'), 0))*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS remain_percent,
         COUNT(*) AS pp_quantity
     FROM igk_stat_data
     WHERE {yc} = TRUE AND status IN ({sl})
@@ -78,14 +80,14 @@ def igk_stat_total(yc, statuses):
     return f"""
     SELECT 'ИТОГО' AS igk,
         ROUND(CAST(COALESCE(SUM(plan), 0) AS numeric), 2) AS spec_sum,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='Аванс'), 0) AS numeric), 2) AS pp_sum,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='Аванс'), 0)*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS pp_percent,
-        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE payment_type='Аванс'), 0) AS numeric), 2) AS pp_fact,
-        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE payment_type='Аванс'), 0)*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS fact_percent,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='Аванс' AND plan>=0), 0)
-                 - COALESCE(SUM(fact) FILTER (WHERE payment_type='Аванс' AND plan>=0), 0) AS numeric), 2) AS pp_remain,
-        ROUND(CAST((COALESCE(SUM(plan) FILTER (WHERE payment_type='Аванс'), 0)
-                  - COALESCE(SUM(fact) FILTER (WHERE payment_type='Аванс'), 0))*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS remain_percent,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}'), 0) AS numeric), 2) AS pp_sum,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}'), 0)*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS pp_percent,
+        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}'), 0) AS numeric), 2) AS pp_fact,
+        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}'), 0)*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS fact_percent,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}' AND plan>=0), 0)
+                 - COALESCE(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}' AND plan>=0), 0) AS numeric), 2) AS pp_remain,
+        ROUND(CAST((COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}'), 0)
+                  - COALESCE(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}'), 0))*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS remain_percent,
         COUNT(*) AS pp_quantity
     FROM igk_stat_data
     WHERE {yc} = TRUE AND status IN ({sl})
@@ -197,8 +199,8 @@ def all_contracts(where):
             COALESCE(payment_type,'ИНОЕ') AS payment_type,
             item, "order", TRIM(stage) AS stage, y25, y26, y27,
             ROUND(CAST(SUM(plan) AS numeric), 2) AS spec_sum,
-            ROUND(CAST(SUM(plan) FILTER (WHERE payment_type='Аванс') AS numeric), 2) AS pp_sum,
-            ROUND(CAST(SUM(fact) FILTER (WHERE payment_type='Аванс') AS numeric), 2) AS pp_fact,
+            ROUND(CAST(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}') AS numeric), 2) AS pp_sum,
+            ROUND(CAST(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}') AS numeric), 2) AS pp_fact,
             ROUND(CAST(SUM(plan) - SUM(COALESCE(fact,0)) AS numeric), 2) AS pp_remain,
             0 AS is_subtotal
         FROM igk_stat_data {where}
@@ -210,8 +212,8 @@ def all_contracts(where):
             'ИТОГО' AS payment_type,
             item, "order", NULL AS stage, y25, y26, y27,
             ROUND(CAST(SUM(plan) AS numeric), 2) AS spec_sum,
-            ROUND(CAST(SUM(plan) FILTER (WHERE payment_type='Аванс') AS numeric), 2) AS pp_sum,
-            ROUND(CAST(SUM(fact) FILTER (WHERE payment_type='Аванс') AS numeric), 2) AS pp_fact,
+            ROUND(CAST(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}') AS numeric), 2) AS pp_sum,
+            ROUND(CAST(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}') AS numeric), 2) AS pp_fact,
             ROUND(CAST(SUM(plan) - SUM(COALESCE(fact,0)) AS numeric), 2) AS pp_remain,
             1 AS is_subtotal
         FROM igk_stat_data {where}
@@ -228,12 +230,12 @@ def advances(year):
             CASE WHEN MAX(status) IN ('Черновик','Приостановлен') THEN 'Не заключён' ELSE 'Заключён' END AS state,
             MAX(payment_type) AS payment_type, MAX(item) AS item, "order" AS qty,
             ROUND(CAST(SUM(CASE WHEN tolerance>0 THEN plan*(1+tolerance/100.0) ELSE plan END) AS numeric),2) AS spec_sum,
-            ROUND(CAST(SUM(CASE WHEN payment_type='Аванс' AND tolerance>0 THEN plan*(1+tolerance/100.0)
-                              WHEN payment_type='Аванс' THEN plan ELSE 0 END) AS numeric),2) AS advance_plan,
-            ROUND(CAST(SUM(CASE WHEN payment_type='Аванс' THEN COALESCE(fact,0) ELSE 0 END) AS numeric),2) AS advance_fact
+            ROUND(CAST(SUM(CASE WHEN payment_type='{ADVANCE}' AND tolerance>0 THEN plan*(1+tolerance/100.0)
+                              WHEN payment_type='{ADVANCE}' THEN plan ELSE 0 END) AS numeric),2) AS advance_plan,
+            ROUND(CAST(SUM(CASE WHEN payment_type='{ADVANCE}' THEN COALESCE(fact,0) ELSE 0 END) AS numeric),2) AS advance_fact
         FROM igk_stat_data
         WHERE {yc}=TRUE AND is_deleted=FALSE AND status!='Расторгнут'
-          AND payment_type IN ('Аванс','Постоплата')
+          AND payment_type IN ('{ADVANCE}','{POSTPAYMENT}')
           AND igk IS NOT NULL AND TRIM(igk)!=''
           AND cfo IS NOT NULL AND TRIM(cfo)!=''
           AND contract IS NOT NULL AND TRIM(contract)!=''
@@ -258,8 +260,8 @@ def kdr_export(year):
             ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {yc}=TRUE AND status IN ({cl})),0)/1e6 AS numeric),2) AS year_concl_sum,
             COUNT(DISTINCT contract) FILTER (WHERE {yc}=TRUE AND status IN ({nl})) AS year_not_concl_count,
             ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {yc}=TRUE AND status IN ({nl})),0)/1e6 AS numeric),2) AS year_not_concl_sum,
-            ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {yc}=TRUE AND payment_type='Аванс' AND status!='Расторгнут'),0)/1e6 AS numeric),2) AS pp_plan,
-            ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE {yc}=TRUE AND payment_type='Аванс' AND status!='Расторгнут'),0)/1e6 AS numeric),2) AS pp_fact,
+            ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'),0)/1e6 AS numeric),2) AS pp_plan,
+            ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'),0)/1e6 AS numeric),2) AS pp_fact,
             0 AS delta_concl_count
         FROM igk_stat_data
         WHERE igk IS NOT NULL AND TRIM(igk)!='' AND cfo IS NOT NULL AND TRIM(cfo)!=''
@@ -355,15 +357,15 @@ def znp_list(where):
             z.plan_sum AS znp_plan_sum, z.fact_sum AS znp_fact_sum,
             z.znp_igk,
             CASE
-                WHEN z.id IS NULL AND i.payment_type = 'Аванс'
+                WHEN z.id IS NULL AND i.payment_type = '{ADVANCE}'
                     THEN 'Не оформлено (Аванс)'
-                WHEN z.id IS NULL AND i.payment_type = 'Постоплата'
+                WHEN z.id IS NULL AND i.payment_type = '{POSTPAYMENT}'
                     THEN 'Не оформлено (Постоплата)'
                 WHEN z.id IS NULL THEN 'Не оформлено ЗнП'
-                WHEN i.payment_type = 'Аванс' AND z.fact_sum IS NOT NULL THEN 'Оплачено ЗнП (Аванс)'
-                WHEN i.payment_type = 'Аванс' THEN 'Оформлено ЗнП (Аванс)'
-                WHEN i.payment_type = 'Постоплата' AND z.fact_sum IS NOT NULL THEN 'Оплачено ЗнП (Постоплата)'
-                WHEN i.payment_type = 'Постоплата' THEN 'Оформлено ЗнП (Постоплата)'
+                WHEN i.payment_type = '{ADVANCE}' AND z.fact_sum IS NOT NULL THEN 'Оплачено ЗнП (Аванс)'
+                WHEN i.payment_type = '{ADVANCE}' THEN 'Оформлено ЗнП (Аванс)'
+                WHEN i.payment_type = '{POSTPAYMENT}' AND z.fact_sum IS NOT NULL THEN 'Оплачено ЗнП (Постоплата)'
+                WHEN i.payment_type = '{POSTPAYMENT}' THEN 'Оформлено ЗнП (Постоплата)'
                 ELSE 'Оформлено ЗнП (иное)'
             END AS znp_status
         FROM igk_stat_data i
