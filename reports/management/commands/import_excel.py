@@ -21,8 +21,7 @@ COLUMN_MAP = {
     "ФАКТ": "fakt",
     "Тол": "tol",
     "Этап графика": "etap_grafika",
-    "ДатаПЛАН": "dataplan",
-    "Создан": "sozdan",
+    "ДатаПланПодп": "dataplan",
     "ГодИГК": "god_igk",
 }
 FIELDS = list(COLUMN_MAP.values())
@@ -47,4 +46,4 @@ class Command(BaseCommand):
             wb.close()
 
         replace_table(TABLE, FIELDS, data)
-        self.stdout.write(f"loaded {len(data)} rows into {TABLE}")
+        self.stdout.write(f"загружено строк: {len(data)}")

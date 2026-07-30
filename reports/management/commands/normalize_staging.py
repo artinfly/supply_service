@@ -30,6 +30,18 @@ def norm(val):
     return str(val).strip() if val is not None else None
 
 
+def plan_month(val):
+    text = norm(val)
+    if not text:
+        return None
+    parts = text.split(".")
+    if len(parts) == 3 and len(parts[2]) == 4:
+        return f"{parts[2]}.{parts[1].zfill(2)}"
+    if len(parts) == 2 and len(parts[0]) == 4:
+        return f"{parts[0]}.{parts[1].zfill(2)}"
+    return None
+
+
 def floats_equal(a, b):
     if a is None and b is None:
         return True
@@ -75,7 +87,7 @@ class Command(BaseCommand):
                 """
                 SELECT igk, kontragent, cfo, dogovor, sostoyanie,
                        tip_platezha, predmet, zakaz, plan, fakt,
-                       tol, etap_grafika, dataplan, sozdan, god_igk
+                       tol, etap_grafika, dataplan, god_igk
                 FROM staging_excel
                 WHERE tip_platezha IN (%s, %s)
                 """,
@@ -85,7 +97,7 @@ class Command(BaseCommand):
 
             new_data = []
             for r in staging_rows:
-                y25, y26, y27 = year_flags(r[14])
+                y25, y26, y27 = year_flags(r[13])
                 new_data.append(
                     (
                         norm(r[0]),
@@ -104,8 +116,8 @@ class Command(BaseCommand):
                         y26,
                         y27,
                         False,
-                        norm(r[12]),
-                        norm(r[14]),
+                        plan_month(r[12]),
+                        norm(r[13]),
                         contract_hash(norm(r[0]), norm(r[1]), norm(r[3]), norm(r[11])),
                     )
                 )
@@ -229,4 +241,6 @@ class Command(BaseCommand):
 
             relink_znp_parents()
 
-        self.stdout.write(f"done: {len(new_data)} rows, {len(history)} changes")
+        self.stdout.write(
+            f"обработано строк: {len(new_data)}, изменений записано: {len(history)}"
+        )

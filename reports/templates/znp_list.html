@@ -9,14 +9,10 @@
 <div class="filter-panel mb-3">
     <div class="d-flex flex-wrap gap-3 align-items-end">
         <div class="filter-group">
-            <label class="filter-label">Контрагент</label>
+            <label class="filter-label">Контрагент или договор</label>
             <input type="text" id="filter-agent" class="filter-input"
-                   placeholder="Часть названия" autocomplete="off">
-        </div>
-        <div class="filter-group">
-            <label class="filter-label">Договор</label>
-            <input type="text" id="filter-contract" class="filter-input"
-                   placeholder="Часть номера" autocomplete="off">
+                   placeholder="Часть названия или номера" autocomplete="off"
+                   style="width:260px">
         </div>
         <div class="filter-group">
             <label class="filter-label">ИГК</label>
@@ -49,6 +45,7 @@
             <label class="filter-label">Статус ЗНП</label>
             <div class="d-flex gap-2 flex-wrap">
                 <label class="status-check"><input type="checkbox" id="cb-not-issued" checked> Не оформлена</label>
+                <label class="status-check"><input type="checkbox" id="cb-in-progress" checked> На оформлении</label>
                 <label class="status-check"><input type="checkbox" id="cb-advance" checked> Аванс</label>
                 <label class="status-check"><input type="checkbox" id="cb-advance-paid" checked> Оплачен аванс</label>
                 <label class="status-check"><input type="checkbox" id="cb-postpayment" checked> Постоплата</label>
@@ -105,15 +102,14 @@ let currentPage = 1;
 
 function buildUrl() {
     const params = new URLSearchParams();
-    const agent    = document.getElementById('filter-agent').value.trim();
-    const contract = document.getElementById('filter-contract').value.trim();
+    const agent = document.getElementById('filter-agent').value.trim();
     const igk    = document.getElementById('filter-igk').value.trim();
     const cfo    = document.getElementById('filter-cfo').value.trim();
-    if (agent)    params.append('agent', agent);
-    if (contract) params.append('contract', contract);
+    if (agent) params.append('agent', agent);
     if (igk)   params.append('igk', igk);
     if (cfo)   params.append('cfo', cfo);
     if (document.getElementById('cb-not-issued').checked)       params.append('status', 'not_issued');
+    if (document.getElementById('cb-in-progress').checked)      params.append('status', 'in_progress');
     if (document.getElementById('cb-advance').checked)          params.append('status', 'advance');
     if (document.getElementById('cb-advance-paid').checked)     params.append('status', 'advance_paid');
     if (document.getElementById('cb-postpayment').checked)      params.append('status', 'postpayment');
@@ -171,8 +167,6 @@ function loadFiltersFromURL() {
         document.getElementById('filter-cfo').value = params.get('cfo');
     if (params.has('year'))
         document.getElementById('filter-year').value = params.get('year');
-    if (params.has('contract'))
-        document.getElementById('filter-contract').value = params.get('contract');
     if (params.has('statuses')) {
         const statusesParams = params.get('statuses').split(',');
         document.getElementById('cb-not-issued').checked       = statusesParams.includes('not_issued');
@@ -198,18 +192,16 @@ async function loadData() {
 }
 
 document.getElementById('page-size').addEventListener('change', () => { currentPage = 1; renderPage(); });
-['filter-agent', 'filter-contract'].forEach(id => {
-    document.getElementById(id).addEventListener('keydown', e => {
-        if (e.key === 'Enter') loadData();
-    });
+document.getElementById('filter-agent').addEventListener('keydown', e => {
+    if (e.key === 'Enter') loadData();
 });
 document.getElementById('btn-search').addEventListener('click', loadData);
 document.getElementById('btn-reset').addEventListener('click', () => {
     document.getElementById('filter-agent').value      = '';
-    document.getElementById('filter-contract').value   = '';
     document.getElementById('filter-igk').value        = '';
     document.getElementById('filter-cfo').value        = '';
     document.getElementById('cb-not-issued').checked       = true;
+    document.getElementById('cb-in-progress').checked      = true;
     document.getElementById('cb-advance').checked          = true;
     document.getElementById('cb-advance-paid').checked     = true;
     document.getElementById('cb-postpayment').checked      = true;

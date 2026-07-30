@@ -67,7 +67,8 @@ class Command(BaseCommand):
                     crc32_hash,
                     stage,
                     znp_igk,
-                    znp_payment_type
+                    znp_payment_type,
+                    znp_status
                 FROM staging_znp_excel sze;
             """)
             staging_rows = cur.fetchall()
@@ -90,6 +91,7 @@ class Command(BaseCommand):
                         norm(r[8]),
                         norm(r[9]),
                         norm(r[10]),
+                        norm(r[11]),
                     )
                 )
 
@@ -99,12 +101,13 @@ class Command(BaseCommand):
                 INSERT INTO znp_data
                     (parent_id, plan_doc, payment_purpose,
                     plan_payment_date, fact_payment_date, plan_sum,
-                    fact_sum, crc32_hash, stage, znp_igk, znp_payment_type)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    fact_sum, crc32_hash, stage, znp_igk, znp_payment_type,
+                    znp_status)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """,
                 new_data,
             )
 
         self.stdout.write(
-            f"done: {len(new_data)} rows, {unmatched_count} without a matching contract"
+            f"обработано заявок: {len(new_data)}, без совпадения с договором: {unmatched_count}"
         )

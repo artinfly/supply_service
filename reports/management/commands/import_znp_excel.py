@@ -9,7 +9,7 @@ from reports.services.excel_import import (
 from reports.services.hashing import contract_hash
 
 TABLE = "staging_znp_excel"
-HEADER_ROW = 6
+HEADER_ROW = 1
 COLUMN_MAP = {
     "ИГК договора": "igk",
     "ИГК заявки": "znp_igk",
@@ -23,6 +23,7 @@ COLUMN_MAP = {
     "Сумма руб планирования": "plan_sum",
     "Сумма руб оплаты": "fact_sum",
     "ТипПлатежа": "znp_payment_type",
+    "Статус": "znp_status",
 }
 FIELDS = list(COLUMN_MAP.values()) + ["crc32_hash"]
 
@@ -52,4 +53,4 @@ class Command(BaseCommand):
             wb.close()
 
         replace_table(TABLE, FIELDS, data)
-        self.stdout.write(f"loaded {len(data)} rows into {TABLE}")
+        self.stdout.write(f"загружено строк: {len(data)}")

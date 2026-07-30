@@ -16,6 +16,8 @@ from ..services.queries import (
     TERMINATED,
     YEAR_COL,
     YEARS,
+    ZNP_APPROVED,
+    ZNP_PENDING,
     all_contracts,
     contract_dupes,
     contract_dupes_by_order,
@@ -89,7 +91,7 @@ def _escape_like(value):
 def _igk_response(year, statuses):
     yc = YEAR_COL.get(year)
     if not yc:
-        return JsonResponse({"error": "invalid year"}, status=400)
+        return JsonResponse({"error": "недопустимый год"}, status=400)
     with connection.cursor() as cur:
         cur.execute(igk_stat(yc, statuses))
         rows = _json_rows(cur)
@@ -102,7 +104,7 @@ def _igk_response(year, statuses):
 def api_kdr(request, year):
     yc = YEAR_COL.get(year)
     if not yc:
-        return JsonResponse({"error": "invalid year"}, status=400)
+        return JsonResponse({"error": "недопустимый год"}, status=400)
     return _json_response(kdr(year))
 
 
@@ -150,7 +152,7 @@ def api_contract_dupes_by_order(request):
 def api_igk_detail(request, year, igk):
     yc = YEAR_COL.get(year)
     if not yc:
-        return JsonResponse({"error": "invalid year"}, status=400)
+        return JsonResponse({"error": "недопустимый год"}, status=400)
     report_type = request.GET.get("type", "concluded")
     statuses = {"concluded": CONCLUDED, "not_concluded": NOT_CONCL}.get(
         report_type, TERMINATED
@@ -161,7 +163,6 @@ def api_igk_detail(request, year, igk):
 @login_required
 def api_all_contracts(request):
     agent = request.GET.get("agent", "").strip()
-    contract_filter = request.GET.get("contract", "").strip()
     igk_filter = request.GET.get("igk", "").strip()
     statuses = request.GET.getlist("status")
     year_filter = request.GET.get("year", "").strip()
@@ -179,9 +180,6 @@ def api_all_contracts(request):
     if cfo_filter:
         conditions.append("cfo LIKE %s")
         params.append(f"%{_escape_like(cfo_filter)}")
-    if contract_filter:
-        conditions.append("contract ILIKE %s")
-        params.append(f"%{contract_filter}%")
     if statuses:
         conditions.append(f"status IN ({','.join(['%s'] * len(statuses))})")
         params.extend(statuses)
@@ -217,14 +215,21 @@ def api_all_contracts(request):
 
 ZNP_STATUS_CONDITIONS = {
     "not_issued": "z.id IS NULL",
+    "in_progress": f"z.znp_status = '{ZNP_PENDING}'",
     "not_issued_advance": f"(z.id IS NULL AND i.payment_type = '{ADVANCE}')",
     "not_issued_postpayment": f"(z.id IS NULL AND i.payment_type = '{POSTPAYMENT}')",
-    "advance": f"(z.id IS NOT NULL AND i.payment_type = '{ADVANCE}')",
+    "advance": (
+        f"(z.id IS NOT NULL AND i.payment_type = '{ADVANCE}'"
+        f" AND z.znp_status = '{ZNP_APPROVED}')"
+    ),
     "advance_paid": (
         f"(z.id IS NOT NULL AND i.payment_type = '{ADVANCE}'"
         " AND z.fact_sum IS NOT NULL)"
     ),
-    "postpayment": f"(z.id IS NOT NULL AND i.payment_type = '{POSTPAYMENT}')",
+    "postpayment": (
+        f"(z.id IS NOT NULL AND i.payment_type = '{POSTPAYMENT}'"
+        f" AND z.znp_status = '{ZNP_APPROVED}')"
+    ),
     "postpayment_paid": (
         f"(z.id IS NOT NULL AND i.payment_type = '{POSTPAYMENT}'"
         " AND z.fact_sum IS NOT NULL)"
@@ -235,7 +240,6 @@ ZNP_STATUS_CONDITIONS = {
 @login_required
 def api_znp_list(request):
     agent = request.GET.get("agent", "").strip()
-    contract_filter = request.GET.get("contract", "").strip()
     igk_filter = request.GET.get("igk", "").strip()
     cfo_filter = request.GET.get("cfo", "").strip()
     year_filter = request.GET.get("year", "").strip()
@@ -253,9 +257,6 @@ def api_znp_list(request):
     if cfo_filter:
         conditions.append("i.cfo LIKE %s")
         params.append(f"%{_escape_like(cfo_filter)}")
-    if contract_filter:
-        conditions.append("i.contract ILIKE %s")
-        params.append(f"%{contract_filter}%")
     if year_filter in YEAR_COL:
         conditions.append(f"i.{YEAR_COL[year_filter]} = TRUE")
     status_conditions = [

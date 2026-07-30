@@ -8,6 +8,8 @@ CONCLUDED = (
 )
 NOT_CONCL = ("Черновик",)
 ADVANCE = "Аванс"
+ZNP_APPROVED = "Утвержден"
+ZNP_PENDING = "На утверждении"
 POSTPAYMENT = "Постоплата"
 TERMINATED = ("Расторгнут",)
 YEARS = [2025, 2026, 2027]
@@ -356,6 +358,7 @@ def znp_list(where):
             z.plan_sum AS znp_plan_sum, z.fact_sum AS znp_fact_sum,
             z.znp_igk,
             CASE
+                WHEN z.znp_status = '{ZNP_PENDING}' THEN 'На оформлении ЗнП'
                 WHEN z.id IS NULL AND i.payment_type = '{ADVANCE}'
                     THEN 'Не оформлено (Аванс)'
                 WHEN z.id IS NULL AND i.payment_type = '{POSTPAYMENT}'

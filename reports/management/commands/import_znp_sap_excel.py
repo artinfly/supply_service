@@ -47,4 +47,4 @@ class Command(BaseCommand):
             wb.close()
 
         replace_table(TABLE, FIELDS, data)
-        self.stdout.write(f"loaded {len(data)} rows into {TABLE}")
+        self.stdout.write(f"загружено строк: {len(data)}")

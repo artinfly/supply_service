@@ -1,23 +1,10 @@
-import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = "django-insecure-local-dev-key-change-in-production"
-
-
-def _env_flag(name, default):
-    return os.getenv(name, default).strip().lower() in ("1", "true", "yes", "on")
-
-
-DEBUG = _env_flag("DEBUG", "True")
-ALLOWED_HOSTS = [
-    h.strip()
-    for h in os.getenv(
-        "ALLOWED_HOSTS", "localhost,127.0.0.1,10.109.42.67,10.10.10.37"
-    ).split(",")
-    if h.strip()
-]
+DEBUG = True
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -60,41 +47,14 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "supply_service.wsgi.application"
 
-WORK_DB_HOST = "10.10.10.37"
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "supply_service_test")
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "root")
-
-
-def _pick_db_host():
-    forced = os.getenv("DB_HOST", "").strip()
-    if forced:
-        return forced
-    try:
-        import psycopg2
-
-        psycopg2.connect(
-            host=WORK_DB_HOST,
-            port=DB_PORT,
-            dbname=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            connect_timeout=1,
-        ).close()
-        return WORK_DB_HOST
-    except Exception:
-        return "localhost"
-
-
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": DB_NAME,
-        "USER": DB_USER,
-        "PASSWORD": DB_PASSWORD,
-        "HOST": _pick_db_host(),
-        "PORT": DB_PORT,
+        "NAME": "supply_service_test",
+        "USER": "root",
+        "PASSWORD": "root",
+        "HOST": "localhost",
+        "PORT": "5432",
         "OPTIONS": {"client_encoding": "UTF8"},
     }
 }

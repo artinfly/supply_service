@@ -20,6 +20,8 @@ from ..services.queries import (
     POSTPAYMENT,
     TERMINATED,
     YEARS,
+    ZNP_APPROVED,
+    ZNP_PENDING,
     distinct_agents,
     distinct_cfo,
     distinct_igk_suffixes,
@@ -186,7 +188,7 @@ FILE_TYPE_LABELS = {
 @login_required
 def upload_excel(request):
     if not is_operator(request.user):
-        return JsonResponse({"error": "forbidden"}, status=403)
+        return JsonResponse({"error": "нет прав на загрузку файлов"}, status=403)
     result = None
     if request.method == "POST" and request.FILES.get("excel_file"):
         file_type = request.POST.get("file_type", "contracts")
@@ -436,6 +438,7 @@ def dashboard(request):
 ZNP_STAGE_LABELS = {
     "not_issued_advance": "Не оформлено (Аванс)",
     "not_issued_postpayment": "Не оформлено (Постоплата)",
+    "in_progress": "На оформлении ЗнП",
     "advance": "Оформлено ЗнП (Аванс)",
     "advance_paid": "Оплачено ЗнП (Аванс)",
     "postpayment": "Оформлено ЗнП (Постоплата)",
@@ -454,6 +457,8 @@ _EMPTY_NOT_ISSUED = {
 _EMPTY_ZNP = {
     "issued_count": 0,
     "issued_sum": None,
+    "in_progress_count": 0,
+    "in_progress_sum": None,
     "advance_count": 0,
     "advance_sum": None,
     "advance_paid_count": 0,
@@ -475,6 +480,7 @@ def _breakdown_from_stats(ni, zs):
 
     issued_count = zs["issued_count"] or 0
     issued_sum = to_mln(zs["issued_sum"])
+    in_progress_count = zs["in_progress_count"] or 0
     advance_count = zs["advance_count"] or 0
     advance_paid_count = zs["advance_paid_count"] or 0
     postpayment_count = zs["postpayment_count"] or 0
@@ -508,6 +514,11 @@ def _breakdown_from_stats(ni, zs):
             "not_issued_postpayment",
         ),
         "issued": _card(issued_count, issued_sum, "advance,postpayment"),
+        "in_progress": _card(
+            in_progress_count,
+            to_mln(zs["in_progress_sum"]),
+            "in_progress",
+        ),
         "advance": _card(
             advance_count,
             to_mln(zs["advance_sum"]),
@@ -583,12 +594,16 @@ def znp_table(request):
             postpayment_count=Count("pp_id", filter=pos_postpayment_q),
             postpayment_sum=Sum("plan", filter=pos_postpayment_q),
         )
-        advance_q = Q(parent__payment_type=ADVANCE)
-        postpayment_q = Q(parent__payment_type=POSTPAYMENT)
+        approved_q = Q(znp_status=ZNP_APPROVED)
+        pending_q = Q(znp_status=ZNP_PENDING)
+        advance_q = Q(parent__payment_type=ADVANCE) & approved_q
+        postpayment_q = Q(parent__payment_type=POSTPAYMENT) & approved_q
         paid_q = Q(fact_sum__isnull=False)
         znp_agg = znp_qs.aggregate(
-            issued_count=Count("id"),
-            issued_sum=Sum("plan_sum"),
+            issued_count=Count("id", filter=approved_q),
+            issued_sum=Sum("plan_sum", filter=approved_q),
+            in_progress_count=Count("id", filter=pending_q),
+            in_progress_sum=Sum("plan_sum", filter=pending_q),
             advance_count=Count("id", filter=advance_q),
             advance_sum=Sum("plan_sum", filter=advance_q),
             advance_paid_count=Count("id", filter=advance_q & paid_q),
@@ -644,14 +659,18 @@ def znp_table(request):
         )
     }
 
-    advance_q = Q(parent__payment_type=ADVANCE)
-    postpayment_q = Q(parent__payment_type=POSTPAYMENT)
+    approved_q = Q(znp_status=ZNP_APPROVED)
+    pending_q = Q(znp_status=ZNP_PENDING)
+    advance_q = Q(parent__payment_type=ADVANCE) & approved_q
+    postpayment_q = Q(parent__payment_type=POSTPAYMENT) & approved_q
     paid_q = Q(fact_sum__isnull=False)
     znp_stats = {
         row["parent__cfo"]: row
         for row in igk_znp_qs.values("parent__cfo").annotate(
-            issued_count=Count("id"),
-            issued_sum=Sum("plan_sum"),
+            issued_count=Count("id", filter=approved_q),
+            issued_sum=Sum("plan_sum", filter=approved_q),
+            in_progress_count=Count("id", filter=pending_q),
+            in_progress_sum=Sum("plan_sum", filter=pending_q),
             advance_count=Count("id", filter=advance_q),
             advance_sum=Sum("plan_sum", filter=advance_q),
             advance_paid_count=Count("id", filter=advance_q & paid_q),
