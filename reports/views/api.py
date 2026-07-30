@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 
 from ..models import ZnpDataSAP
+from ..services.dashboards import SAP_STAGE_LABELS
 from ..services.queries import (
     ADVANCE,
     CONCLUDED,
@@ -31,7 +32,12 @@ from ..services.queries import (
     znp_list,
 )
 from ..services.sap_status import SAP_STATUS_CONDITIONS, sap_status
-from ..services.timeseries import contracts_monthly, znp_monthly, znp_sap_monthly
+from ..services.timeseries import (
+    AGE_BUCKETS,
+    contracts_backlog,
+    znp_monthly,
+    znp_sap_monthly,
+)
 
 MONTHS = [
     "янв",
@@ -49,10 +55,15 @@ MONTHS = [
 ]
 
 
+MAX_MONTHS = 15
+
+
 def _month_axis(keys):
     parsed = sorted({k for k in keys if k and len(k) == 7})
     if not parsed:
         return [], []
+    if len(parsed) > MAX_MONTHS:
+        parsed = parsed[-MAX_MONTHS:]
     start, end = parsed[0], parsed[-1]
     y0, m0 = int(start[:4]), int(start[5:7])
     y1, m1 = int(end[:4]), int(end[5:7])
@@ -271,8 +282,6 @@ def api_znp_list(request):
 
 @login_required
 def api_znp_sap_list(request):
-    from .pages import SAP_STAGE_LABELS
-
     agent = request.GET.get("agent", "").strip()
     igk_filter = request.GET.get("igk", "").strip()
     cfo_filter = request.GET.get("cfo", "").strip()
@@ -363,15 +372,27 @@ def api_chart_contracts(request):
     igk = request.GET.get("igk", "").strip()
     if not igk:
         return _chart_response([], [])
-    sql, params = contracts_monthly(YEAR_COL[str(year)], igk)
-    return _two_series(
-        sql,
-        params,
-        "Заключено",
-        "Не заключено",
-        "млн ₽",
-        f"Суммы договоров по месяцам графика платежей, ГодИГК {year}",
-        stacked=True,
+
+    sql, params = contracts_backlog(YEAR_COL[str(year)], igk)
+    with connection.cursor() as cur:
+        cur.execute(sql, params)
+        found = {
+            row[0]: (row[1], float(row[2] or 0) / 1000000) for row in cur.fetchall()
+        }
+
+    labels = [label for _, label in AGE_BUCKETS]
+    sums = [found.get(key, (0, 0.0))[1] for key, _ in AGE_BUCKETS]
+    counts = [found.get(key, (0, 0.0))[0] for key, _ in AGE_BUCKETS]
+
+    return _chart_response(
+        labels,
+        [{"label": "Не заключено", "data": sums, "counts": counts}],
+        {
+            "unit": "млн ₽",
+            "ordinal": True,
+            "horizontal": True,
+            "title": f"Незаключённые договоры по давности срока, ГодИГК {year}",
+        },
     )
 
 

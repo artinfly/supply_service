@@ -1,22 +1,39 @@
 from .queries import CONCLUDED, NOT_CONCL
 
+AGE_BUCKETS = (
+    ("overdue_12", "Просрочено более года"),
+    ("overdue_6", "Просрочено 6-12 месяцев"),
+    ("overdue_3", "Просрочено 3-6 месяцев"),
+    ("overdue_0", "Просрочено до 3 месяцев"),
+    ("ahead", "Срок ещё не наступил"),
+)
 
-def contracts_monthly(year_col, igk):
-    concluded = ", ".join(["%s"] * len(CONCLUDED))
+
+def contracts_backlog(year_col, igk):
     not_concl = ", ".join(["%s"] * len(NOT_CONCL))
     sql = f"""
-        SELECT substring(plan_date, 1, 7) AS ym,
-               COALESCE(SUM(plan) FILTER (WHERE status IN ({concluded})), 0) AS concluded_sum,
-               COALESCE(SUM(plan) FILTER (WHERE status IN ({not_concl})), 0) AS not_concluded_sum
-        FROM igk_stat_data
-        WHERE {year_col} = TRUE
-          AND igk = %s
-          AND plan_date IS NOT NULL AND TRIM(plan_date) <> ''
-          AND status <> 'Расторгнут'
+        WITH src AS (
+            SELECT plan,
+                   to_date(plan_date, 'YYYY.MM') AS due
+            FROM igk_stat_data
+            WHERE {year_col} = TRUE
+              AND igk = %s
+              AND status IN ({not_concl})
+              AND plan_date IS NOT NULL AND TRIM(plan_date) <> ''
+        )
+        SELECT CASE
+                   WHEN due >= date_trunc('month', CURRENT_DATE) THEN 'ahead'
+                   WHEN due >= CURRENT_DATE - INTERVAL '3 months' THEN 'overdue_0'
+                   WHEN due >= CURRENT_DATE - INTERVAL '6 months' THEN 'overdue_3'
+                   WHEN due >= CURRENT_DATE - INTERVAL '12 months' THEN 'overdue_6'
+                   ELSE 'overdue_12'
+               END AS bucket,
+               COUNT(*) AS cnt,
+               COALESCE(SUM(plan), 0) AS plan_sum
+        FROM src
         GROUP BY 1
-        ORDER BY 1
     """
-    return sql, [*CONCLUDED, *NOT_CONCL, igk]
+    return sql, [igk, *NOT_CONCL]
 
 
 def znp_monthly(year_col, igk):

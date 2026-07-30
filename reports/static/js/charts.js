@@ -10,6 +10,7 @@
 
   const CATEGORICAL = ["#2a78d6", "#eb6834"];
   const ORDINAL = ["#86b6ef", "#2a78d6", "#104281"];
+  const AGE = ["#be0c0c", "#e0521f", "#d97706", "#eda100", "#2a78d6"];
 
   const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   function escape(value) {
@@ -71,6 +72,7 @@
     const unit = payload.unit || "";
     const ordinal = Boolean(payload.ordinal);
     const stacked = Boolean(payload.stacked);
+    const horizontal = Boolean(payload.horizontal);
     const colors = ordinal ? ORDINAL : CATEGORICAL;
 
     const empty = payload.datasets.every((d) =>
@@ -89,10 +91,15 @@
         label: d.label,
         data: d.data,
         amounts: d.amounts || null,
-        backgroundColor: colors[i % colors.length],
+        counts: d.counts || null,
+        backgroundColor: horizontal
+          ? d.data.map(function (_, k) { return AGE[k % AGE.length]; })
+          : colors[i % colors.length],
         maxBarThickness: 22,
-        borderRadius: { topLeft: 4, topRight: 4 },
-        borderSkipped: "bottom",
+        borderRadius: horizontal
+          ? { topRight: 4, bottomRight: 4 }
+          : { topLeft: 4, topRight: 4 },
+        borderSkipped: horizontal ? "left" : "bottom",
       };
     });
 
@@ -103,21 +110,37 @@
       type: "bar",
       data: { labels: payload.labels, datasets: datasets },
       options: {
+        indexAxis: horizontal ? "y" : "x",
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
         scales: {
-          x: axis({ grid: { display: false }, stacked: stacked }),
-          y: axis({
-            beginAtZero: true,
+          x: axis({
+            grid: { display: horizontal },
             stacked: stacked,
-            ticks: {
-              color: MUTED,
-              padding: 8,
-              callback: function (v) {
-                return fmt(v, unit);
-              },
-            },
-            title: { display: true, text: unit, color: MUTED },
+            beginAtZero: horizontal,
+            ticks: horizontal
+              ? { color: MUTED, padding: 8, callback: function (v) { return fmt(v, unit); } }
+              : { color: MUTED, padding: 8 },
+            title: horizontal
+              ? { display: true, text: unit, color: MUTED }
+              : { display: false },
+          }),
+          y: axis({
+            beginAtZero: !horizontal,
+            stacked: stacked,
+            grid: { display: !horizontal },
+            ticks: horizontal
+              ? { color: MUTED, padding: 8 }
+              : {
+                  color: MUTED,
+                  padding: 8,
+                  callback: function (v) {
+                    return fmt(v, unit);
+                  },
+                },
+            title: horizontal
+              ? { display: false }
+              : { display: true, text: unit, color: MUTED },
           }),
         },
         plugins: {
@@ -125,8 +148,12 @@
           tooltip: {
             callbacks: {
               label: function (ctx) {
-                let text =
-                  ctx.dataset.label + ": " + fmt(ctx.parsed.y, unit) + " " + unit;
+                const value = horizontal ? ctx.parsed.x : ctx.parsed.y;
+                let text = ctx.dataset.label + ": " + fmt(value, unit) + " " + unit;
+                const counts = ctx.dataset.counts;
+                if (counts) {
+                  text += " (" + nf0.format(counts[ctx.dataIndex]) + " поз.)";
+                }
                 const amounts = ctx.dataset.amounts;
                 if (amounts && amounts[ctx.dataIndex]) {
                   text += " (" + nf1.format(amounts[ctx.dataIndex]) + " млн ₽)";
