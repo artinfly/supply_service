@@ -1,4 +1,10 @@
+from zlib import crc32
+
 from django.db import connection
+
+
+def contract_hash(igk, c_agent, contract, stage):
+    return crc32(f"{igk}{c_agent}{contract}{stage}".encode())
 
 
 def relink_znp_parents():

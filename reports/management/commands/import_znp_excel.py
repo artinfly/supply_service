@@ -6,7 +6,7 @@ from reports.services.excel_import import (
     read_values,
     replace_table,
 )
-from reports.services.hashing import contract_hash
+from reports.services.znp_linking import contract_hash
 
 TABLE = "staging_znp_excel"
 HEADER_ROW = 1
