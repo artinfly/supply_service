@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load custom_filters %}
-{% block title %}ЗНП (SAP){% endblock %}
+{% block title %}Заявки на платёж (SAP){% endblock %}
 
 {% block content %}
     <div class="page-header">
@@ -28,7 +28,7 @@
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
                         </div>
                         <div>
-                            <div class="dash-card-num" style="color: black;">Всего ЗНП (SAP): {{ all.total_count }}</div>
+                            <div class="dash-card-num" style="color: black;">Всего ЗнП (SAP): {{ all.total_count }}</div>
                             <div class="dash-card-lbl" style="color: black;">на сумму {{ all.total_sum|floatformat:2|intspace }} млн. &#8381</div>
                         </div>
                     </div>
@@ -88,8 +88,8 @@
             <thead>
                 <tr>
                     <th rowspan="2">ЦФО</th>
-                    <th rowspan="2">Всего ЗНП, шт.</th>
-                    <th rowspan="2">Сумма всех ЗНП, млн.руб.</th>
+                    <th rowspan="2">Всего ЗнП, шт.</th>
+                    <th rowspan="2">Сумма всех ЗнП, млн.руб.</th>
                     {% for stage in stage_names %}
                     <th colspan="2">{{ stage }}</th>
                     {% endfor %}

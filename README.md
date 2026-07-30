@@ -60,7 +60,7 @@ supply_service/
     ├── services/
     │   ├── queries.py            — SQL реестров и отчётов
     │   ├── timeseries.py         — помесячные разрезы для графиков
-    │   ├── sap_status.py         — статус ЗНП (SAP)
+    │   ├── sap_status.py         — статус ЗнП (SAP)
     │   ├── hashing.py            — contract_hash()
     │   ├── znp_linking.py        — пересборка связи ЗНП с договорами
     │   ├── excel.py              — сборка xlsx
@@ -68,8 +68,8 @@ supply_service/
     │
     ├── management/commands/
     │   ├── import_excel.py / normalize_staging.py                 — договоры
-    │   ├── import_znp_excel.py / normalize_znp_staging.py         — ЗНП (ФЗД)
-    │   ├── import_znp_sap_excel.py / normalize_znp_sap_staging.py — ЗНП (SAP)
+    │   ├── import_znp_excel.py / normalize_znp_staging.py         — ЗнП (ФЗД)
+    │   ├── import_znp_sap_excel.py / normalize_znp_sap_staging.py — ЗнП (SAP)
     │   └── setup_groups.py
     │
     ├── static/
@@ -93,22 +93,23 @@ supply_service/
 |---|---|---|
 | `/reports/` | обзор | всем |
 | `/reports/dashboard/` | договорная работа: карточки, разрез по ЦФО, график авансов по месяцам | superuser |
-| `/reports/znp/` | ЗНП (ФЗД): этапы оформления и оплаты | superuser |
-| `/reports/znp-sap/` | ЗНП (SAP): этапы согласования | superuser |
+| `/reports/znp/` | заявки на платёж (ФЗД): этапы оформления и оплаты | superuser |
+| `/reports/znp-sap/` | заявки на платёж (SAP): этапы согласования | superuser |
 | `/reports/kdr/<год>/` | статистика заключения договоров | всем |
 | `/reports/igk-concluded/<год>/` и рядом | ИГК по статусам | всем |
-| `/reports/all-contracts/` | все договоры с фильтрами | всем |
-| `/reports/znp-list/` | все заявки на платёж (ФЗД) с фильтрами | всем |
+| `/reports/all-contracts/` | реестр договоров | всем |
+| `/reports/znp-list/` | реестр ЗнП (ФЗД) | всем |
+| `/reports/znp-sap-list/` | реестр ЗнП (SAP) | всем |
 | `/reports/history-*/` | история изменений статуса, плана, факта | всем |
 | `/reports/contract-dupes/` | дубликаты позиций: полные повторы и один заказ в разных договорах | всем |
-| `/reports/export/` | формирование отчётов xlsx | всем |
+| `/reports/export/` | отчёты в Excel | всем |
 | `/reports/upload/` | загрузка файлов | operator, superuser |
 
 На каждом из трёх дашбордов внизу, под таблицей по ЦФО, помесячный график.
 
-Реестр «Все ЗнП» есть в меню рядом с «Все договоры». Реестр ЗНП (SAP)
-(`/reports/znp-sap-list/`) в меню не выводится — на него переходят кликом
-с карточек и ячеек дашборда SAP.
+Меню собрано по назначению: сначала «Сводки» (дашборды), сразу за ними
+«Реестры» — все договоры и оба реестра ЗнП, дальше КДР, ИГК, история и
+служебные страницы.
 
 В обоих реестрах фильтры одинаковые: поиск, ИГК, ЦФО, год, статус. Поиск —
 одно поле на контрагента и номер договора, по части строки, без подсказок.
@@ -245,7 +246,7 @@ python manage.py normalize_znp_sap_staging
 Без колонок ИГК, Контрагент, Договор и Этап графика загрузка прерывается: из них
 считается хеш связки с ЗНП, и без него связь порвётся у всех заявок сразу.
 
-### ЗНП (ФЗД)
+### ЗнП (ФЗД)
 
 Заголовок в первой строке:
 

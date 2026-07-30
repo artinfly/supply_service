@@ -11,6 +11,4 @@ media/
 *.log
 local_settings.py
 *.xlsx
-!reports/static/files/templateIGK.xlsxкдр.xlsx
-сап.xlsx
-фзд.xlsx
+!reports/static/files/templateIGK.xlsx
