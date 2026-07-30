@@ -1,3 +1,4 @@
+# Фильтр intspace для шаблонов: разбивает число на разряды (1234567 -> 1 234 567).
 from django import template
 
 register = template.Library()

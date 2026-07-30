@@ -1,3 +1,4 @@
+# Создаёт группы viewer и operator. Запускается один раз при развёртывании.
 from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand
 

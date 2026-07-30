@@ -1,17 +1,19 @@
-def _mln(value):
+# Расчёты для дашбордов: карточки сверху и таблица по ЦФО.
+# Одни и те же числа считаются здесь для сводки и для строк по ЦФО.
+def to_mln(value):
     return (value or 0) / 1000000
 
 
-def _percent(part, whole):
+def percent(part, whole):
     return (part / whole * 100) if whole else 0
 
 
-def _filter_by_year(queryset, year, field_prefix=""):
+def filter_by_year(queryset, year, field_prefix=""):
     field_name = f"{field_prefix}y{str(year)[-2:]}"
     return queryset.filter(**{field_name: True})
 
 
-_EMPTY_CFO_STATS = {
+EMPTY_CFO_STATS = {
     "all_count": 0,
     "all_sum": None,
     "all_concluded_count": 0,
@@ -26,7 +28,7 @@ _EMPTY_CFO_STATS = {
     "curr_fact": None,
 }
 
-_CFO_SUMMED = (
+CFO_SUMMED = (
     "all_count",
     "all_sum",
     "all_concluded_count",
@@ -42,41 +44,41 @@ _CFO_SUMMED = (
 )
 
 
-def _cfo_row(label, s):
+def cfo_row(label, s):
     row = {
         "cfo": label,
         "all_count": s["all_count"],
-        "all_sum": _mln(s["all_sum"]),
+        "all_sum": to_mln(s["all_sum"]),
         "all_concluded_count": s["all_concluded_count"],
-        "all_concluded_sum": _mln(s["all_concluded_sum"]),
+        "all_concluded_sum": to_mln(s["all_concluded_sum"]),
         "year_count": s["curr_count"],
-        "year_sum": _mln(s["curr_sum"]),
+        "year_sum": to_mln(s["curr_sum"]),
         "year_concluded_count": s["curr_concluded_count"],
-        "year_concluded_sum": _mln(s["curr_concluded_sum"]),
+        "year_concluded_sum": to_mln(s["curr_concluded_sum"]),
         "year_not_concluded_count": s["curr_not_concluded_count"],
-        "year_not_concluded_sum": _mln(s["curr_not_concluded_sum"]),
-        "advance_plan": _mln(s["curr_plan"]),
-        "advance_fact": _mln(s["curr_fact"]),
+        "year_not_concluded_sum": to_mln(s["curr_not_concluded_sum"]),
+        "advance_plan": to_mln(s["curr_plan"]),
+        "advance_fact": to_mln(s["curr_fact"]),
     }
-    return _with_cfo_percents(row)
+    return with_cfo_percents(row)
 
 
-def _with_cfo_percents(row):
-    row["year_concluded_percent"] = _percent(
+def with_cfo_percents(row):
+    row["year_concluded_percent"] = percent(
         row["year_concluded_count"], row["year_count"]
     )
-    row["year_concluded_sum_percent"] = _percent(
+    row["year_concluded_sum_percent"] = percent(
         row["year_concluded_sum"], row["year_sum"]
     )
-    row["advance_percent"] = _percent(row["advance_fact"], row["advance_plan"])
+    row["advance_percent"] = percent(row["advance_fact"], row["advance_plan"])
     return row
 
 
-def _cfo_totals_row(rows):
+def cfo_totals_row(rows):
     totals = {"cfo": "ИТОГО"}
-    for key in _CFO_SUMMED:
+    for key in CFO_SUMMED:
         totals[key] = sum(r[key] for r in rows)
-    return _with_cfo_percents(totals)
+    return with_cfo_percents(totals)
 
 
 ZNP_STAGE_LABELS = {
@@ -91,7 +93,7 @@ ZNP_STAGE_LABELS = {
 
 ZNP_STAGE_NAMES = list(ZNP_STAGE_LABELS.values())
 
-_EMPTY_NOT_ISSUED = {
+EMPTY_NOT_ISSUED = {
     "count": 0,
     "plan_sum": None,
     "advance_count": 0,
@@ -100,7 +102,7 @@ _EMPTY_NOT_ISSUED = {
     "postpayment_sum": None,
 }
 
-_EMPTY_ZNP = {
+EMPTY_ZNP = {
     "issued_count": 0,
     "issued_sum": None,
     "in_progress_count": 0,
@@ -116,7 +118,7 @@ _EMPTY_ZNP = {
 }
 
 
-def _breakdown_from_stats(ni, zs):
+def breakdown_from_stats(ni, zs):
     to_mln = lambda v: (v or 0) / 1000000
 
     not_issued_count = ni["count"] or 0
@@ -204,7 +206,7 @@ SAP_STAGE_NAMES = list(SAP_STAGE_LABELS.values())
 SAP_STAGE_PARAMS = list(SAP_STAGE_LABELS.keys())
 
 
-def _sap_cards(total_row, status_rows):
+def sap_cards(total_row, status_rows):
     total = (total_row or {}).get("total") or 0
     total_sum = ((total_row or {}).get("total_sum") or 0) / 1000000
 

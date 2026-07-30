@@ -1,3 +1,4 @@
+# Что показывать в /admin/ — служебный просмотр таблиц для суперпользователя.
 from django.contrib import admin
 
 from .models import (
