@@ -190,9 +190,9 @@ def export_page(request):
 
 
 FILE_TYPE_COMMANDS = {
-    "contracts": ("import_excel", "normalize_staging"),
-    "znp": ("import_znp_excel", "normalize_znp_staging"),
-    "znp_sap": ("import_znp_sap_excel", "normalize_znp_sap_staging"),
+    "contracts": "load_contracts",
+    "znp": "load_znp",
+    "znp_sap": "load_znp_sap",
 }
 FILE_TYPE_LABELS = {
     "contracts": "Договоры",
@@ -208,19 +208,17 @@ def upload_excel(request):
     result = None
     if request.method == "POST" and request.FILES.get("excel_file"):
         file_type = request.POST.get("file_type", "contracts")
-        commands = FILE_TYPE_COMMANDS.get(file_type)
+        command = FILE_TYPE_COMMANDS.get(file_type)
         f = request.FILES["excel_file"]
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
             for chunk in f.chunks():
                 tmp.write(chunk)
             tmp_path = tmp.name
         try:
-            if commands is None:
+            if command is None:
                 raise ValueError(f"Неизвестный тип файла: {file_type}")
-            import_command, normalize_command = commands
             out = StringIO()
-            call_command(import_command, tmp_path, stdout=out)
-            call_command(normalize_command, stdout=out)
+            call_command(command, tmp_path, stdout=out)
             result = out.getvalue()
             messages.success(request, "Файл успешно загружен и нормализован")
         except Exception as e:
