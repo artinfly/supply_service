@@ -1,3 +1,5 @@
+# Описание таблиц базы. Единственное место, где задаётся схема:
+# изменили здесь — сделали makemigrations и migrate.
 from django.db import models
 
 

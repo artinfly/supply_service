@@ -1,3 +1,5 @@
+# Колонки файла договоров. Все перечисленные обязательны:
+# нет хотя бы одной — загрузка отменяется.
 from django.core.management.base import BaseCommand
 
 from reports.services.excel_import import (
