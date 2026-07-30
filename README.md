@@ -63,7 +63,6 @@ supply_service/
     │   ├── charts.py             — разрезы для графиков
     │   ├── sap_status.py         — статус ЗнП (SAP)
     │   ├── excel_import.py       — общая часть загрузки xlsx
-    │   ├── hashing.py            — contract_hash()
     │   ├── znp_linking.py        — пересборка связи ЗНП с договорами
     │   ├── excel.py              — сборка xlsx
     │   └── pivot.py              — xlsx со сводной таблицей
@@ -211,18 +210,14 @@ DELETE FROM django_migrations WHERE app = 'reports' AND name <> '0001_initial';
 Через командную строку:
 
 ```bash
-python manage.py import_excel файл.xlsx
-python manage.py normalize_staging
-
-python manage.py import_znp_excel файл.xlsx
-python manage.py normalize_znp_staging
-
-python manage.py import_znp_sap_excel файл.xlsx
-python manage.py normalize_znp_sap_staging
+python manage.py load_contracts файл.xlsx
+python manage.py load_znp файл.xlsx
+python manage.py load_znp_sap файл.xlsx
 ```
 
-`import_*` кладёт сырые строки в `staging_*`, `normalize_*` разбирает их и
-переносит в рабочие таблицы. Обе команды выполняются одной транзакцией.
+Каждая команда делает два шага одной транзакцией: кладёт сырые строки в
+`staging_*`, затем разбирает их и переносит в рабочие таблицы. Если второй шаг
+упадёт, первый откатится и данные останутся прежними.
 
 Повторная загрузка договоров сравнивается с предыдущей: изменения статуса, плана
 и факта попадают в «Историю изменений». По ЗНП истории нет, хранится только
