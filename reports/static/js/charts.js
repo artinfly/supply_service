@@ -10,7 +10,7 @@
 
   const CATEGORICAL = ["#2a78d6", "#eb6834"];
   const ORDINAL = ["#86b6ef", "#2a78d6", "#104281"];
-  const AGE = ["#be0c0c", "#e0521f", "#d97706", "#eda100", "#2a78d6"];
+  const STAGES = ["#be0c0c", "#e0521f", "#d97706", "#2a78d6", "#16a34a"];
 
   const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   function escape(value) {
@@ -93,13 +93,12 @@
         amounts: d.amounts || null,
         counts: d.counts || null,
         backgroundColor: horizontal
-          ? d.data.map(function (_, k) { return AGE[k % AGE.length]; })
+          ? STAGES[i % STAGES.length]
           : colors[i % colors.length],
         maxBarThickness: 22,
-        borderRadius: horizontal
-          ? { topRight: 4, bottomRight: 4 }
-          : { topLeft: 4, topRight: 4 },
-        borderSkipped: horizontal ? "left" : "bottom",
+        borderRadius: 2,
+        borderColor: SURFACE,
+        borderWidth: stacked ? 1 : 0,
       };
     });
 

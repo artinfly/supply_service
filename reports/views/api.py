@@ -8,6 +8,14 @@ from django.db.models import Q
 from django.http import JsonResponse
 
 from ..models import ZnpDataSAP
+from ..services.charts import (
+    CONTRACT_AGE,
+    SAP_STAGES,
+    ZNP_STAGES,
+    contracts_by_cfo,
+    znp_by_cfo,
+    znp_sap_by_cfo,
+)
 from ..services.dashboards import SAP_STAGE_LABELS
 from ..services.queries import (
     ADVANCE,
@@ -32,49 +40,6 @@ from ..services.queries import (
     znp_list,
 )
 from ..services.sap_status import SAP_STATUS_CONDITIONS, sap_status
-from ..services.timeseries import (
-    AGE_BUCKETS,
-    contracts_backlog,
-    znp_monthly,
-    znp_sap_monthly,
-)
-
-MONTHS = [
-    "янв",
-    "фев",
-    "мар",
-    "апр",
-    "май",
-    "июн",
-    "июл",
-    "авг",
-    "сен",
-    "окт",
-    "ноя",
-    "дек",
-]
-
-
-MAX_MONTHS = 15
-
-
-def _month_axis(keys):
-    parsed = sorted({k for k in keys if k and len(k) == 7})
-    if not parsed:
-        return [], []
-    if len(parsed) > MAX_MONTHS:
-        parsed = parsed[-MAX_MONTHS:]
-    start, end = parsed[0], parsed[-1]
-    y0, m0 = int(start[:4]), int(start[5:7])
-    y1, m1 = int(end[:4]), int(end[5:7])
-
-    axis = []
-    y, m = y0, m0
-    while (y, m) <= (y1, m1):
-        axis.append(f"{y}.{m:02d}")
-        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
-    labels = [f"{MONTHS[int(k[5:7]) - 1]} {k[2:4]}" for k in axis]
-    return axis, labels
 
 
 def _json_rows(cur):
@@ -343,26 +308,41 @@ def _chart_response(labels, datasets, extra=None):
     return JsonResponse(payload, json_dumps_params={"ensure_ascii": False})
 
 
-def _two_series(sql, params, first, second, unit, title, stacked=False):
+def _stacked_by_cfo(sql, params, stages, title):
     with connection.cursor() as cur:
         cur.execute(sql, params)
         rows = cur.fetchall()
 
-    axis, labels = _month_axis(row[0] for row in rows)
-    a = dict.fromkeys(axis, 0.0)
-    b = dict.fromkeys(axis, 0.0)
-    for ym, first_sum, second_sum in rows:
-        if ym in a:
-            a[ym] = float(first_sum or 0) / 1000000
-            b[ym] = float(second_sum or 0) / 1000000
+    totals = {}
+    values = {key: {} for key, _ in stages}
+    counts = {key: {} for key, _ in stages}
+    for cfo, stage, cnt, amount in rows:
+        if stage not in values:
+            continue
+        mln = float(amount or 0) / 1000000
+        values[stage][cfo] = mln
+        counts[stage][cfo] = int(cnt or 0)
+        totals[cfo] = totals.get(cfo, 0) + mln
 
+    labels = sorted(totals, key=lambda cfo: totals[cfo], reverse=True)
+    datasets = [
+        {
+            "label": label,
+            "data": [values[key].get(cfo, 0.0) for cfo in labels],
+            "counts": [counts[key].get(cfo, 0) for cfo in labels],
+        }
+        for key, label in stages
+    ]
     return _chart_response(
         labels,
-        [
-            {"label": first, "data": [a[k] for k in axis]},
-            {"label": second, "data": [b[k] for k in axis]},
-        ],
-        {"unit": unit, "title": title, "stacked": stacked},
+        datasets,
+        {
+            "unit": "млн ₽",
+            "ordinal": True,
+            "horizontal": True,
+            "stacked": True,
+            "title": title,
+        },
     )
 
 
@@ -372,27 +352,12 @@ def api_chart_contracts(request):
     igk = request.GET.get("igk", "").strip()
     if not igk:
         return _chart_response([], [])
-
-    sql, params = contracts_backlog(YEAR_COL[str(year)], igk)
-    with connection.cursor() as cur:
-        cur.execute(sql, params)
-        found = {
-            row[0]: (row[1], float(row[2] or 0) / 1000000) for row in cur.fetchall()
-        }
-
-    labels = [label for _, label in AGE_BUCKETS]
-    sums = [found.get(key, (0, 0.0))[1] for key, _ in AGE_BUCKETS]
-    counts = [found.get(key, (0, 0.0))[0] for key, _ in AGE_BUCKETS]
-
-    return _chart_response(
-        labels,
-        [{"label": "Не заключено", "data": sums, "counts": counts}],
-        {
-            "unit": "млн ₽",
-            "ordinal": True,
-            "horizontal": True,
-            "title": f"Незаключённые договоры по давности срока, ГодИГК {year}",
-        },
+    sql, params = contracts_by_cfo(YEAR_COL[str(year)], igk)
+    return _stacked_by_cfo(
+        sql,
+        params,
+        CONTRACT_AGE,
+        f"Незаключённые по ЦФО и давности срока, ГодИГК {year}",
     )
 
 
@@ -402,49 +367,14 @@ def api_chart_znp(request):
     igk = request.GET.get("igk", "").strip()
     if not igk:
         return _chart_response([], [])
-    sql, params = znp_monthly(YEAR_COL[str(year)], igk)
-    return _two_series(
-        sql,
-        params,
-        "Оформлено",
-        "Оплачено",
-        "млн ₽",
-        f"Заявки на платёж по месяцам, ГодИГК {year}",
+    sql, params = znp_by_cfo(YEAR_COL[str(year)], igk)
+    return _stacked_by_cfo(
+        sql, params, ZNP_STAGES, f"Заявки по ЦФО и стадиям, ГодИГК {year}"
     )
-
-
-SAP_CHART_STAGES = [
-    ("stage_e", "Передано в 18 отдел"),
-    ("stage_f", "Подтверждено 18 отделом"),
-    ("payment_possible", "Возможна оплата"),
-]
 
 
 @login_required
 def api_chart_znp_sap(request):
     igk = request.GET.get("igk", "").strip()
-    sql, params = znp_sap_monthly(igk)
-    with connection.cursor() as cur:
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-
-    axis, labels = _month_axis(row[0] for row in rows)
-    counts = {column: dict.fromkeys(axis, 0.0) for column, _ in SAP_CHART_STAGES}
-    amounts = {column: dict.fromkeys(axis, 0.0) for column, _ in SAP_CHART_STAGES}
-    for ym, stage, cnt, amount in rows:
-        if stage in counts and ym in counts[stage]:
-            counts[stage][ym] = float(cnt or 0)
-            amounts[stage][ym] = float(amount or 0) / 1000000
-
-    return _chart_response(
-        labels,
-        [
-            {
-                "label": label,
-                "data": [counts[column][k] for k in axis],
-                "amounts": [amounts[column][k] for k in axis],
-            }
-            for column, label in SAP_CHART_STAGES
-        ],
-        {"unit": "шт", "ordinal": True, "title": "Этапы согласования по месяцам"},
-    )
+    sql, params = znp_sap_by_cfo(igk)
+    return _stacked_by_cfo(sql, params, SAP_STAGES, "Заявки SAP по ЦФО и этапам")
