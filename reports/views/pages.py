@@ -843,6 +843,4 @@ def znp_sap_table(request):
 
 @login_required
 def znp_sap_list_table(request):
-    if not request.user.is_superuser:
-        return render(request, "access_denied.html", _ctx(request))
     return render(request, "znp_sap_list.html", _ctx(request))

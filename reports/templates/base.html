@@ -18,35 +18,36 @@
         <div class="sidebar-logo-text">МТО<span>УВЗ</span></div>
     </div>
 
-    <div class="nav-section">Главная</div>
+    <div class="nav-section">Сводки</div>
     <a href="{% url 'root' %}" class="nav-link">Обзор</a>
     <a href="{% url 'dashboard' %}" class="nav-link">Договорная работа</a>
-    <a href="{% url 'znp_table' %}" class="nav-link">Все ЗнП (ФЗД)</a>
-    <a href="{% url 'znp_sap_table' %}" class="nav-link">Все ЗнП (SAP)</a>
+    <a href="{% url 'znp_table' %}" class="nav-link">Заявки на платёж (ФЗД)</a>
+    <a href="{% url 'znp_sap_table' %}" class="nav-link">Заявки на платёж (SAP)</a>
 
-    <div class="nav-section">КДР — статистика</div>
+    <div class="nav-section">Реестры</div>
+    <a href="{% url 'all_contracts_table' %}" class="nav-sub-link">Все договоры</a>
+    <a href="{% url 'znp_list_table' %}" class="nav-sub-link">Все ЗнП (ФЗД)</a>
+    <a href="{% url 'znp_sap_list_table' %}" class="nav-sub-link">Все ЗнП (SAP)</a>
+
+    <div class="nav-section">КДР по годам</div>
     {% for y in years %}
-    <a href="{% url 'kdr_table' y|stringformat:'s' %}" class="nav-sub-link">КДР {{ y }}</a>
+    <a href="{% url 'kdr_table' y|stringformat:'s' %}" class="nav-sub-link">{{ y }}</a>
     {% endfor %}
 
-    <div class="nav-section">ИГК — Заключённые</div>
+    <div class="nav-section">ИГК — заключённые</div>
     {% for y in years %}
     <a href="{% url 'igk_concluded_table' y|stringformat:'s' %}" class="nav-sub-link">{{ y }}</a>
     {% endfor %}
 
-    <div class="nav-section">ИГК — Незаключённые</div>
+    <div class="nav-section">ИГК — незаключённые</div>
     {% for y in years %}
     <a href="{% url 'igk_not_concluded_table' y|stringformat:'s' %}" class="nav-sub-link">{{ y }}</a>
     {% endfor %}
 
-    <div class="nav-section">ИГК — Расторгнутые</div>
+    <div class="nav-section">ИГК — расторгнутые</div>
     {% for y in years %}
     <a href="{% url 'igk_terminated_table' y|stringformat:'s' %}" class="nav-sub-link">{{ y }}</a>
     {% endfor %}
-
-    <div class="nav-section">Договоры</div>
-    <a href="{% url 'all_contracts_table' %}" class="nav-sub-link">Все договоры</a>
-    <a href="{% url 'znp_list_table' %}" class="nav-sub-link">Все ЗнП</a>
 
     <div class="nav-section">История изменений</div>
     <a href="{% url 'history_status_table' %}" class="nav-sub-link">Статусы</a>
@@ -54,8 +55,8 @@
     <a href="{% url 'history_fact_table' %}" class="nav-sub-link">Факт</a>
 
     <div class="nav-section">Служебное</div>
-    <a href="{% url 'contract_dupes_table' %}" class="nav-sub-link">Дубликаты договоров</a>
-    <a href="{% url 'export_page' %}" class="nav-sub-link">Формирование отчётов</a>
+    <a href="{% url 'contract_dupes_table' %}" class="nav-sub-link">Дубликаты</a>
+    <a href="{% url 'export_page' %}" class="nav-sub-link">Отчёты в Excel</a>
     {% if user.is_superuser or is_operator %}
     <a href="{% url 'upload_excel' %}" class="nav-sub-link">Загрузка данных</a>
     {% endif %}

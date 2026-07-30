@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
-{% block title %}Все ЗНП (ФЗД){% endblock %}
+{% block title %}Реестр ЗнП (ФЗД){% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h5>Все ЗНП (ФЗД)</h5>
+    <h5>Реестр ЗнП (ФЗД)</h5>
 </div>
 
 <div class="filter-panel mb-3">
@@ -42,7 +42,7 @@
             </select>
         </div>
         <div class="filter-group">
-            <label class="filter-label">Статус ЗНП</label>
+            <label class="filter-label">Статус ЗнП</label>
             <div class="d-flex gap-2 flex-wrap">
                 <label class="status-check"><input type="checkbox" id="cb-not-issued" checked> Не оформлена</label>
                 <label class="status-check"><input type="checkbox" id="cb-in-progress" checked> На оформлении</label>
@@ -86,14 +86,14 @@ const COLS = [
     { field: 'contract',         title: 'Договор' },
     { field: 'cfo',              title: 'ЦФО',                    style: 'style="width: 80px;"' },
     { field: 'payment_type',     title: 'Тип платежа',            style: 'style="width: 100px;"' },
-    { field: 'znp_status',       title: 'Статус ЗНП',             style: 'style="width: 130px;"' },
+    { field: 'znp_status',       title: 'Статус ЗнП',             style: 'style="width: 130px;"' },
     { field: 'plan_doc',         title: 'Документ планирования' },
     { field: 'payment_purpose',  title: 'Назначение платежа' },
     { field: 'plan_payment_date', title: 'Дата оплаты (план)',    style: 'style="width: 110px;"' },
     { field: 'fact_payment_date', title: 'Дата оплаты (факт)',    style: 'style="width: 110px;"' },
     { field: 'position_sum',     title: 'Сумма позиции, руб.',    format: 'number' },
-    { field: 'znp_plan_sum',     title: 'Сумма ЗНП план, руб.',   format: 'number' },
-    { field: 'znp_fact_sum',     title: 'Сумма ЗНП факт, руб.',   format: 'number' },
+    { field: 'znp_plan_sum',     title: 'Сумма ЗнП план, руб.',   format: 'number' },
+    { field: 'znp_fact_sum',     title: 'Сумма ЗнП факт, руб.',   format: 'number' },
 ];
 
 const apiUrl    = document.getElementById('page-data').dataset.apiUrl;

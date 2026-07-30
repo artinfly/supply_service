@@ -1,18 +1,15 @@
 {% extends 'base.html' %}
-{% block title %}Формирование отчётов{% endblock %}
+{% block title %}Отчёты в Excel{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h5>Формирование отчётов</h5>
+    <h5>Отчёты в Excel</h5>
 </div>
 
 <div style="max-width:640px;display:flex;flex-direction:column;gap:0.75rem">
 
     <div class="index-card">
-        <div class="index-card-title">ИГК — Авансовые платежи</div>
-        <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">
-            Сводная таблица по ИГК: контрагент, ЦФО, договор, состояние, суммы аванса
-        </p>
+        <div class="index-card-title">Авансы по ИГК</div>
         <div class="d-flex gap-2 flex-wrap">
             {% for y in years %}
             <a href="{% url 'export_advances' y|stringformat:'s' %}" class="btn-index">ИГК {{ y }} ↓</a>
@@ -21,10 +18,9 @@
     </div>
 
     <div class="index-card">
-        <div class="index-card-title">КДР — Заключение договоров</div>
+        <div class="index-card-title">КДР — заключение договоров</div>
         <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">
-            По каждому ИГК и ЦФО: договоры, суммы, % контрактации, авансирование.
-            Укажите период — в отчёт добавится столбец «Заключено за период, шт.»
+            Укажите период — добавится столбец «Заключено за период»
         </p>
         <div class="d-flex gap-3 flex-wrap align-items-end mb-2">
             <div class="filter-group">
@@ -46,9 +42,6 @@
 
     <div class="index-card">
         <div class="index-card-title">Договоры по контрагенту</div>
-        <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">
-            Все договора выбранного контрагента за год
-        </p>
         <div class="filter-group mb-2">
             <label class="filter-label">Контрагент</label>
             <input type="text" id="agent-input" class="filter-input"
@@ -63,20 +56,14 @@
     </div>
 
     <div class="index-card">
-        <div class="index-card-title">История изменений статусов</div>
-        <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">
-            Все зафиксированные изменения статусов договоров
-        </p>
+        <div class="index-card-title">История статусов</div>
         <div class="d-flex gap-2 flex-wrap">
             <a href="{% url 'export_history_status' %}" class="btn-index">Скачать xlsx ↓</a>
         </div>
     </div>
 
     <div class="index-card">
-        <div class="index-card-title">История изменений плана и факта</div>
-        <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">
-            Изменения плановых и фактических сумм по договорам
-        </p>
+        <div class="index-card-title">История плана и факта</div>
         <div class="d-flex gap-2 flex-wrap">
             <a href="{% url 'export_history_plan' %}" class="btn-index">План ↓</a>
             <a href="{% url 'export_history_fact' %}" class="btn-index">Факт ↓</a>
@@ -84,10 +71,7 @@
     </div>
 
     <div class="index-card">
-        <div class="index-card-title">Дубликаты договоров</div>
-        <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">
-            Записи с одинаковой комбинацией полей — ИГК, договор, предмет, заказ, этап
-        </p>
+        <div class="index-card-title">Дубликаты</div>
         <div class="d-flex gap-2 flex-wrap">
             <a href="{% url 'export_contract_dupes' %}" class="btn-index">Скачать xlsx ↓</a>
         </div>
