@@ -542,3 +542,23 @@ body.login-page {
     height: 34px;
     flex: 0 0 34px;
 }
+
+.dupes-block { margin-bottom: 22px; }
+.dupes-head {
+    display: flex; align-items: baseline; gap: 10px;
+    flex-wrap: wrap; margin-bottom: 8px;
+}
+.dupes-head h6 {
+    margin: 0; font-size: 14px; font-weight: 700; color: var(--text);
+}
+.dupes-head span { font-size: 12px; color: var(--text-muted); }
+.dupes-table { max-height: calc(50vh - 90px); }
+
+.block-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 6px 2px;
+}
+.card-block + .block-title { margin-top: 18px; }

@@ -20,6 +20,7 @@
     {% else %}
 
     <div class="row g-3 mb-4">
+        <div class="block-title">Все заявки</div>
         <div class="card-block">
             <div class="dash-row">
                 <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid" class="text-decoration-none">
@@ -28,8 +29,8 @@
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
                         </div>
                         <div>
-                            <div class="dash-card-num" style="color: black;">Всего ЗнП (SAP): {{ all.total_count }}</div>
-                            <div class="dash-card-lbl" style="color: black;">на сумму {{ all.total_sum|floatformat:2|intspace }} млн. &#8381</div>
+                            <div class="dash-card-num">Всего ЗнП (SAP): {{ all.total_count }}</div>
+                            <div class="dash-card-lbl">на сумму {{ all.total_sum|floatformat:2|intspace }} млн. &#8381</div>
                         </div>
                     </div>
                 </a>
@@ -40,7 +41,7 @@
                         </div>
                         <div>
                             <div class="dash-card-num" style="color: #be0c0c;">На согласовании: {{ all.waiting_agreement.count }}</div>
-                            <div class="dash-card-lbl" style="color: black;">{{ all.waiting_agreement.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.waiting_agreement.percent|floatformat:1 }}%</div>
+                            <div class="dash-card-lbl">{{ all.waiting_agreement.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.waiting_agreement.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
                 </a>
@@ -51,7 +52,7 @@
                         </div>
                         <div>
                             <div class="dash-card-num" style="color: #be0c0c;">Передано в 18 отдел: {{ all.sent_18.count }}</div>
-                            <div class="dash-card-lbl" style="color: black;">{{ all.sent_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.sent_18.percent|floatformat:1 }}%</div>
+                            <div class="dash-card-lbl">{{ all.sent_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.sent_18.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
                 </a>
@@ -64,7 +65,7 @@
                         </div>
                         <div>
                             <div class="dash-card-num" style="color: #2563eb;">Подтверждено 18 отделом: {{ all.confirmed_18.count }}</div>
-                            <div class="dash-card-lbl" style="color: black;">{{ all.confirmed_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.confirmed_18.percent|floatformat:1 }}%</div>
+                            <div class="dash-card-lbl">{{ all.confirmed_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.confirmed_18.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
                 </a>
@@ -75,7 +76,7 @@
                         </div>
                         <div>
                             <div class="dash-card-num" style="color: #16a34a;">Оплачено: {{ all.paid.count }}</div>
-                            <div class="dash-card-lbl" style="color: black;">{{ all.paid.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.paid.percent|floatformat:1 }}%</div>
+                            <div class="dash-card-lbl">{{ all.paid.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.paid.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
                 </a>
