@@ -29,8 +29,8 @@
         <div class="card-block">
             <div class="dash-row">
                 <a href="{% url 'all_contracts_table' %}?year=all&statuses=none" class="text-decoration-none">
-                    <div class="dash-card">
-                        <div class="dash-card-icon" style="background:rgba(37,99,235,.12);color:#2563eb">
+                    <div class="dash-card stage-total">
+                        <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
                         </div>
                         <div>
@@ -40,23 +40,23 @@
                     </div>
                 </a>
                 <a href="{% url 'all_contracts_table' %}?year=all&statuses=concluded" class="text-decoration-none">
-                    <div class="dash-card">
-                        <div class="dash-card-icon" style="background:rgba(22,163,74,.12);color:#16a34a">
+                    <div class="dash-card stage-done">
+                        <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
                         </div>
                         <div>
-                            <div class="dash-card-num" style="color: #16a34a;">Всего закл.: {{ all_concluded_count }}</div>
+                            <div class="dash-card-num">Всего закл.: {{ all_concluded_count }}</div>
                             <div class="dash-card-lbl">на сумму {{ all_concluded_sum|floatformat:2|intspace }} млн. &#8381</div>
                         </div>
                     </div>
                 </a>
                 <a href="{% url 'all_contracts_table' %}?year=all&statuses=not_concluded" class="text-decoration-none">
-                    <div class="dash-card">
-                        <div class="dash-card-icon" style="background:rgba(190,12,12,.12);color:#be0c0c">
+                    <div class="dash-card stage-wait">
+                        <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
                         </div>
                         <div>
-                            <div class="dash-card-num" style="color: #be0c0c;">Всего не закл.: {{ all_not_concluded_count }}</div>
+                            <div class="dash-card-num">Всего не закл.: {{ all_not_concluded_count }}</div>
                             <div class="dash-card-lbl">на сумму {{ all_not_concluded_sum|floatformat:2|intspace }} млн. &#8381</div>
                         </div>
                     </div>
@@ -68,8 +68,8 @@
         <div class="card-block">
             <div class="dash-row">
                 <a href="{% url 'all_contracts_table' %}?year={{ selected_year }}&statuses=none" class="text-decoration-none">
-                    <div class="dash-card">
-                        <div class="dash-card-icon" style="background:rgba(37,99,235,.12);color:#2563eb">
+                    <div class="dash-card stage-total">
+                        <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
                         </div>
                         <div>
@@ -79,34 +79,34 @@
                     </div>
                 </a>
                 <a href="{% url 'all_contracts_table' %}?year={{ selected_year }}&statuses=concluded" class="text-decoration-none">
-                    <div class="dash-card">
-                        <div class="dash-card-icon" style="background:rgba(22,163,74,.12);color:#16a34a">
+                    <div class="dash-card stage-done">
+                        <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
                         </div>
                         <div>
-                            <div class="dash-card-num" style="color: #16a34a;">Заключено договоров на {{ selected_year }}г.: {{ curr_year_concluded_count }}</div>
+                            <div class="dash-card-num">Заключено договоров на {{ selected_year }}г.: {{ curr_year_concluded_count }}</div>
                             <div class="dash-card-lbl">на сумму {{ curr_year_concluded_sum|floatformat:2|intspace }} млн. &#8381</div>
                         </div>
                     </div>
                 </a>
                 <a href="{% url 'all_contracts_table' %}?year={{ selected_year }}&statuses=not_concluded" class="text-decoration-none">
-                    <div class="dash-card">
-                        <div class="dash-card-icon" style="background:rgba(190,12,12,.12);color:#be0c0c">
+                    <div class="dash-card stage-wait">
+                        <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
                         </div>
                         <div>
-                            <div class="dash-card-num" style="color: #be0c0c;">Не заключено на {{ selected_year }}г.: {{ curr_year_not_concluded_count }}</div>
+                            <div class="dash-card-num">Не заключено на {{ selected_year }}г.: {{ curr_year_not_concluded_count }}</div>
                             <div class="dash-card-lbl">на сумму {{ curr_year_not_concluded_sum|floatformat:2|intspace }} млн. &#8381</div>
                         </div>
                     </div>
                 </a>
                 <div>
-                    <div class="dash-card">
-                        <div class="dash-card-icon" style="background:rgba(0,140,255,.12);color:#008cff">
+                    <div class="dash-card stage-metric">
+                        <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M16 12h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3a2 2 0 0 1 0-4z"/></svg>
                         </div>
                         <div>
-                            <div class="dash-card-num" style="color: #008cff;">{{ curr_year_plan|floatformat:2|intspace }} млн. &#8381</div>
+                            <div class="dash-card-num">{{ curr_year_plan|floatformat:2|intspace }} млн. &#8381</div>
                             <div class="dash-card-lbl">Плановая сумма аванса на {{ selected_year }}</div>
                         </div>
                     </div>
@@ -114,45 +114,45 @@
             </div>
             <div class="dash-row">
                 <div>
-                    <div class="dash-card">
-                        <div class="dash-card-icon" style="background:rgba(0,140,255,.12);color:#008cff">
+                    <div class="dash-card stage-metric">
+                        <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>
                         </div>
                         <div>
-                            <div class="dash-card-num" style="color: #008cff;">{{ curr_year_fact|floatformat:2|intspace }} млн. &#8381</div>
+                            <div class="dash-card-num">{{ curr_year_fact|floatformat:2|intspace }} млн. &#8381</div>
                             <div class="dash-card-lbl">Фактическая сумма аванса на {{ selected_year }}</div>
                         </div>
                     </div>
                 </div>
                 <div>
-                    <div class="dash-card">
-                        <div class="dash-card-icon" style="background:rgba(0,140,255,.12);color:#008cff">
+                    <div class="dash-card stage-metric">
+                        <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
                         </div>
                         <div>
-                            <div class="dash-card-num" style="color: #008cff;">{{ curr_year_percent_count|floatformat:2 }}%</div>
+                            <div class="dash-card-num">{{ curr_year_percent_count|floatformat:2 }}%</div>
                             <div class="dash-card-lbl">% контрактации {{ selected_year }}(кол-во)</div>
                         </div>
                     </div>
                 </div>
                 <div>
-                    <div class="dash-card">
-                        <div class="dash-card-icon" style="background:rgba(0,140,255,.12);color:#008cff">
+                    <div class="dash-card stage-metric">
+                        <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
                         </div>
                         <div>
-                            <div class="dash-card-num" style="color: #008cff;">{{ curr_year_percent_sum|floatformat:2 }}%</div>
+                            <div class="dash-card-num">{{ curr_year_percent_sum|floatformat:2 }}%</div>
                             <div class="dash-card-lbl">% контрактации {{ selected_year }}(руб)</div>
                         </div>
                     </div>
                 </div>
                 <div>
-                    <div class="dash-card">
-                        <div class="dash-card-icon" style="background:rgba(0,140,255,.12);color:#008cff">
+                    <div class="dash-card stage-metric">
+                        <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
                         </div>
                         <div>
-                            <div class="dash-card-num" style="color: #008cff;">{{ curr_year_percent_prepaid|floatformat:2 }}%</div>
+                            <div class="dash-card-num">{{ curr_year_percent_prepaid|floatformat:2 }}%</div>
                             <div class="dash-card-lbl">% авансирования на {{ selected_year }}</div>
                         </div>
                     </div>
