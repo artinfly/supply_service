@@ -1,3 +1,4 @@
+# Выгрузка по ИГК со сводной таблицей внутри книги Excel.
 import io
 import os
 import re

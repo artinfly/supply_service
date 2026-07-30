@@ -1,3 +1,5 @@
+# Страницы, которые отдаются браузером как HTML.
+# Считать здесь ничего не нужно — расчёты в services/dashboards.py.
 import os
 import tempfile
 from datetime import date as _date
@@ -14,20 +16,20 @@ from django.shortcuts import redirect, render
 
 from ..models import IgkStatData, NsiIgk, ZnpData, ZnpDataSAP
 from ..services.dashboards import (
-    _EMPTY_CFO_STATS,
-    _EMPTY_NOT_ISSUED,
-    _EMPTY_ZNP,
+    EMPTY_CFO_STATS,
+    EMPTY_NOT_ISSUED,
+    EMPTY_ZNP,
     SAP_STAGE_NAMES,
     SAP_STAGE_PARAMS,
     ZNP_STAGE_LABELS,
     ZNP_STAGE_NAMES,
-    _breakdown_from_stats,
-    _cfo_row,
-    _cfo_totals_row,
-    _filter_by_year,
-    _mln,
-    _percent,
-    _sap_cards,
+    breakdown_from_stats,
+    cfo_row,
+    cfo_totals_row,
+    filter_by_year,
+    percent,
+    sap_cards,
+    to_mln,
 )
 from ..services.queries import (
     ADVANCE,
@@ -323,9 +325,9 @@ def dashboard(request):
         )
     }
     igk_table = [
-        _cfo_row(cfo, cfo_stats.get(cfo, _EMPTY_CFO_STATS)) for cfo in available_cfo
+        cfo_row(cfo, cfo_stats.get(cfo, EMPTY_CFO_STATS)) for cfo in available_cfo
     ]
-    igk_table.append(_cfo_totals_row(igk_table))
+    igk_table.append(cfo_totals_row(igk_table))
 
     year_count = totals_year["count"]
     year_concluded_count = totals_year["concluded_count"]
@@ -341,22 +343,22 @@ def dashboard(request):
             "available_igk": available_igk,
             "selected_igk": selected_igk,
             "all_contracts_count": totals_all["count"],
-            "all_contracts_sum": _mln(totals_all["plan_sum"]),
+            "all_contracts_sum": to_mln(totals_all["plan_sum"]),
             "all_concluded_count": totals_all["concluded_count"],
-            "all_concluded_sum": _mln(totals_all["concluded_plan"]),
+            "all_concluded_sum": to_mln(totals_all["concluded_plan"]),
             "all_not_concluded_count": totals_all["not_concluded_count"],
-            "all_not_concluded_sum": _mln(totals_all["not_concluded_plan"]),
+            "all_not_concluded_sum": to_mln(totals_all["not_concluded_plan"]),
             "curr_year_contracts_count": year_count,
-            "curr_year_contracts_sum": _mln(year_plan),
+            "curr_year_contracts_sum": to_mln(year_plan),
             "curr_year_concluded_count": year_concluded_count,
-            "curr_year_concluded_sum": _mln(year_concluded_plan),
+            "curr_year_concluded_sum": to_mln(year_concluded_plan),
             "curr_year_not_concluded_count": year_count - year_concluded_count,
-            "curr_year_not_concluded_sum": _mln(year_plan - year_concluded_plan),
-            "curr_year_fact": _mln(advance_fact),
-            "curr_year_plan": _mln(advance_plan),
-            "curr_year_percent_count": _percent(year_concluded_count, year_count),
-            "curr_year_percent_sum": _percent(year_concluded_plan, year_plan),
-            "curr_year_percent_prepaid": _percent(advance_fact, advance_plan),
+            "curr_year_not_concluded_sum": to_mln(year_plan - year_concluded_plan),
+            "curr_year_fact": to_mln(advance_fact),
+            "curr_year_plan": to_mln(advance_plan),
+            "curr_year_percent_count": percent(year_concluded_count, year_count),
+            "curr_year_percent_sum": percent(year_concluded_plan, year_plan),
+            "curr_year_percent_prepaid": percent(advance_fact, advance_plan),
             "igk_table": igk_table,
             "has_data": IgkStatData.objects.exists(),
             "no_data_hint": (
@@ -402,8 +404,8 @@ def znp_table(request):
 
     all_not_issued_qs = _not_issued_qs()
     all_znp_qs = _znp_qs()
-    year_not_issued_qs = _filter_by_year(all_not_issued_qs, year)
-    year_znp_qs = _filter_by_year(all_znp_qs, year, field_prefix="parent__")
+    year_not_issued_qs = filter_by_year(all_not_issued_qs, year)
+    year_znp_qs = filter_by_year(all_znp_qs, year, field_prefix="parent__")
 
     def _breakdown(not_issued_qs, znp_qs):
         pos_advance_q = Q(payment_type=ADVANCE)
@@ -435,7 +437,7 @@ def znp_table(request):
             postpayment_paid_count=Count("id", filter=postpayment_q & paid_q),
             postpayment_paid_sum=Sum("fact_sum", filter=postpayment_q & paid_q),
         )
-        return _breakdown_from_stats(not_issued_agg, znp_agg)
+        return breakdown_from_stats(not_issued_agg, znp_agg)
 
     all_breakdown = _breakdown(all_not_issued_qs, all_znp_qs)
     year_breakdown = _breakdown(year_not_issued_qs, year_znp_qs)
@@ -447,8 +449,8 @@ def znp_table(request):
         .order_by("cfo")
     )
 
-    igk_not_issued_qs = _filter_by_year(_not_issued_qs(igk=selected_igk), year)
-    igk_znp_qs = _filter_by_year(
+    igk_not_issued_qs = filter_by_year(_not_issued_qs(igk=selected_igk), year)
+    igk_znp_qs = filter_by_year(
         _znp_qs(igk=selected_igk), year, field_prefix="parent__"
     )
 
@@ -507,9 +509,9 @@ def znp_table(request):
     cfo_table = [
         _row_from_breakdown(
             cfo,
-            _breakdown_from_stats(
-                not_issued_stats.get(cfo, _EMPTY_NOT_ISSUED),
-                znp_stats.get(cfo, _EMPTY_ZNP),
+            breakdown_from_stats(
+                not_issued_stats.get(cfo, EMPTY_NOT_ISSUED),
+                znp_stats.get(cfo, EMPTY_ZNP),
             ),
         )
         for cfo in available_cfo
@@ -551,7 +553,7 @@ def znp_sap_table(request):
     )
 
     def _breakdown(qs):
-        return _sap_cards(
+        return sap_cards(
             qs.aggregate(total=Count("id"), total_sum=Sum("vv_sum")),
             {
                 row["sap_status"]: row
@@ -606,7 +608,7 @@ def znp_sap_table(request):
 
     cfo_table = [
         _row_from_breakdown(
-            cfo, _sap_cards(cfo_totals.get(cfo), cfo_status.get(cfo, {}))
+            cfo, sap_cards(cfo_totals.get(cfo), cfo_status.get(cfo, {}))
         )
         for cfo in available_cfo
     ]

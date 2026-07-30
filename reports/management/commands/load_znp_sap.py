@@ -1,3 +1,4 @@
+# Загрузка заявок ЗнП (SAP): чтение файла и разбор одной транзакцией.
 from django.core.management.base import BaseCommand
 from django.db import transaction
 

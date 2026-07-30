@@ -1,3 +1,4 @@
+# Колонки файла заявок ЗнП (ФЗД). Здесь же считается хеш связки с договором.
 from django.core.management.base import BaseCommand
 
 from reports.services.excel_import import (
@@ -6,7 +7,7 @@ from reports.services.excel_import import (
     read_values,
     replace_table,
 )
-from reports.services.znp_linking import contract_hash
+from reports.services.linking import contract_hash
 
 TABLE = "staging_znp_excel"
 HEADER_ROW = 1

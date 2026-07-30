@@ -1,3 +1,4 @@
+# JSON для таблиц и графиков: страница рисует разметку, а данные забирает отсюда.
 from collections import defaultdict
 from datetime import date as _date
 from decimal import Decimal

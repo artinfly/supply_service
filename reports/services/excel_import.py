@@ -1,3 +1,5 @@
+# Общая часть чтения xlsx: открыть файл, найти колонки, залить в staging.
+# Сами колонки перечислены в командах import_*.
 import openpyxl
 from django.core.management.base import CommandError
 from django.db import connection, transaction

@@ -1,3 +1,4 @@
+# Колонки файла заявок ЗнП (SAP). Берутся только строки с типом ГОЗ.
 from django.core.management.base import BaseCommand
 
 from reports.services.excel_import import (

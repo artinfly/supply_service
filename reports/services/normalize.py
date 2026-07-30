@@ -1,10 +1,12 @@
+# Разбор загруженного файла: из staging_* в рабочие таблицы.
+# Вызывается командами load_*, сама по себе не запускается.
 from collections import defaultdict
 from datetime import date
 
 from django.db import connection, transaction
 
+from reports.services.linking import contract_hash, relink_znp_parents
 from reports.services.queries import ADVANCE, CONCLUDED, POSTPAYMENT, YEARS
-from reports.services.znp_linking import contract_hash, relink_znp_parents
 
 
 def to_float(val):
