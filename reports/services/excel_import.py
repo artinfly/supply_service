@@ -7,7 +7,7 @@ def open_sheet(filepath, header_row=1):
     try:
         wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
     except FileNotFoundError:
-        raise CommandError(f"file not found: {filepath}")
+        raise CommandError(f"файл не найден: {filepath}")
     except Exception as exc:
         raise CommandError(str(exc))
     return wb, wb.active.iter_rows(min_row=header_row, values_only=True)
@@ -17,7 +17,7 @@ def map_columns(rows, column_map, command, required=()):
     try:
         header = next(rows)
     except StopIteration:
-        raise CommandError("file is empty")
+        raise CommandError("файл пустой")
 
     lookup = {name.strip().casefold(): field for name, field in column_map.items()}
     positions = {
@@ -26,19 +26,12 @@ def map_columns(rows, column_map, command, required=()):
         if cell and str(cell).strip().casefold() in lookup
     }
     if not positions:
-        raise CommandError("no matching columns found in header")
+        raise CommandError("в строке заголовка не найдено ни одной известной колонки")
 
     missing = set(column_map.values()) - set(positions.values())
-    blocking = missing & set(required)
-    if blocking:
-        raise CommandError(f"missing required columns: {', '.join(sorted(blocking))}")
     if missing:
-        command.stdout.write(
-            command.style.WARNING(
-                "columns not found in file, will stay empty: "
-                f"{', '.join(sorted(missing))}"
-            )
-        )
+        names = sorted(n for n, f in column_map.items() if f in missing)
+        raise CommandError("в файле нет обязательных колонок: " + ", ".join(names))
     return positions
 
 

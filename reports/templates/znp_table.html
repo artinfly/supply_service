@@ -38,6 +38,17 @@
                         </div>
                     </div>
                 </a>
+                <a href="{% url 'znp_list_table' %}?year=all&statuses=in_progress" class="text-decoration-none">
+                    <div class="dash-card dash-card-sm">
+                        <div class="dash-card-icon" style="background:#d977061f;color:#d97706">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/><path d="M13 3l5 5h-5V3z"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #d97706;">На оформлении: {{ all.in_progress.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ all.in_progress.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.in_progress.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
                 <a href="{% url 'znp_list_table' %}?year=all&statuses=advance,postpayment" class="text-decoration-none">
                     <div class="dash-card dash-card-sm">
                         <div class="dash-card-icon" style="background:rgba(22,163,74,.12);color:#16a34a">
@@ -130,6 +141,17 @@
                         <div>
                             <div class="dash-card-num" style="color: black;">Всего ЗНП за {{ selected_year }}г.: {{ year.total_count }}</div>
                             <div class="dash-card-lbl" style="color: black;">на сумму {{ year.total_sum|floatformat:2|intspace }} млн. &#8381</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_list_table' %}?year={{ selected_year }}&statuses=in_progress" class="text-decoration-none">
+                    <div class="dash-card dash-card-sm">
+                        <div class="dash-card-icon" style="background:#d977061f;color:#d97706">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/><path d="M13 3l5 5h-5V3z"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num" style="color: #d97706;">На оформлении: {{ year.in_progress.count }}</div>
+                            <div class="dash-card-lbl" style="color: black;">{{ year.in_progress.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ year.in_progress.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
                 </a>

@@ -118,7 +118,7 @@ def export_contract_dupes(request):
 def export_kdr(request, year):
     yc = YEAR_COL.get(str(year))
     if not yc:
-        return JsonResponse({"error": "invalid year"}, status=400)
+        return JsonResponse({"error": "недопустимый год"}, status=400)
 
     start_date = request.GET.get("start", "").strip()
     end_date = request.GET.get("end", "").strip()
@@ -270,7 +270,7 @@ def export_kdr(request, year):
 def export_advances(request, year):
     yc = YEAR_COL.get(str(year))
     if not yc:
-        return JsonResponse({"error": "invalid year"}, status=400)
+        return JsonResponse({"error": "недопустимый год"}, status=400)
     with connection.cursor() as cur:
         cur.execute(advances(year))
         cols = [c[0] for c in cur.description]
@@ -282,7 +282,7 @@ def export_advances(request, year):
 def export_contracts_by_agent(request, year):
     yc = YEAR_COL.get(str(year))
     if not yc:
-        return JsonResponse({"error": "invalid year"}, status=400)
+        return JsonResponse({"error": "недопустимый год"}, status=400)
 
     agent = request.GET.get("agent", "").strip()
     conditions, params = contracts_by_agent_filter(yc, agent)

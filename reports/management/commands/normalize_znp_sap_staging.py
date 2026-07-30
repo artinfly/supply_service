@@ -58,4 +58,6 @@ class Command(BaseCommand):
                 new_data,
             )
 
-        self.stdout.write(f"done: {len(new_data)} rows, {no_igk_count} without an ИГК")
+        self.stdout.write(
+            f"обработано заявок: {len(new_data)}, без ИГК: {no_igk_count}"
+        )
