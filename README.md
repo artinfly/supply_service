@@ -66,17 +66,16 @@ supply_service/
     │   ├── dashboards.py         — расчёт карточек и таблиц по ЦФО
     │   ├── charts.py             — разрезы для графиков
     │   ├── normalize.py          — разбор staging в рабочие таблицы
-    │   ├── excel_import.py       — общая часть чтения xlsx
+    │   ├── excel_import.py       — чтение xlsx в staging, колонки файлов
     │   ├── excel.py              — сборка простых xlsx
     │   ├── pivot.py              — xlsx со сводной таблицей
     │   ├── linking.py            — хеш связки ЗнП с договорами и её пересборка
     │   └── sap_status.py         — статус заявки SAP
     │
-    ├── management/commands/
+    ├── management/commands/      — что запускается из консоли
     │   ├── load_contracts.py     — загрузка договоров
     │   ├── load_znp.py           — загрузка ЗнП (ФЗД)
     │   ├── load_znp_sap.py       — загрузка ЗнП (SAP)
-    │   ├── import_*.py           — колонки файлов, чтение в staging
     │   └── setup_groups.py       — создание групп viewer и operator
     │
     ├── migrations/               — история изменений схемы
