@@ -1,9 +1,9 @@
-# Загрузка договоров: читает файл в staging и сразу разбирает его.
+# Загрузка договоров: файл читается в staging и сразу разбирается.
 # Оба шага в одной транзакции — при ошибке база остаётся прежней.
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from reports.management.commands.import_excel import Command as ImportCommand
+from reports.services.excel_import import import_contracts
 from reports.services.normalize import normalize_contracts
 
 
@@ -15,8 +15,6 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         with transaction.atomic():
-            loader = ImportCommand()
-            loader.stdout = self.stdout
-            loader.style = self.style
-            loader.handle(filepath=options["filepath"])
+            loaded = import_contracts(options["filepath"])
+            self.stdout.write(f"загружено строк: {loaded}")
             self.stdout.write(normalize_contracts())
