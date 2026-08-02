@@ -86,7 +86,6 @@ class StagingExcel(models.Model):
     tol = models.TextField(null=True)
     etap_grafika = models.TextField(null=True)
     dataplan = models.TextField(null=True)
-    sozdan = models.TextField(null=True)
     summa_dogovora = models.TextField(null=True)
     god_igk = models.TextField(null=True)
 

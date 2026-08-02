@@ -61,6 +61,10 @@ def _ctx(request):
     }
 
 
+def _valid_year(year):
+    return year if year in YEARS else YEARS[-1]
+
+
 def login_view(request):
     if request.user.is_authenticated:
         return redirect("/reports/")
@@ -90,6 +94,7 @@ def index(request):
 
 @login_required
 def kdr_table(request, year):
+    year = _valid_year(year)
     ctx = _ctx(request)
     ctx["year"] = year
     return render(request, "kdr_table.html", ctx)
@@ -97,6 +102,7 @@ def kdr_table(request, year):
 
 @login_required
 def igk_concluded_table(request, year):
+    year = _valid_year(year)
     ctx = _ctx(request)
     ctx.update(
         {"year": year, "report_type": "concluded", "title": f"ИГК {year} — Заключённые"}
@@ -106,6 +112,7 @@ def igk_concluded_table(request, year):
 
 @login_required
 def igk_not_concluded_table(request, year):
+    year = _valid_year(year)
     ctx = _ctx(request)
     ctx.update(
         {
@@ -119,6 +126,7 @@ def igk_not_concluded_table(request, year):
 
 @login_required
 def igk_terminated_table(request, year):
+    year = _valid_year(year)
     ctx = _ctx(request)
     ctx.update(
         {
@@ -251,9 +259,7 @@ def _resolve_year(request):
         year = int(request.GET.get("year", ""))
     except (TypeError, ValueError):
         year = _date.today().year
-    if year not in YEARS:
-        year = YEARS[-1]
-    return year
+    return _valid_year(year)
 
 
 @login_required

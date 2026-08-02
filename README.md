@@ -44,6 +44,7 @@ Django-сервис отчётности отдела снабжения: дог
 supply_service/
 ├── manage.py                     — точка входа для всех команд
 ├── requirements.txt
+├── pyproject.toml                — настройки black и isort
 ├── wheels/                       — колёса для офлайн-установки
 │
 ├── supply_service/
@@ -206,13 +207,15 @@ python manage.py runserver
 
 ## Миграции
 
-Шесть:
+Семь:
 
 1. `0001_initial` — создаёт все таблицы
 2. `0002_performance_indexes_and_snapshot_key` — индексы и уникальный ключ снимков
 3. `0003_sap_indexes` — индексы по ЦФО и ИГК для заявок SAP
 4. `0004_znp_status` — поле статуса заявки ЗнП
-5. `0005_contract_sum`, `0006_staging_contract_sum` — сумма договора и её история
+5. `0005_contract_sum` — сумма договора в позиции и её история
+6. `0006_staging_contract_sum` — колонка суммы договора в staging
+7. `0007_drop_staging_sozdan` — убрана неиспользуемая колонка в staging
 
 Модель в `models.py` описывает, как должно быть; миграция — записанный шаг, как
 к этому прийти. `makemigrations` сравнивает модель с последней миграцией и пишет
