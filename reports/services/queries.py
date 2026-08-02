@@ -16,6 +16,10 @@ TERMINATED = ("Расторгнут",)
 YEARS = [2025, 2026, 2027]
 YEAR_COL = {str(y): f"y{str(y)[2:]}" for y in YEARS}
 
+# Строка без заказа в отчёты не идёт. Заказ бывает пустым двумя способами:
+# в ячейке ничего нет (NULL) или там одни пробелы — считаем пустым и то и то.
+HAS_ORDER = '"order" IS NOT NULL AND TRIM("order") != \'\''
+
 
 def _sl(statuses):
     return ", ".join(f"'{s}'" for s in statuses)
@@ -27,31 +31,31 @@ def kdr(year):
     nl = _sl(NOT_CONCL)
     return f"""
     SELECT igk,
-        COUNT(DISTINCT contract) FILTER (WHERE "order" IS NOT NULL AND "order" != '') AS orders,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND "order" != ''), 0)/1e6 AS numeric), 2) AS order_sum,
-        COUNT(DISTINCT contract) FILTER (WHERE "order" != '' AND status IN ({cl})) AS count_concluded,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE "order" != '' AND status IN ({cl})), 0)/1e6 AS numeric), 2) AS concluded_order_sum,
-        COUNT(DISTINCT contract) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status!='Расторгнут') AS count_curr_year,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS order_sum_curr_year,
-        COUNT(DISTINCT contract) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status IN ({cl})) AS count_concluded_curr_year,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status IN ({cl})), 0)/1e6 AS numeric), 2) AS concluded_order_sum_curr_year,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS pp_sum_plan,
-        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS pp_sum_fact,
-        COUNT(DISTINCT contract) FILTER (WHERE "order" != '' AND status IN ({nl}) AND {yc}=TRUE) AS count_not_concluded_curr_year,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status IN ({nl})), 0)/1e6 AS numeric), 2) AS not_concluded_order_sum_curr_year,
+        COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER}) AS orders,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER}), 0)/1e6 AS numeric), 2) AS order_sum,
+        COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND status IN ({cl})) AS count_concluded,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND status IN ({cl})), 0)/1e6 AS numeric), 2) AS concluded_order_sum,
+        COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status!='Расторгнут') AS count_curr_year,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS order_sum_curr_year,
+        COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status IN ({cl})) AS count_concluded_curr_year,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status IN ({cl})), 0)/1e6 AS numeric), 2) AS concluded_order_sum_curr_year,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS pp_sum_plan,
+        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS pp_sum_fact,
+        COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND status IN ({nl}) AND {yc}=TRUE) AS count_not_concluded_curr_year,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status IN ({nl})), 0)/1e6 AS numeric), 2) AS not_concluded_order_sum_curr_year,
         -- проценты ниже через CAST(... AS int) — усечение вниз, а не округление
         -- (60.9 превратится в 60), это осознанно так, а не ROUND(...)
-        CASE WHEN COUNT(DISTINCT contract) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status!='Расторгнут') = 0 THEN 0
-             ELSE CAST(COUNT(DISTINCT contract) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status IN ({cl})) * 100.0
-                  / NULLIF(COUNT(DISTINCT contract) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status!='Расторгнут'), 0) AS int)
+        CASE WHEN COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status!='Расторгнут') = 0 THEN 0
+             ELSE CAST(COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status IN ({cl})) * 100.0
+                  / NULLIF(COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status!='Расторгнут'), 0) AS int)
         END AS count_concluded_percent_curr_year,
-        CASE WHEN COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status!='Расторгнут'), 0) = 0 THEN 0
-             ELSE CAST(COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status IN ({cl})), 0) * 100.0
-                  / NULLIF(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND status!='Расторгнут'), 0) AS int)
+        CASE WHEN COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status!='Расторгнут'), 0) = 0 THEN 0
+             ELSE CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status IN ({cl})), 0) * 100.0
+                  / NULLIF(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status!='Расторгнут'), 0) AS int)
         END AS order_sum_percent_curr_year,
-        CASE WHEN COALESCE(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0) = 0 THEN 0
-             ELSE CAST(COALESCE(SUM(fact) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)
-                  / NULLIF(SUM(plan) FILTER (WHERE "order" IS NOT NULL AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0) * 100 AS int)
+        CASE WHEN COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0) = 0 THEN 0
+             ELSE CAST(COALESCE(SUM(fact) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)
+                  / NULLIF(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0) * 100 AS int)
         END AS pp_percent
     FROM igk_stat_data
     GROUP BY igk ORDER BY igk
@@ -166,7 +170,7 @@ def contract_dupes():
 
 
 def contract_dupes_by_order():
-    return """
+    return f"""
         SELECT RIGHT(igk, 4) AS igk, item, "order",
                COUNT(*) AS rows_count,
                COUNT(DISTINCT contract) AS contracts_count,
@@ -175,7 +179,7 @@ def contract_dupes_by_order():
         FROM igk_stat_data
         WHERE igk IS NOT NULL AND TRIM(igk) != ''
           AND item IS NOT NULL AND TRIM(item) != ''
-          AND "order" IS NOT NULL AND TRIM("order") != ''
+          AND {HAS_ORDER}
         GROUP BY RIGHT(igk, 4), item, "order"
         HAVING COUNT(*) > 1
         ORDER BY COUNT(*) DESC, igk, item

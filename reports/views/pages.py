@@ -65,6 +65,10 @@ def _valid_year(year):
     return year if year in YEARS else YEARS[-1]
 
 
+# То же условие, что HAS_ORDER в SQL: строка без заказа в отчёты не идёт.
+HAS_ORDER_Q = Q(order__isnull=False) & ~Q(order__regex=r"^\s*$")
+
+
 def login_view(request):
     if request.user.is_authenticated:
         return redirect("/reports/")
@@ -282,21 +286,19 @@ def dashboard(request):
     year_q = Q(**{year_field: True})
     advance_q = Q(payment_type=ADVANCE)
 
-    totals_all = (
-        IgkStatData.objects.filter(contract__isnull=False)
-        .exclude(order="")
-        .aggregate(
-            count=Count("contract", distinct=True),
-            plan_sum=Sum("plan"),
-            concluded_count=Count("contract", filter=concluded_q, distinct=True),
-            concluded_plan=Sum("plan", filter=concluded_q),
-            not_concluded_count=Count("contract", filter=not_concl_q, distinct=True),
-            not_concluded_plan=Sum("plan", filter=not_concl_q),
-        )
+    totals_all = IgkStatData.objects.filter(
+        HAS_ORDER_Q, contract__isnull=False
+    ).aggregate(
+        count=Count("contract", distinct=True),
+        plan_sum=Sum("plan"),
+        concluded_count=Count("contract", filter=concluded_q, distinct=True),
+        concluded_plan=Sum("plan", filter=concluded_q),
+        not_concluded_count=Count("contract", filter=not_concl_q, distinct=True),
+        not_concluded_plan=Sum("plan", filter=not_concl_q),
     )
     totals_year = (
         IgkStatData.objects.exclude(status="Расторгнут")
-        .filter(contract__isnull=False, order__isnull=False, **{year_field: True})
+        .filter(HAS_ORDER_Q, contract__isnull=False, **{year_field: True})
         .aggregate(
             count=Count("contract", distinct=True),
             plan_sum=Sum("plan"),
@@ -318,7 +320,7 @@ def dashboard(request):
         row["cfo"]: row
         for row in (
             IgkStatData.objects.exclude(status="Расторгнут")
-            .filter(igk=selected_igk, contract__isnull=False, order__isnull=False)
+            .filter(HAS_ORDER_Q, igk=selected_igk, contract__isnull=False)
             .values("cfo")
             .annotate(
                 all_count=Count("contract", distinct=True),
