@@ -12,7 +12,7 @@
 
   const CATEGORICAL = ["#2a78d6", "#eb6834"];
   const ORDINAL = ["#86b6ef", "#2a78d6", "#104281"];
-  const STAGES = ["#be0c0c", "#e0521f", "#d97706", "#2a78d6", "#16a34a"];
+  const STAGES = ["#be0c0c", "#eb6834", "#2a78d6", "#16a34a"];
 
   const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   function escape(value) {

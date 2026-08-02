@@ -7,8 +7,8 @@
     <h5>Загрузка данных</h5>
 </div>
 
-<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);padding:1.5rem;max-width:480px;">
-
+<div style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap">
+<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);padding:1.5rem;flex: 1 1 420px;">
     {% if messages %}
     {% for msg in messages %}
     <div class="alert alert-{{ msg.tags }} mb-3" style="font-size:0.82rem">{{ msg }}</div>
@@ -25,7 +25,7 @@
             <label class="filter-label">Тип файла</label>
             <select name="file_type" class="form-control mt-1" style="font-size:0.82rem">
                 {% for value, label in file_types.items %}
-                <option value="{{ value }}">{{ label }}</option>
+                <option value="{{ value }}" {% if value == selected_type %}selected{% endif %}> {{ label }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -47,6 +47,21 @@
     {% endif %}
 
 </div>
+
+<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);padding:1.5rem;flex:1 1 320px;max-width:420px;">
+    <div class="filter-label mb-2">Обязательные колонки в шапке файла</div>
+    {% for type, cols in file_columns.items %}
+    <div class="req-cols" data-type="{{ type }}" style="display:none">
+        <div style="font-size:0.8rem;color:#888;margin-bottom:0.4rem">{{ cols|length }} колонок, порядок значение не имеет</div>
+        <ul style="margin:0;padding-left:1.1rem;font-size:0.82rem;line-height:1.7">
+            {% for c in cols %}<li>{{ c }}</li>{% endfor %}
+        </ul>
+    </div>
+    {% endfor %}
+</div>
+
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -64,5 +79,13 @@ function checkFile() {
     document.getElementById('upload-btn').style.display = 'block';
     return true;
 }
+function showCols() {
+    const t = document.querySelector('select[name="file_type"]').value;
+    document.querySelectorAll('.req-cols').forEach(function (el) {
+        el.style.display = el.dataset.type === t ? 'block' : 'none' ;
+    });
+}
+document.querySelector('select[name="file_type"]').addEventListener('change', showCols);
+showCols();
 </script>
 {% endblock %}

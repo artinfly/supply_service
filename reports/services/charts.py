@@ -4,7 +4,7 @@ from .queries import (
     CONCLUDED,
     NOT_CONCL,
     POSTPAYMENT,
-    ZNP_PENDING,
+    ZNP_APPROVED,
 )
 
 CONTRACT_AGE = (
@@ -63,7 +63,7 @@ def znp_by_cfo(year_col, igk):
             SELECT i.cfo,
                    CASE
                        WHEN z.id IS NULL THEN 'not_issued'
-                       WHEN z.znp_status = '{ZNP_PENDING}' THEN 'in_progress'
+                       WHEN z.znp_status IS DISTINCT FROM '{ZNP_APPROVED}' THEN 'in_progress'
                        WHEN z.fact_sum IS NOT NULL THEN 'paid'
                        ELSE 'issued'
                    END AS stage,

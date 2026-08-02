@@ -15,11 +15,21 @@
         </div>
         <div class="filter-group">
             <label class="filter-label">ИГК</label>
-            <input type="text" id="filter-igk" class="filter-input" placeholder="Поиск...">
+            <select id="filter-igk" class="filter-select">
+                <option value="">Все</option>
+                {% for igk in igk_list %}
+                <option value="{{ igk }}">{{ igk }}</option>
+                {% endfor %}
+            </select>
         </div>
         <div class="filter-group">
             <label class="filter-label">ЦФО</label>
-            <input type="text" id="filter-cfo" class="filter-input" style="width:100px" placeholder="Поиск...">
+            <select id="filter-cfo" class="filter-select">
+                <option value="">Все</option>
+                {% for cfo in cfo_list %}
+                <option value="{{ cfo }}">{{ cfo }}</option>
+                {% endfor %}
+            </select>
         </div>
         <div class="filter-group">
             <label class="filter-label">Этап согласования</label>

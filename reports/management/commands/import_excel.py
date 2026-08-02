@@ -24,6 +24,7 @@ COLUMN_MAP = {
     "Тол": "tol",
     "Этап графика": "etap_grafika",
     "ДатаПланПодп": "dataplan",
+    "СУММА договора": "summa_dogovora",
     "ГодИГК": "god_igk",
 }
 FIELDS = list(COLUMN_MAP.values())

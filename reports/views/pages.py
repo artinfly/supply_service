@@ -14,6 +14,9 @@ from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 
+from ..management.commands.import_excel import COLUMN_MAP as CONTRACT_COLUMNS
+from ..management.commands.import_znp_excel import COLUMN_MAP as ZNP_COLUMNS
+from ..management.commands.import_znp_sap_excel import COLUMN_MAP as ZNP_SAP_COLUMNS
 from ..models import IgkStatData, NsiIgk, ZnpData, ZnpDataSAP
 from ..services.dashboards import (
     EMPTY_CFO_STATS,
@@ -39,10 +42,11 @@ from ..services.queries import (
     TERMINATED,
     YEARS,
     ZNP_APPROVED,
-    ZNP_PENDING,
     distinct_agents,
     distinct_cfo,
     distinct_igk_suffixes,
+    distinct_sap_cfo,
+    distinct_sap_igk,
 )
 from ..services.sap_status import sap_status_expr
 
@@ -196,6 +200,11 @@ FILE_TYPE_COMMANDS = {
     "znp": "load_znp",
     "znp_sap": "load_znp_sap",
 }
+FILE_TYPE_COLUMNS = {
+    "contracts": list(CONTRACT_COLUMNS),
+    "znp": list(ZNP_COLUMNS),
+    "znp_sap": list(ZNP_SAP_COLUMNS),
+}
 FILE_TYPE_LABELS = {
     "contracts": "Договоры",
     "znp": "ЗНП (ФЗД)",
@@ -208,8 +217,8 @@ def upload_excel(request):
     if not is_operator(request.user):
         return JsonResponse({"error": "нет прав на загрузку файлов"}, status=403)
     result = None
+    file_type = request.POST.get("file_type", "contracts")
     if request.method == "POST" and request.FILES.get("excel_file"):
-        file_type = request.POST.get("file_type", "contracts")
         command = FILE_TYPE_COMMANDS.get(file_type)
         f = request.FILES["excel_file"]
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
@@ -224,13 +233,18 @@ def upload_excel(request):
             result = out.getvalue()
             messages.success(request, "Файл успешно загружен и нормализован")
         except Exception as e:
-            messages.error(request, f"Ошибка: {e}")
+            text = str(e)
+            messages.error(
+                request, text if text.startswith("Ошибка") else f"Ошибка: {text}"
+            )
             result = str(e)
         finally:
             os.unlink(tmp_path)
     ctx = _ctx(request)
     ctx["result"] = result
     ctx["file_types"] = FILE_TYPE_LABELS
+    ctx["file_columns"] = FILE_TYPE_COLUMNS
+    ctx["selected_type"] = file_type
     return render(request, "upload.html", ctx)
 
 
@@ -419,7 +433,7 @@ def znp_table(request):
             postpayment_sum=Sum("plan", filter=pos_postpayment_q),
         )
         approved_q = Q(znp_status=ZNP_APPROVED)
-        pending_q = Q(znp_status=ZNP_PENDING)
+        pending_q = ~Q(znp_status=ZNP_APPROVED)
         advance_q = Q(parent__payment_type=ADVANCE) & approved_q
         postpayment_q = Q(parent__payment_type=POSTPAYMENT) & approved_q
         paid_q = Q(fact_sum__isnull=False)
@@ -484,7 +498,7 @@ def znp_table(request):
     }
 
     approved_q = Q(znp_status=ZNP_APPROVED)
-    pending_q = Q(znp_status=ZNP_PENDING)
+    pending_q = ~Q(znp_status=ZNP_APPROVED)
     advance_q = Q(parent__payment_type=ADVANCE) & approved_q
     postpayment_q = Q(parent__payment_type=POSTPAYMENT) & approved_q
     paid_q = Q(fact_sum__isnull=False)
@@ -635,4 +649,11 @@ def znp_sap_table(request):
 
 @login_required
 def znp_sap_list_table(request):
-    return render(request, "znp_sap_list.html", _ctx(request))
+    with connection.cursor() as cur:
+        cur.execute(distinct_sap_igk())
+        igk_list = [r[0] for r in cur.fetchall()]
+        cur.execute(distinct_sap_cfo())
+        cfo_list = [r[0] for r in cur.fetchall()]
+    ctx = _ctx(request)
+    ctx.update({"igk_list": igk_list, "cfo_list": cfo_list})
+    return render(request, "znp_sap_list.html", ctx)

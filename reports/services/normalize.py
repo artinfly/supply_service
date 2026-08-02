@@ -122,7 +122,7 @@ def normalize_contracts():
             """
             SELECT igk, kontragent, cfo, dogovor, sostoyanie,
                    tip_platezha, predmet, zakaz, plan, fakt,
-                   tol, etap_grafika, dataplan, god_igk
+                   tol, etap_grafika, dataplan, summa_dogovora, god_igk
             FROM staging_excel
             WHERE tip_platezha IN (%s, %s)
             """,
@@ -132,7 +132,7 @@ def normalize_contracts():
 
         new_data = []
         for r in staging_rows:
-            y25, y26, y27 = year_flags(r[13])
+            y25, y26, y27 = year_flags(r[14])
             new_data.append(
                 (
                     norm(r[0]),
@@ -152,14 +152,15 @@ def normalize_contracts():
                     y27,
                     False,
                     plan_month(r[12]),
-                    norm(r[13]),
+                    norm(r[14]),
+                    to_float(r[13]),
                     contract_hash(norm(r[0]), norm(r[1]), norm(r[3]), norm(r[11])),
                 )
             )
 
         cur.execute("""
             SELECT igk, c_agent, contract, item, "order", stage, plan_date,
-                   status, plan, fact
+                   status, plan, fact, contract_sum
             FROM igk_stat_data
             ORDER BY pp_id
         """)
@@ -174,7 +175,7 @@ def normalize_contracts():
                 norm(r[5]) or "",
                 norm(r[6]) or "",
             ),
-            value_fn=lambda r: (r[7], r[8], r[9]),
+            value_fn=lambda r: (r[7], r[8], r[9], r[10]),
         )
 
         new_lookup = _indexed_lookup(
@@ -188,7 +189,7 @@ def normalize_contracts():
                 r[11] or "",
                 r[16] or "",
             ),
-            value_fn=lambda r: (r[4], r[8], r[9]),
+            value_fn=lambda r: (r[4], r[8], r[9], r[18]),
         )
 
         today = date.today()
@@ -198,14 +199,15 @@ def normalize_contracts():
                 continue
             old_vals = old_lookup[key]
 
-            old_status, old_plan, old_fact = old_vals
-            new_status, new_plan, new_fact = new_vals
+            old_status, old_plan, old_fact, old_sum = old_vals
+            new_status, new_plan, new_fact, new_sum = new_vals
 
             status_changed = old_status != new_status
             plan_changed = not floats_equal(old_plan, new_plan)
             fact_changed = not floats_equal(old_fact, new_fact)
+            sum_changed = not floats_equal(old_sum, new_sum)
 
-            if not (status_changed or plan_changed or fact_changed):
+            if not (status_changed or plan_changed or fact_changed or sum_changed):
                 continue
 
             history.append(
@@ -221,6 +223,8 @@ def normalize_contracts():
                     new_fact if fact_changed else None,
                     today if plan_changed else None,
                     today if fact_changed else None,
+                    old_sum,
+                    new_sum,
                 )
             )
 
@@ -232,8 +236,10 @@ def normalize_contracts():
                     update_date, upload_date,
                     old_plan, new_plan,
                     old_fact, new_fact,
-                    plan_changed_date, fact_changed_date)
-                VALUES (digest(%s, 'md5'), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    plan_changed_date, fact_changed_date,
+                    old_contract_sum, new_contract_sum)
+                VALUES (digest(%s, 'md5'), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s)
             """,
                 history,
             )
@@ -244,8 +250,9 @@ def normalize_contracts():
             INSERT INTO igk_stat_data
                 (igk, c_agent, cfo, contract, status, payment_type,
                  item, "order", plan, fact, tolerance, stage,
-                 y25, y26, y27, is_deleted, plan_date, c_date, crc32_hash)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 y25, y26, y27, is_deleted, plan_date, c_date, contract_sum,
+                 crc32_hash)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """,
             new_data,
         )
