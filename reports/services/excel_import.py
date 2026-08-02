@@ -16,24 +16,24 @@ def open_sheet(filepath, header_row=1):
 
 
 def map_columns(rows, column_map, command, required=()):
-    try:
-        header = next(rows)
-    except StopIteration:
-        raise CommandError("файл пустой")
-
     lookup = {name.strip().casefold(): field for name, field in column_map.items()}
+    known = set(lookup)
+    header = next(
+        (r for r in rows if known & {str(c).strip().casefold() for c in r if c}), None
+    )
+    if header is None:
+        raise CommandError("Документ не соответствует формату")
     positions = {
         i: lookup[str(cell).strip().casefold()]
         for i, cell in enumerate(header)
         if cell and str(cell).strip().casefold() in lookup
     }
     if not positions:
-        raise CommandError("в строке заголовка не найдено ни одной известной колонки")
+        raise CommandError("Документ не соответствует формату")
 
     missing = set(column_map.values()) - set(positions.values())
     if missing:
-        names = sorted(n for n, f in column_map.items() if f in missing)
-        raise CommandError("в файле нет обязательных колонок: " + ", ".join(names))
+        raise CommandError("Документ не соответствует формату")
     return positions
 
 
