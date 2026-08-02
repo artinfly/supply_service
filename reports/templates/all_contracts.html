@@ -73,13 +73,16 @@
 <div class="table-container" id="table-wrapper"></div>
 <div id="pagination-bot" class="mt-2 d-flex justify-content-end"></div>
 <div id="page-data" data-api-url="{% url 'api_all_contracts' %}" style="display:none"></div>
+{{ concluded_statuses|json_script:"concluded-statuses" }}
+{{ not_concl_statuses|json_script:"not-concl-statuses" }}
+{{ terminated_statuses|json_script:"terminated-statuses" }}
 {% endblock %}
 
 {% block extra_js %}
 <script>
-const CONCLUDED_STATUSES  = {{ concluded_statuses|safe }};
-const NOT_CONCL_STATUSES  = {{ not_concl_statuses|safe }};
-const TERMINATED_STATUSES = {{ terminated_statuses|safe }};
+const CONCLUDED_STATUSES  = JSON.parse(document.getElementById('concluded-statuses').textContent);
+const NOT_CONCL_STATUSES  = JSON.parse(document.getElementById('not-concl-statuses').textContent);
+const TERMINATED_STATUSES = JSON.parse(document.getElementById('terminated-statuses').textContent);
 
 const COLS = [
     { field: 'igk',        title: 'ИГК',            style: 'style="width: 80px;"' },

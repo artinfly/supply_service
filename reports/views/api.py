@@ -30,6 +30,7 @@ from ..services.queries import (
     all_contracts,
     contract_dupes,
     contract_dupes_by_order,
+    escape_like,
     history_fact,
     history_plan,
     history_status,
@@ -42,14 +43,19 @@ from ..services.queries import (
 from ..services.sap_status import SAP_STATUS_CONDITIONS, sap_status
 
 
-def _json_rows(cur):
-    cols = [c[0] for c in cur.description]
-    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+def _to_json_types(rows):
+    # Только Decimal: если ловить всё, у чего есть __float__, то целые
+    # и логические поля уедут в 73.0 и 0.0.
     for row in rows:
         for k, v in row.items():
             if isinstance(v, Decimal):
                 row[k] = int(v) if v == v.to_integral_value() else float(v)
     return rows
+
+
+def _json_rows(cur):
+    cols = [c[0] for c in cur.description]
+    return _to_json_types([dict(zip(cols, r)) for r in cur.fetchall()])
 
 
 def _json_response(sql, params=None):
@@ -58,10 +64,6 @@ def _json_response(sql, params=None):
         return JsonResponse(
             _json_rows(cur), safe=False, json_dumps_params={"ensure_ascii": False}
         )
-
-
-def _escape_like(value):
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _igk_response(year, statuses):
@@ -133,7 +135,7 @@ def api_igk_detail(request, year, igk):
     statuses = {"concluded": CONCLUDED, "not_concluded": NOT_CONCL}.get(
         report_type, TERMINATED
     )
-    return _json_response(igk_detail(year, igk, statuses), [f"%{igk}"])
+    return _json_response(igk_detail(year, igk, statuses), [f"%{escape_like(igk)}"])
 
 
 @login_required
@@ -148,14 +150,14 @@ def api_all_contracts(request):
     params = []
     if agent:
         conditions.append("(c_agent ILIKE %s OR contract ILIKE %s)")
-        params.append(f"%{agent}%")
-        params.append(f"%{agent}%")
+        params.append(f"%{escape_like(agent)}%")
+        params.append(f"%{escape_like(agent)}%")
     if igk_filter:
         conditions.append("igk LIKE %s")
-        params.append(f"%{_escape_like(igk_filter)}")
+        params.append(f"%{escape_like(igk_filter)}")
     if cfo_filter:
         conditions.append("cfo LIKE %s")
-        params.append(f"%{_escape_like(cfo_filter)}")
+        params.append(f"%{escape_like(cfo_filter)}")
     if statuses:
         conditions.append(f"status IN ({','.join(['%s'] * len(statuses))})")
         params.extend(statuses)
@@ -182,11 +184,9 @@ def api_all_contracts(request):
         if key in totals:
             result.append(totals[key])
 
-    for row in result:
-        for k, v in row.items():
-            if hasattr(v, "__float__"):
-                row[k] = float(v)
-    return JsonResponse(result, safe=False, json_dumps_params={"ensure_ascii": False})
+    return JsonResponse(
+        _to_json_types(result), safe=False, json_dumps_params={"ensure_ascii": False}
+    )
 
 
 ZNP_STATUS_CONDITIONS = {
@@ -225,14 +225,14 @@ def api_znp_list(request):
     params = list(CONCLUDED)
     if agent:
         conditions.append("(i.c_agent ILIKE %s OR i.contract ILIKE %s)")
-        params.append(f"%{agent}%")
-        params.append(f"%{agent}%")
+        params.append(f"%{escape_like(agent)}%")
+        params.append(f"%{escape_like(agent)}%")
     if igk_filter:
         conditions.append("i.igk LIKE %s")
-        params.append(f"%{_escape_like(igk_filter)}")
+        params.append(f"%{escape_like(igk_filter)}")
     if cfo_filter:
         conditions.append("i.cfo LIKE %s")
-        params.append(f"%{_escape_like(cfo_filter)}")
+        params.append(f"%{escape_like(cfo_filter)}")
     if year_filter in YEAR_COL:
         conditions.append(f"i.{YEAR_COL[year_filter]} = TRUE")
     status_conditions = [

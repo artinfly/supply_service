@@ -25,6 +25,12 @@ def _sl(statuses):
     return ", ".join(f"'{s}'" for s in statuses)
 
 
+def escape_like(value):
+    # В поиске по подстроке % и _ — служебные символы LIKE. Без экранирования
+    # запрос «427_1» нашёл бы ещё и «427-1», а «100%» — вообще всё.
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def kdr(year):
     yc = YEAR_COL.get(str(year))
     cl = _sl(CONCLUDED)
@@ -317,7 +323,7 @@ def contracts_by_agent_filter(yc, agent):
     params = []
     if agent:
         conditions.append("c_agent ILIKE %s")
-        params.append(f"%{agent}%")
+        params.append(f"%{escape_like(agent)}%")
     return conditions, params
 
 

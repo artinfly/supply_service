@@ -147,16 +147,6 @@ body {
 }
 .btn-ghost:hover { border-color: var(--orange); color: var(--orange); }
 
-.btn-year {
-    background: #fff; border: 1px solid #ddd;
-    color: #666; font-size: 0.76rem;
-    font-family: inherit; font-weight: 500;
-    padding: 0.22rem 0.7rem; border-radius: 4px;
-    cursor: pointer; transition: all 0.12s;
-}
-.btn-year:hover { border-color: var(--orange); color: var(--orange); }
-.btn-year.active { background: var(--orange); border-color: var(--orange); color: #fff; }
-
 .status-check {
     display: flex; align-items: center; gap: 0.3rem;
     font-size: 0.79rem; cursor: pointer; white-space: nowrap; color: var(--text);
@@ -524,26 +514,6 @@ body.login-page {
 }
 /* Компактные плашки: на странице ЗНП их семь, в обычном размере они
    вытесняли таблицу за пределы экрана */
-.dash-card-sm {
-    padding: 12px 14px;
-    gap: 10px;
-}
-.dash-row > a .dash-card-sm,
-.dash-row > div .dash-card-sm {
-    min-height: 74px;
-}
-.dash-card-sm .dash-card-num {
-    font-size: 15px;
-}
-.dash-card-sm .dash-card-lbl {
-    font-size: 11px;
-}
-.dash-card-sm .dash-card-icon {
-    width: 34px;
-    height: 34px;
-    flex: 0 0 34px;
-}
-
 .dupes-block { margin-bottom: 22px; }
 .dupes-head {
     display: flex; align-items: baseline; gap: 10px;
