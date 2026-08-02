@@ -14,9 +14,6 @@ from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 
-from ..management.commands.import_excel import COLUMN_MAP as CONTRACT_COLUMNS
-from ..management.commands.import_znp_excel import COLUMN_MAP as ZNP_COLUMNS
-from ..management.commands.import_znp_sap_excel import COLUMN_MAP as ZNP_SAP_COLUMNS
 from ..models import IgkStatData, NsiIgk, ZnpData, ZnpDataSAP
 from ..services.dashboards import (
     EMPTY_CFO_STATS,
@@ -34,6 +31,7 @@ from ..services.dashboards import (
     sap_cards,
     to_mln,
 )
+from ..services.excel_import import CONTRACT_COLUMNS, ZNP_COLUMNS, ZNP_SAP_COLUMNS
 from ..services.queries import (
     ADVANCE,
     CONCLUDED,
