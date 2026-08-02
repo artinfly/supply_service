@@ -17,8 +17,8 @@
 
 <div class="dupes-block">
     <div class="dupes-head">
-        <h6>Повторы позиции в договоре</h6>
-        <span>одна позиция с одним типом платежа заведена несколько раз; строк больше, чем этапов — лишние</span>
+        <h6>Повторы по ИГК, предмету и заказу</h6>
+        <span>уникальность считается по трём полям: ИГК + предмет + заказ</span>
     </div>
     <div class="table-container dupes-table" id="wrap-order"></div>
 </div>
@@ -41,15 +41,13 @@ const COLS_FULL = [
 ];
 
 const COLS_ORDER = [
-    { field: 'igk',          title: 'ИГК' },
-    { field: 'c_agent',      title: 'Контрагент' },
-    { field: 'contract',     title: 'Договор' },
-    { field: 'item',         title: 'Предмет' },
-    { field: 'order',        title: 'Заказ' },
-    { field: 'payment_type', title: 'Тип платежа' },
-    { field: 'rows_count',   title: 'Строк',  format: 'int' },
-    { field: 'stages_count', title: 'Этапов', format: 'int' },
-    { field: 'plan_sum',     title: 'Сумма плана, руб.', format: 'number' },
+    { field: 'igk',             title: 'ИГК' },
+    { field: 'item',            title: 'Предмет' },
+    { field: 'order',           title: 'Заказ' },
+    { field: 'rows_count',      title: 'Строк',        format: 'int' },
+    { field: 'contracts_count', title: 'Договоров',    format: 'int' },
+    { field: 'agents_count',    title: 'Контрагентов', format: 'int' },
+    { field: 'plan_sum',        title: 'Сумма плана, руб.', format: 'number' },
 ];
 
 const data = document.getElementById('page-data').dataset;

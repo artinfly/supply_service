@@ -134,7 +134,7 @@ def breakdown_from_stats(ni, zs):
     postpayment_count = zs["postpayment_count"] or 0
     postpayment_paid_count = zs["postpayment_paid_count"] or 0
 
-    total = not_issued_count + issued_count
+    total = not_issued_count + issued_count + in_progress_count
 
     def _pct(part, whole):
         return (part / whole * 100) if whole else 0
@@ -149,7 +149,7 @@ def breakdown_from_stats(ni, zs):
 
     return {
         "total_count": total,
-        "total_sum": not_issued_sum + issued_sum,
+        "total_sum": not_issued_sum + issued_sum + to_mln(zs["in_progress_sum"]),
         "not_issued": _card(not_issued_count, not_issued_sum, "not_issued"),
         "not_issued_advance": _card(
             not_issued_advance_count,

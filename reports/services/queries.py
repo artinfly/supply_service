@@ -11,7 +11,6 @@ CONCLUDED = (
 NOT_CONCL = ("Черновик",)
 ADVANCE = "Аванс"
 ZNP_APPROVED = "Утвержден"
-ZNP_PENDING = "На утверждении"
 POSTPAYMENT = "Постоплата"
 TERMINATED = ("Расторгнут",)
 YEARS = [2025, 2026, 2027]
@@ -129,10 +128,15 @@ def history_plan():
     return f"""
         SELECT RIGHT(isd.igk, 4) AS igk, isd.c_agent, isd.cfo, isd.contract,
             isd.payment_type, isd.item, ch.old_plan, ch.new_plan,
+            ROUND(CAST(ch.old_plan * 100.0
+                  / NULLIF(ch.old_contract_sum, 0) AS numeric), 2) AS old_percent,
+            ROUND(CAST(ch.new_plan * 100.0
+                  / NULLIF(ch.new_contract_sum, 0) AS numeric), 2) AS new_percent,
             ch.plan_changed_date, isd.c_date
         {_HISTORY_JOIN}
         WHERE ch.plan_changed_date IS NOT NULL
-        GROUP BY {_HISTORY_GROUP}, ch.old_plan, ch.new_plan, ch.plan_changed_date
+        GROUP BY {_HISTORY_GROUP}, ch.old_plan, ch.new_plan, ch.plan_changed_date,
+                 ch.old_contract_sum, ch.new_contract_sum
         ORDER BY ch.plan_changed_date DESC NULLS LAST
     """
 
@@ -163,18 +167,18 @@ def contract_dupes():
 
 def contract_dupes_by_order():
     return """
-        SELECT RIGHT(igk, 4) AS igk, c_agent, contract, item, "order",
-               payment_type,
+        SELECT RIGHT(igk, 4) AS igk, item, "order",
                COUNT(*) AS rows_count,
-               COUNT(DISTINCT TRIM(stage)) AS stages_count,
+               COUNT(DISTINCT contract) AS contracts_count,
+               COUNT(DISTINCT c_agent) AS agents_count,
                ROUND(CAST(SUM(plan) AS numeric), 2) AS plan_sum
         FROM igk_stat_data
         WHERE igk IS NOT NULL AND TRIM(igk) != ''
           AND item IS NOT NULL AND TRIM(item) != ''
           AND "order" IS NOT NULL AND TRIM("order") != ''
-        GROUP BY RIGHT(igk, 4), c_agent, contract, item, "order", payment_type
+        GROUP BY RIGHT(igk, 4), item, "order"
         HAVING COUNT(*) > 1
-        ORDER BY COUNT(*) - COUNT(DISTINCT TRIM(stage)) DESC, COUNT(*) DESC, igk
+        ORDER BY COUNT(*) DESC, igk, item
     """
 
 
@@ -342,6 +346,22 @@ def distinct_cfo():
     """
 
 
+def distinct_sap_igk():
+    return """
+        SELECT DISTINCT RIGHT(igk, 4) FROM znp_data_sap
+        WHERE igk IS NOT NULL AND TRIM(igk) != ''
+        ORDER BY 1
+    """
+
+
+def distinct_sap_cfo():
+    return """
+        SELECT DISTINCT cfo FROM znp_data_sap
+        WHERE cfo IS NOT NULL AND TRIM(cfo) != ''
+        ORDER BY cfo
+    """
+
+
 def distinct_agents():
     return """
         SELECT DISTINCT c_agent FROM igk_stat_data
@@ -360,7 +380,7 @@ def znp_list(where):
             z.plan_sum AS znp_plan_sum, z.fact_sum AS znp_fact_sum,
             z.znp_igk,
             CASE
-                WHEN z.znp_status = '{ZNP_PENDING}' THEN 'На оформлении ЗнП'
+                WHEN z.id IS NOT NULL AND z.znp_status IS DISTINCT FROM '{ZNP_APPROVED}' THEN 'На оформлении ЗнП'
                 WHEN z.id IS NULL AND i.payment_type = '{ADVANCE}'
                     THEN 'Не оформлено (Аванс)'
                 WHEN z.id IS NULL AND i.payment_type = '{POSTPAYMENT}'

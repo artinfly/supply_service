@@ -27,7 +27,6 @@ from ..services.queries import (
     YEAR_COL,
     YEARS,
     ZNP_APPROVED,
-    ZNP_PENDING,
     all_contracts,
     contract_dupes,
     contract_dupes_by_order,
@@ -192,7 +191,7 @@ def api_all_contracts(request):
 
 ZNP_STATUS_CONDITIONS = {
     "not_issued": "z.id IS NULL",
-    "in_progress": f"z.znp_status = '{ZNP_PENDING}'",
+    "in_progress": f"(z.id IS NOT NULL AND z.znp_status IS DISTINCT FROM '{ZNP_APPROVED}')",
     "not_issued_advance": f"(z.id IS NULL AND i.payment_type = '{ADVANCE}')",
     "not_issued_postpayment": f"(z.id IS NULL AND i.payment_type = '{POSTPAYMENT}')",
     "advance": (

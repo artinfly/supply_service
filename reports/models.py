@@ -51,6 +51,7 @@ class IgkStatData(models.Model):
     is_deleted = models.BooleanField(default=False)
     plan_date = models.CharField(max_length=50, null=True)
     c_date = models.CharField(max_length=256, null=True)
+    contract_sum = models.FloatField(null=True)
     crc32_hash = models.BigIntegerField()
 
     class Meta:
@@ -86,6 +87,7 @@ class StagingExcel(models.Model):
     etap_grafika = models.TextField(null=True)
     dataplan = models.TextField(null=True)
     sozdan = models.TextField(null=True)
+    summa_dogovora = models.TextField(null=True)
     god_igk = models.TextField(null=True)
 
     class Meta:
@@ -223,6 +225,8 @@ class ContractsHistory(models.Model):
     new_fact = models.FloatField(null=True)
     plan_changed_date = models.DateField(null=True)
     fact_changed_date = models.DateField(null=True)
+    old_contract_sum = models.FloatField(null=True)
+    new_contract_sum = models.FloatField(null=True)
 
     class Meta:
         managed = True
