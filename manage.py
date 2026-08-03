@@ -1,4 +1,3 @@
-# Точка входа для всех команд: runserver, migrate, load_contracts и прочих.
 import os
 import sys
 

@@ -1,4 +1,3 @@
-# Разрезы для графиков под таблицами: по ЦФО, с разбивкой по стадиям.
 from .queries import (
     ADVANCE,
     CONCLUDED,

@@ -1,4 +1,3 @@
-# Адреса приложения: страницы, JSON для таблиц и графиков, выгрузки.
 from django.urls import path
 
 from .views import api, exports, pages

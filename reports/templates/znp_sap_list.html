@@ -1,4 +1,3 @@
-{# Реестр заявок ЗнП (SAP). Строки подгружаются из api_znp_sap_list. #}
 {% extends 'base.html' %}
 {% block title %}Реестр ЗнП (SAP){% endblock %}
 
@@ -85,8 +84,6 @@ const apiUrl = document.getElementById('page-data').dataset.apiUrl;
 let loadedData  = [];
 let currentPage = 1;
 
-// Галочка -> статус для запроса. Одна таблица на сборку запроса,
-// разбор адреса и сброс фильтров.
 const STATUS_BOXES = [
     ['cb-waiting-agreement', 'waiting_agreement'],
     ['cb-sent-18',           'sent_18'],

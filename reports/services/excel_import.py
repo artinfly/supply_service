@@ -1,6 +1,3 @@
-# Чтение файлов Excel в таблицы staging_*.
-# Здесь же перечислены колонки каждого файла: нет хотя бы одной — загрузка
-# отменяется и база остаётся прежней.
 import openpyxl
 from django.core.management.base import CommandError
 from django.db import connection, transaction
