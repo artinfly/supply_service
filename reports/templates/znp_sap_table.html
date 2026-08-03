@@ -24,7 +24,7 @@
         <div class="block-title">Все заявки</div>
         <div class="card-block">
             <div class="dash-row">
-                <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid" class="text-decoration-none">
+                <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,paid" class="text-decoration-none">
                     <div class="dash-card stage-total">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
@@ -108,15 +108,15 @@
                 <tr>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ row.cfo }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ row.total_count }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ row.total_sum|floatformat:2|intspace }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
                     </td>
                     {% for cell in row.cells %}
                     <td class="clickable-cell">
@@ -133,15 +133,15 @@
                 <tr class="row-total">
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cfo_total_row.cfo }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cfo_total_row.total_count }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cfo_total_row.total_sum|floatformat:2|intspace }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,in_payment,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
                     </td>
                     {% for cell in cfo_total_row.cells %}
                     <td class="clickable-cell">

@@ -20,6 +20,11 @@ YEAR_COL = {str(y): f"y{str(y)[2:]}" for y in YEARS}
 # в ячейке ничего нет (NULL) или там одни пробелы — считаем пустым и то и то.
 HAS_ORDER = '"order" IS NOT NULL AND TRIM("order") != \'\''
 
+# Отделы МТО. Заявки SAP чужих отделов не показываются нигде: ни на плашках,
+# ни на графиках, ни в реестре — иначе число на плашке и список по клику
+# на неё расходятся.
+SAP_CFO = tuple(str(n) for n in range(420, 430))
+
 
 def _sl(statuses):
     return ", ".join(f"'{s}'" for s in statuses)
@@ -365,9 +370,9 @@ def distinct_sap_igk():
 
 
 def distinct_sap_cfo():
-    return """
+    return f"""
         SELECT DISTINCT cfo FROM znp_data_sap
-        WHERE cfo IS NOT NULL AND TRIM(cfo) != ''
+        WHERE cfo IN ({_sl(SAP_CFO)})
         ORDER BY cfo
     """
 

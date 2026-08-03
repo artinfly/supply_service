@@ -45,7 +45,8 @@
         <div class="filter-group">
             <label class="filter-label">Статус ЗнП</label>
             <div class="d-flex gap-2 flex-wrap">
-                <label class="status-check"><input type="checkbox" id="cb-not-issued" checked> Не оформлена</label>
+                <label class="status-check"><input type="checkbox" id="cb-not-issued-advance" checked> Не оформлена (аванс)</label>
+                <label class="status-check"><input type="checkbox" id="cb-not-issued-postpayment" checked> Не оформлена (постоплата)</label>
                 <label class="status-check"><input type="checkbox" id="cb-in-progress" checked> На оформлении</label>
                 <label class="status-check"><input type="checkbox" id="cb-advance" checked> Аванс</label>
                 <label class="status-check"><input type="checkbox" id="cb-advance-paid" checked> Оплачен аванс</label>
@@ -101,6 +102,21 @@ const apiUrl    = document.getElementById('page-data').dataset.apiUrl;
 let loadedData  = [];
 let currentPage = 1;
 
+// Галочка -> статус для запроса. Одна таблица на все три места, где статусы
+// перебираются: сборка запроса, разбор адреса и сброс фильтров.
+const STATUS_BOXES = [
+    ['cb-not-issued-advance',     'not_issued_advance'],
+    ['cb-not-issued-postpayment', 'not_issued_postpayment'],
+    ['cb-in-progress',            'in_progress'],
+    ['cb-advance',                'advance'],
+    ['cb-advance-paid',           'advance_paid'],
+    ['cb-postpayment',            'postpayment'],
+    ['cb-postpayment-paid',       'postpayment_paid'],
+];
+
+// Плашка «Не оформлено» без разбивки просит оба типа платежа сразу.
+const STATUS_ALIASES = { not_issued: ['not_issued_advance', 'not_issued_postpayment'] };
+
 function buildUrl() {
     const params = new URLSearchParams();
     const agent = document.getElementById('filter-agent').value.trim();
@@ -109,12 +125,8 @@ function buildUrl() {
     if (agent) params.append('agent', agent);
     if (igk)   params.append('igk', igk);
     if (cfo)   params.append('cfo', cfo);
-    if (document.getElementById('cb-not-issued').checked)       params.append('status', 'not_issued');
-    if (document.getElementById('cb-in-progress').checked)      params.append('status', 'in_progress');
-    if (document.getElementById('cb-advance').checked)          params.append('status', 'advance');
-    if (document.getElementById('cb-advance-paid').checked)     params.append('status', 'advance_paid');
-    if (document.getElementById('cb-postpayment').checked)      params.append('status', 'postpayment');
-    if (document.getElementById('cb-postpayment-paid').checked) params.append('status', 'postpayment_paid');
+    for (const [id, status] of STATUS_BOXES)
+        if (document.getElementById(id).checked) params.append('status', status);
     const year = document.getElementById('filter-year').value;
     if (year !== 'all') params.append('year', year);
     const qs = params.toString();
@@ -169,12 +181,11 @@ function loadFiltersFromURL() {
     if (params.has('year'))
         document.getElementById('filter-year').value = params.get('year');
     if (params.has('statuses')) {
-        const statusesParams = params.get('statuses').split(',');
-        document.getElementById('cb-not-issued').checked       = statusesParams.includes('not_issued');
-        document.getElementById('cb-advance').checked          = statusesParams.includes('advance');
-        document.getElementById('cb-advance-paid').checked     = statusesParams.includes('advance_paid');
-        document.getElementById('cb-postpayment').checked      = statusesParams.includes('postpayment');
-        document.getElementById('cb-postpayment-paid').checked = statusesParams.includes('postpayment_paid');
+        const asked = new Set();
+        for (const s of params.get('statuses').split(','))
+            (STATUS_ALIASES[s] || [s]).forEach(x => asked.add(x));
+        for (const [id, status] of STATUS_BOXES)
+            document.getElementById(id).checked = asked.has(status);
     }
 }
 
@@ -201,12 +212,7 @@ document.getElementById('btn-reset').addEventListener('click', () => {
     document.getElementById('filter-agent').value      = '';
     document.getElementById('filter-igk').value        = '';
     document.getElementById('filter-cfo').value        = '';
-    document.getElementById('cb-not-issued').checked       = true;
-    document.getElementById('cb-in-progress').checked      = true;
-    document.getElementById('cb-advance').checked          = true;
-    document.getElementById('cb-advance-paid').checked     = true;
-    document.getElementById('cb-postpayment').checked      = true;
-    document.getElementById('cb-postpayment-paid').checked = true;
+    for (const [id] of STATUS_BOXES) document.getElementById(id).checked = true;
     document.getElementById('filter-year').value = 'all';
     loadData();
 });
