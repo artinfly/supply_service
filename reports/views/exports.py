@@ -1,4 +1,3 @@
-# Выгрузки в Excel: собирает данные и отдаёт файл на скачивание.
 from collections import defaultdict
 from datetime import datetime
 

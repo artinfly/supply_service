@@ -1,4 +1,3 @@
-# JSON для таблиц и графиков: страница рисует разметку, а данные забирает отсюда.
 from collections import defaultdict
 from datetime import date as _date
 from decimal import Decimal
@@ -45,8 +44,6 @@ from ..services.sap_status import SAP_STATUS_CONDITIONS, sap_status
 
 
 def _to_json_types(rows):
-    # Только Decimal: если ловить всё, у чего есть __float__, то целые
-    # и логические поля уедут в 73.0 и 0.0.
     for row in rows:
         for k, v in row.items():
             if isinstance(v, Decimal):

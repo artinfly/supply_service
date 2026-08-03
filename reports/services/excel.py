@@ -1,4 +1,3 @@
-# Сборка простых xlsx на выгрузку: шапка, рамки, ширина колонок.
 from datetime import date
 from io import BytesIO
 from urllib.parse import quote

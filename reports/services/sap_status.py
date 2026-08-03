@@ -1,5 +1,3 @@
-# Статус заявки SAP по датам этапов. Одно место на два применения:
-# выражение для запроса и функция для построчной подписи в JSON.
 from django.db.models import Case, CharField, Q, Value, When
 
 SAP_STATUS_CONDITIONS = {

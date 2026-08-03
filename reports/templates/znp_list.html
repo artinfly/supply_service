@@ -1,4 +1,3 @@
-{# Реестр заявок ЗнП (ФЗД). Строки подгружаются из api_znp_list. #}
 {% extends 'base.html' %}
 {% block title %}Реестр ЗнП (ФЗД){% endblock %}
 
@@ -102,8 +101,6 @@ const apiUrl    = document.getElementById('page-data').dataset.apiUrl;
 let loadedData  = [];
 let currentPage = 1;
 
-// Галочка -> статус для запроса. Одна таблица на все три места, где статусы
-// перебираются: сборка запроса, разбор адреса и сброс фильтров.
 const STATUS_BOXES = [
     ['cb-not-issued-advance',     'not_issued_advance'],
     ['cb-not-issued-postpayment', 'not_issued_postpayment'],
@@ -114,7 +111,6 @@ const STATUS_BOXES = [
     ['cb-postpayment-paid',       'postpayment_paid'],
 ];
 
-// Плашка «Не оформлено» без разбивки просит оба типа платежа сразу.
 const STATUS_ALIASES = { not_issued: ['not_issued_advance', 'not_issued_postpayment'] };
 
 function buildUrl() {

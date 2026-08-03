@@ -1,5 +1,3 @@
-# Загрузка заявок ЗнП (ФЗД): файл читается в staging и сразу разбирается.
-# Оба шага в одной транзакции — при ошибке база остаётся прежней.
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
