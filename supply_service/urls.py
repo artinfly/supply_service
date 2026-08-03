@@ -1,4 +1,3 @@
-# Корневая таблица адресов: всё, что начинается с /reports/, уходит в приложение.
 from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import RedirectView

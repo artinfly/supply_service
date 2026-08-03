@@ -1,4 +1,3 @@
-/* Все стили проекта: меню, карточки, таблицы, фильтры, графики. */
 :root {
     --orange: #e07b2a;
     --orange-dark: #c96a1e;
@@ -512,8 +511,6 @@ body.login-page {
     z-index: 1;
     pointer-events: none;
 }
-/* Компактные плашки: на странице ЗНП их семь, в обычном размере они
-   вытесняли таблицу за пределы экрана */
 .dupes-block { margin-bottom: 22px; }
 .dupes-head {
     display: flex; align-items: baseline; gap: 10px;

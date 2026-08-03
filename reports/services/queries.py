@@ -1,5 +1,3 @@
-# SQL для реестров и отчётов. Здесь же названия статусов и типов платежа —
-# одно место на весь проект, чтобы не разъезжались.
 CONCLUDED = (
     "Исполняется",
     "Возвращен на уточнение",
@@ -16,13 +14,8 @@ TERMINATED = ("Расторгнут",)
 YEARS = [2025, 2026, 2027]
 YEAR_COL = {str(y): f"y{str(y)[2:]}" for y in YEARS}
 
-# Строка без заказа в отчёты не идёт. Заказ бывает пустым двумя способами:
-# в ячейке ничего нет (NULL) или там одни пробелы — считаем пустым и то и то.
 HAS_ORDER = '"order" IS NOT NULL AND TRIM("order") != \'\''
 
-# Отделы МТО. Заявки SAP чужих отделов не показываются нигде: ни на плашках,
-# ни на графиках, ни в реестре — иначе число на плашке и список по клику
-# на неё расходятся.
 SAP_CFO = tuple(str(n) for n in range(420, 430))
 
 
@@ -31,8 +24,6 @@ def _sl(statuses):
 
 
 def escape_like(value):
-    # В поиске по подстроке % и _ — служебные символы LIKE. Без экранирования
-    # запрос «427_1» нашёл бы ещё и «427-1», а «100%» — вообще всё.
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
@@ -54,8 +45,6 @@ def kdr(year):
         ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS pp_sum_fact,
         COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND status IN ({nl}) AND {yc}=TRUE) AS count_not_concluded_curr_year,
         ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status IN ({nl})), 0)/1e6 AS numeric), 2) AS not_concluded_order_sum_curr_year,
-        -- проценты ниже через CAST(... AS int) — усечение вниз, а не округление
-        -- (60.9 превратится в 60), это осознанно так, а не ROUND(...)
         CASE WHEN COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status!='Расторгнут') = 0 THEN 0
              ELSE CAST(COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status IN ({cl})) * 100.0
                   / NULLIF(COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status!='Расторгнут'), 0) AS int)

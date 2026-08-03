@@ -1,5 +1,3 @@
-# Страницы, которые отдаются браузером как HTML.
-# Считать здесь ничего не нужно — расчёты в services/dashboards.py.
 import os
 import tempfile
 from datetime import date as _date
@@ -66,7 +64,6 @@ def _valid_year(year):
     return year if year in YEARS else YEARS[-1]
 
 
-# То же условие, что HAS_ORDER в SQL: строка без заказа в отчёты не идёт.
 HAS_ORDER_Q = Q(order__isnull=False) & ~Q(order__regex=r"^\s*$")
 
 

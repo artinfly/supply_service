@@ -1,5 +1,3 @@
-# Разбор загруженного файла: из staging_* в рабочие таблицы.
-# Вызывается командами load_*, сама по себе не запускается.
 from collections import defaultdict
 from datetime import date
 
