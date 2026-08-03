@@ -37,6 +37,7 @@ from ..services.queries import (
     CONCLUDED,
     NOT_CONCL,
     POSTPAYMENT,
+    SAP_CFO,
     TERMINATED,
     YEARS,
     ZNP_APPROVED,
@@ -567,10 +568,7 @@ def znp_sap_table(request):
         return render(request, "access_denied.html", _ctx(request))
 
     ctx = _ctx(request)
-    allowed_cfo = [str(n) for n in range(420, 430)]
-    qs = ZnpDataSAP.objects.annotate(sap_status=sap_status_expr).filter(
-        cfo__in=allowed_cfo
-    )
+    qs = ZnpDataSAP.objects.annotate(sap_status=sap_status_expr).filter(cfo__in=SAP_CFO)
 
     def _breakdown(qs):
         return sap_cards(

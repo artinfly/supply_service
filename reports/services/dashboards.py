@@ -119,8 +119,6 @@ EMPTY_ZNP = {
 
 
 def breakdown_from_stats(ni, zs):
-    to_mln = lambda v: (v or 0) / 1000000
-
     not_issued_count = ni["count"] or 0
     not_issued_sum = to_mln(ni["plan_sum"])
     not_issued_advance_count = ni["advance_count"] or 0
