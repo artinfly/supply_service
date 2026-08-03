@@ -23,6 +23,7 @@ from ..services.queries import (
     CONCLUDED,
     NOT_CONCL,
     POSTPAYMENT,
+    SAP_CFO,
     TERMINATED,
     YEAR_COL,
     YEARS,
@@ -200,7 +201,7 @@ ZNP_STATUS_CONDITIONS = {
     ),
     "advance_paid": (
         f"(z.id IS NOT NULL AND i.payment_type = '{ADVANCE}'"
-        " AND z.fact_sum IS NOT NULL)"
+        f" AND z.znp_status = '{ZNP_APPROVED}' AND z.fact_sum IS NOT NULL)"
     ),
     "postpayment": (
         f"(z.id IS NOT NULL AND i.payment_type = '{POSTPAYMENT}'"
@@ -208,7 +209,7 @@ ZNP_STATUS_CONDITIONS = {
     ),
     "postpayment_paid": (
         f"(z.id IS NOT NULL AND i.payment_type = '{POSTPAYMENT}'"
-        " AND z.fact_sum IS NOT NULL)"
+        f" AND z.znp_status = '{ZNP_APPROVED}' AND z.fact_sum IS NOT NULL)"
     ),
 }
 
@@ -252,7 +253,7 @@ def api_znp_sap_list(request):
     cfo_filter = request.GET.get("cfo", "").strip()
     statuses = request.GET.getlist("status")
 
-    qs = ZnpDataSAP.objects.all()
+    qs = ZnpDataSAP.objects.filter(cfo__in=SAP_CFO)
     if agent:
         qs = qs.filter(Q(c_agent__icontains=agent) | Q(reg_num__icontains=agent))
     if igk_filter:

@@ -4,6 +4,7 @@ from .queries import (
     CONCLUDED,
     NOT_CONCL,
     POSTPAYMENT,
+    SAP_CFO,
     ZNP_APPROVED,
 )
 
@@ -82,10 +83,9 @@ def znp_by_cfo(year_col, igk):
 
 
 def znp_sap_by_cfo(igk):
-    allowed_cfo = [str(n) for n in range(420, 430)]
-    cfo_ph = ", ".join(["%s"] * len(allowed_cfo))
+    cfo_ph = ", ".join(["%s"] * len(SAP_CFO))
     igk_filter = "AND igk = %s" if igk else ""
-    params = list(allowed_cfo)
+    params = list(SAP_CFO)
     if igk:
         params.append(igk)
     sql = f"""

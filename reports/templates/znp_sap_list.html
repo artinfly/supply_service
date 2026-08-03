@@ -85,6 +85,15 @@ const apiUrl = document.getElementById('page-data').dataset.apiUrl;
 let loadedData  = [];
 let currentPage = 1;
 
+// Галочка -> статус для запроса. Одна таблица на сборку запроса,
+// разбор адреса и сброс фильтров.
+const STATUS_BOXES = [
+    ['cb-waiting-agreement', 'waiting_agreement'],
+    ['cb-sent-18',           'sent_18'],
+    ['cb-confirmed-18',      'confirmed_18'],
+    ['cb-paid',              'paid'],
+];
+
 function buildUrl() {
     const params = new URLSearchParams();
     const agent = document.getElementById('filter-agent').value.trim();
@@ -93,10 +102,8 @@ function buildUrl() {
     if (agent) params.append('agent', agent);
     if (igk)   params.append('igk', igk);
     if (cfo)   params.append('cfo', cfo);
-    if (document.getElementById('cb-waiting-agreement').checked) params.append('status', 'waiting_agreement');
-    if (document.getElementById('cb-sent-18').checked)           params.append('status', 'sent_18');
-    if (document.getElementById('cb-confirmed-18').checked)      params.append('status', 'confirmed_18');
-    if (document.getElementById('cb-paid').checked)              params.append('status', 'paid');
+    for (const [id, status] of STATUS_BOXES)
+        if (document.getElementById(id).checked) params.append('status', status);
     const qs = params.toString();
     return apiUrl + (qs ? '?' + qs : '');
 }
@@ -145,11 +152,9 @@ function loadFiltersFromURL() {
     if (params.has('cfo'))
         document.getElementById('filter-cfo').value = params.get('cfo');
     if (params.has('statuses')) {
-        const statusesParams = params.get('statuses').split(',');
-        document.getElementById('cb-waiting-agreement').checked = statusesParams.includes('waiting_agreement');
-        document.getElementById('cb-sent-18').checked           = statusesParams.includes('sent_18');
-        document.getElementById('cb-confirmed-18').checked      = statusesParams.includes('confirmed_18');
-        document.getElementById('cb-paid').checked              = statusesParams.includes('paid');
+        const asked = params.get('statuses').split(',');
+        for (const [id, status] of STATUS_BOXES)
+            document.getElementById(id).checked = asked.includes(status);
     }
 }
 
@@ -174,10 +179,7 @@ document.getElementById('btn-reset').addEventListener('click', () => {
     document.getElementById('filter-agent').value = '';
     document.getElementById('filter-igk').value   = '';
     document.getElementById('filter-cfo').value   = '';
-    document.getElementById('cb-waiting-agreement').checked = true;
-    document.getElementById('cb-sent-18').checked           = true;
-    document.getElementById('cb-confirmed-18').checked      = true;
-    document.getElementById('cb-paid').checked              = true;
+    for (const [id] of STATUS_BOXES) document.getElementById(id).checked = true;
     loadData();
 });
 
