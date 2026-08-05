@@ -70,7 +70,7 @@ supply_service/
     │   ├── load_znp_sap.py
     │   └── setup_groups.py
     │
-    ├── migrations/               0001 … 0007
+    ├── migrations/               0001 … 0009
     ├── templates/                19 шаблонов
     ├── templatetags/
     └── static/
@@ -268,6 +268,7 @@ python -c "import django; print(django.get_version())"
 | `0005_contract_sum` | сумма договора в `igk_stat_data`, `contracts_history` |
 | `0006_staging_contract_sum` | сумма договора в `staging_excel` |
 | `0007_drop_staging_sozdan` | удаление неиспользуемой колонки |
+| `0008_testtable`, `0009_delete_testtable` | служебные, на схему не влияют |
 
 ## 8. Загрузка данных
 
