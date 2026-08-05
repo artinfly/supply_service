@@ -1,10 +1,14 @@
 # supply_service
 
-Django-приложение отчётности отдела снабжения. Данные поступают выгрузками
-Excel, попадают в PostgreSQL и показываются на дашбордах, в реестрах и в
-выгрузках Excel.
+Техническое задание и регламент эксплуатации.
 
-## Стек
+## 1. Назначение
+
+Веб-приложение отчётности отдела снабжения. Принимает выгрузки Excel по
+договорам и заявкам на платёж, хранит их в PostgreSQL, отображает сводные
+показатели и реестры, формирует выгрузки Excel.
+
+## 2. Окружение
 
 | Компонент | Версия |
 | --- | --- |
@@ -17,42 +21,45 @@ Excel, попадают в PostgreSQL и показываются на дашб�
 | Bootstrap | 5.3.3 |
 | Chart.js | 4.5.0 |
 
-Интернет не нужен ни при установке, ни при работе: пакеты ставятся из `wheels/`,
-Bootstrap и Chart.js лежат в `reports/static/vendor/`.
+Доступ в интернет не требуется. Пакеты Python устанавливаются из каталога
+`wheels/`, Bootstrap и Chart.js хранятся в `reports/static/vendor/`.
 
-## Структура
+Обязательное расширение PostgreSQL — `pgcrypto`. Без него не работают история
+изменений и поиск дубликатов.
+
+## 3. Состав
 
 ```text
 supply_service/
 ├── manage.py
 ├── requirements.txt
-├── pyproject.toml                настройки black и isort
 ├── wheels/                       пакеты для установки без интернета
 │
 ├── supply_service/
-│   ├── settings.py               база, приложения, статика
-│   ├── urls.py                   подключает admin и reports
+│   ├── settings.py               общие настройки, одинаковы на всех машинах
+│   ├── local_settings.py         настройки машины, в репозиторий не входит
+│   ├── urls.py
 │   ├── asgi.py
 │   └── wsgi.py
 │
 └── reports/
     ├── models.py                 схема базы
     ├── admin.py
-    ├── urls.py                   все маршруты приложения
+    ├── urls.py                   маршруты приложения
     ├── apps.py
     │
     ├── views/
     │   ├── pages.py              HTML-страницы
     │   ├── api.py                JSON для таблиц и графиков
-    │   └── exports.py            выгрузки в Excel
+    │   └── exports.py            выгрузки Excel
     │
     ├── services/
-    │   ├── excel_import.py       чтение xlsx в staging_*, списки колонок
-    │   ├── normalize.py          staging_* -> рабочие таблицы
-    │   ├── linking.py            crc32-хеш и привязка ЗнП к договорам
+    │   ├── excel_import.py       чтение xlsx в staging_*, перечни колонок
+    │   ├── normalize.py          перенос staging_* в рабочие таблицы
+    │   ├── linking.py            crc32-хеш, привязка ЗнП к договорам
     │   ├── queries.py            SQL реестров и отчётов, общие константы
-    │   ├── charts.py             SQL для графиков
-    │   ├── dashboards.py         расчёт плашек и строк по ЦФО
+    │   ├── charts.py             SQL графиков
+    │   ├── dashboards.py         расчёт показателей
     │   ├── sap_status.py         статус заявки SAP по датам этапов
     │   ├── excel.py              сборка книги xlsx
     │   └── pivot.py              выгрузка авансов по шаблону
@@ -74,10 +81,40 @@ supply_service/
         └── vendor/               Bootstrap, Chart.js
 ```
 
-## Установка и запуск
+## 4. Настройки
 
-Создать базу PostgreSQL и расширение `pgcrypto` — оно обязательно, на нём
-работают история изменений и поиск дубликатов:
+`settings.py` входит в репозиторий и одинаков на всех машинах. Его править
+запрещено — параметры, различающиеся между машинами, задаются в
+`supply_service/local_settings.py`. Этот файл в репозиторий не входит, у каждой
+машины он свой и создаётся один раз при развёртывании.
+
+Состав `local_settings.py`:
+
+```python
+DEBUG = False
+
+ALLOWED_HOSTS = ["10.10.10.37"]
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "имя_базы",
+        "USER": "пользователь",
+        "PASSWORD": "пароль",
+        "HOST": "10.10.10.37",
+        "PORT": "5432",
+        "OPTIONS": {"client_encoding": "UTF8"},
+    }
+}
+```
+
+Значения в `settings.py` рассчитаны на локальную разработку: `DEBUG = False`,
+база `supply_service_test` на `localhost`. Если `local_settings.py` отсутствует,
+приложение запускается с этими значениями.
+
+## 5. Развёртывание
+
+Создать базу и расширение:
 
 ```sql
 CREATE DATABASE supply_service_test;
@@ -87,7 +124,7 @@ GRANT ALL PRIVILEGES ON DATABASE supply_service_test TO root;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 ```
 
-Окружение и зависимости:
+Установить окружение:
 
 ```bash
 python -m venv .venv
@@ -95,74 +132,144 @@ python -m venv .venv
 pip install --no-index --find-links=wheels -r requirements.txt
 ```
 
-Миграции, группы, учётная запись, сервер:
+Создать `supply_service/local_settings.py` по образцу из раздела 4.
+
+Применить схему и запустить:
 
 ```bash
 python manage.py migrate
 python manage.py setup_groups
 python manage.py createsuperuser
+python manage.py collectstatic
 python manage.py runserver
 ```
 
-Приложение открывается на `http://127.0.0.1:8000/reports/`.
+`collectstatic` обязателен при `DEBUG = False`: статику раздаёт WhiteNoise с
+манифестом, без сборки страницы не отрисуются.
 
-При `DEBUG = False` перед запуском нужен `python manage.py collectstatic`:
-статику раздаёт WhiteNoise с манифестом, без сборки страницы упадут.
+Приложение доступно по адресу `/reports/`.
 
-## Настройки
+## 6. Регламент переноса изменений
 
-`supply_service/settings.py` не одинаков дома и на работе — у каждой машины свой
-экземпляр. Отличаются только параметры подключения:
+Единственный источник схемы базы — каталог `reports/migrations`. Расхождение
+между файлами миграций и таблицей `django_migrations` в базе останавливает
+`migrate`.
 
-```python
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": "supply_service_test",
-        "USER": "root",
-        "PASSWORD": "root",
-        "HOST": "localhost",
-        "PORT": "5432",
-        "OPTIONS": {"client_encoding": "UTF8"},
-    }
-}
-```
+### Правила
 
-## Таблицы базы
-
-| Таблица | Назначение |
-| --- | --- |
-| `staging_excel` | сырые строки файла договоров |
-| `staging_znp_excel` | сырые строки файла ЗнП (ФЗД) |
-| `staging_znp_sap_excel` | сырые строки файла ЗнП (SAP) |
-| `igk_stat_data` | позиции договоров |
-| `znp_data` | заявки на платёж (ФЗД) |
-| `znp_data_sap` | заявки на платёж (SAP) |
-| `contracts_history` | изменения статуса, плана, факта и суммы договора |
-| `contract_counts_snapshot` | снимок количества заключённых договоров на дату |
-| `nsi_cfo`, `nsi_igk` | справочники ЦФО и ИГК |
-
-Таблицы `staging_*` очищаются при каждой загрузке (`TRUNCATE`).
-
-## Миграции
-
-| Номер | Что делает |
-| --- | --- |
-| `0001_initial` | все таблицы |
-| `0002_performance_indexes_and_snapshot_key` | индексы, уникальный ключ снимка |
-| `0003_sap_indexes` | индексы по ЦФО и ИГК в `znp_data_sap` |
-| `0004_znp_status` | статус заявки в `znp_data` |
-| `0005_contract_sum` | сумма договора в `igk_stat_data` и `contracts_history` |
-| `0006_staging_contract_sum` | сумма договора в `staging_excel` |
-| `0007_drop_staging_sozdan` | убрана неиспользуемая колонка |
-
-Проверка, что схема и модели совпадают:
+1. Файлы миграций создаются только командой `makemigrations` и только на одной
+   машине — той, где менялись модели. На остальные они попадают через git.
+2. Готовый файл миграции не редактируют и не удаляют после того, как он
+   применён хотя бы к одной базе.
+3. Миграции не создают на сервере. Сервер только применяет то, что пришло.
+4. Перед переносом на сервер проверяют, что схема и модели совпадают:
 
 ```bash
 python manage.py makemigrations --check --dry-run
 ```
 
-## Загрузка данных
+Ответ `No changes detected` означает, что незакоммиченных изменений схемы нет.
+
+### Порядок обновления сервера
+
+```bash
+git pull
+pip install --no-index --find-links=wheels -r requirements.txt
+python manage.py migrate --plan
+python manage.py migrate
+python manage.py collectstatic --noinput
+```
+
+`migrate --plan` показывает список миграций к применению, ничего не меняя.
+Если список неожиданный — остановиться и разобраться до `migrate`.
+
+### Диагностика расхождений
+
+Что применено в базе:
+
+```sql
+SELECT name, applied FROM django_migrations WHERE app = 'reports' ORDER BY id;
+```
+
+Что видит Django (`[X]` — применена, `[ ]` — нет):
+
+```bash
+python manage.py showmigrations reports
+```
+
+### Типовые расхождения
+
+**В базе есть запись о миграции, файла нет.**
+
+Возникает, когда миграцию применили, а потом удалили файл. `migrate` падает с
+`InconsistentMigrationHistory`. Устранение: вернуть файл из git. Если он был
+временным и таблиц за собой не оставил — удалить запись:
+
+```sql
+DELETE FROM django_migrations WHERE app = 'reports' AND name = 'имя_миграции';
+```
+
+**Файл есть, в базе записи нет, но таблица или колонка уже существуют.**
+
+Возникает, когда схему меняли руками через SQL. `migrate` падает на
+`DuplicateColumn` или `DuplicateTable`. Устранение: отметить миграцию
+применённой без выполнения:
+
+```bash
+python manage.py migrate reports номер_миграции --fake
+```
+
+**Две ветки создали миграции с одинаковым номером.**
+
+Возникает, когда `makemigrations` запускали на двух машинах. Django сообщает
+`Conflicting migrations detected`. Устранение: удалить свою миграцию, забрать
+чужую через `git pull`, выполнить `makemigrations` заново.
+
+**Расхождение версий Django.**
+
+Файл миграции, созданный новой версией Django, может не примениться на старой.
+Версия из `requirements.txt` должна совпадать на всех машинах. Проверка:
+
+```bash
+python -c "import django; print(django.get_version())"
+```
+
+### Что делать нельзя
+
+- Удалять и пересоздавать миграции на рабочей базе.
+- Править структуру таблиц напрямую в SQL мимо миграций.
+- Копировать `settings.py` между машинами.
+- Переносить каталог `migrations` файлами через флешку в обход git.
+
+## 7. Схема данных
+
+| Таблица | Назначение |
+| --- | --- |
+| `staging_excel` | строки файла договоров |
+| `staging_znp_excel` | строки файла ЗнП (ФЗД) |
+| `staging_znp_sap_excel` | строки файла ЗнП (SAP) |
+| `igk_stat_data` | позиции договоров |
+| `znp_data` | заявки на платёж (ФЗД) |
+| `znp_data_sap` | заявки на платёж (SAP) |
+| `contracts_history` | изменения статуса, плана, факта, суммы договора |
+| `contract_counts_snapshot` | количество заключённых договоров на дату |
+| `nsi_cfo`, `nsi_igk` | справочники ЦФО и ИГК |
+
+Таблицы `staging_*` очищаются при каждой загрузке.
+
+Миграции:
+
+| Номер | Содержание |
+| --- | --- |
+| `0001_initial` | создание таблиц |
+| `0002_performance_indexes_and_snapshot_key` | индексы, уникальный ключ снимка |
+| `0003_sap_indexes` | индексы по ЦФО и ИГК в `znp_data_sap` |
+| `0004_znp_status` | статус заявки в `znp_data` |
+| `0005_contract_sum` | сумма договора в `igk_stat_data`, `contracts_history` |
+| `0006_staging_contract_sum` | сумма договора в `staging_excel` |
+| `0007_drop_staging_sozdan` | удаление неиспользуемой колонки |
+
+## 8. Загрузка данных
 
 Через веб — страница `/reports/upload/`, доступна суперпользователю и группе
 `operator`. Из командной строки:
@@ -173,19 +280,19 @@ python manage.py load_znp путь\к\фзд.xlsx
 python manage.py load_znp_sap путь\к\сап.xlsx
 ```
 
-Каждая команда читает файл в `staging_*` и сразу разбирает его в рабочие
-таблицы. Оба шага в одной транзакции: при ошибке база остаётся прежней.
+Команда читает файл в `staging_*` и разбирает его в рабочие таблицы. Оба шага
+выполняются в одной транзакции: при ошибке база остаётся в прежнем состоянии.
 
 Порядок загрузки произвольный. `load_contracts` полностью перезаписывает
-`igk_stat_data`, но в конце вызывает `relink_znp_parents()`: заявки ФЗД
-привязываются к договорам заново по `crc32_hash`, а заявки, чей договор пропал
-из выгрузки, теряют привязку.
+`igk_stat_data` и в конце вызывает `relink_znp_parents()`: заявки ФЗД
+привязываются к договорам заново по `crc32_hash`, а заявки, договор которых
+отсутствует в новой выгрузке, привязку теряют.
 
-## Формат файлов Excel
+## 9. Формат входных файлов
 
-Строка заголовков ищется по названиям колонок, её положение в файле значения не
-имеет. Если хотя бы одной колонки нет, загрузка отменяется с сообщением
-«Документ не соответствует формату». Списки колонок заданы в
+Строка заголовков определяется по названиям колонок, её положение в файле
+значения не имеет. При отсутствии хотя бы одной колонки загрузка отменяется с
+сообщением «Документ не соответствует формату». Перечни колонок заданы в
 `services/excel_import.py`.
 
 **Договоры (КДР):** ИГК, Контрагент, ЦФО, Договор, Состояние, Тип платежа,
@@ -201,7 +308,7 @@ python manage.py load_znp_sap путь\к\сап.xlsx
 ЗнП 421 отдел (ГОЗ) - (E), ЗнП 18 отдел (ГОЗ) - (F), Платеж возможен - ( ),
 СП/ГП, ДокумВыравнивания.
 
-## Маршруты
+## 10. Маршруты
 
 Все адреса начинаются с `/reports/`.
 
@@ -210,9 +317,9 @@ python manage.py load_znp_sap путь\к\сап.xlsx
 | Адрес | Содержимое |
 | --- | --- |
 | `/` | главная |
-| `dashboard/` | дашборд по договорам |
-| `znp/` | дашборд ЗнП (ФЗД) |
-| `znp-sap/` | дашборд ЗнП (SAP) |
+| `dashboard/` | сводка по договорам |
+| `znp/` | сводка ЗнП (ФЗД) |
+| `znp-sap/` | сводка ЗнП (SAP) |
 | `all-contracts/` | реестр договоров |
 | `znp-list/` | реестр ЗнП (ФЗД) |
 | `znp-sap-list/` | реестр ЗнП (SAP) |
@@ -223,7 +330,7 @@ python manage.py load_znp_sap путь\к\сап.xlsx
 | `history-status/`, `history-plan/`, `history-fact/` | история изменений |
 | `contract-dupes/` | дубликаты договоров |
 | `upload/` | загрузка файлов |
-| `export/` | страница выгрузок |
+| `export/` | выгрузки |
 | `login/`, `logout/` | вход и выход |
 
 ### Выгрузки Excel
@@ -240,53 +347,41 @@ python manage.py load_znp_sap путь\к\сап.xlsx
 `api/history-fact/`, `api/contract-dupes/`, `api/contract-dupes-by-order/`,
 `api/chart/contracts/`, `api/chart/znp/`, `api/chart/znp-sap/`.
 
-Год принимается только из списка `YEARS`. Страницы при чужом годе подставляют
-последний год списка, JSON отвечает 400.
+Год принимается только из списка `YEARS`. Страницы при недопустимом годе
+подставляют последний год списка, JSON отвечает кодом 400.
 
-## Права доступа
+## 11. Права доступа
 
-| Кто | Что может |
+| Роль | Права |
 | --- | --- |
-| суперпользователь | всё, включая дашборды и загрузку |
+| суперпользователь | все страницы, включая сводки и загрузку |
 | группа `operator` | загрузка файлов |
-| остальные | страницы и выгрузки |
+| прочие | страницы и выгрузки |
 
-Группу создаёт `python manage.py setup_groups`.
+Группа создаётся командой `python manage.py setup_groups`.
 
-## Общие константы
+## 12. Общие константы
 
-`services/queries.py` — единственное место, где заданы значения, влияющие на
-все отчёты:
+Заданы в `services/queries.py` и действуют на все отчёты:
 
-| Константа | Смысл |
+| Константа | Назначение |
 | --- | --- |
 | `CONCLUDED`, `NOT_CONCL`, `TERMINATED` | статусы договора |
 | `ADVANCE`, `POSTPAYMENT` | типы платежа |
-| `ZNP_APPROVED` | статус утверждённой ЗнП |
+| `ZNP_APPROVED` | статус утверждённой заявки |
 | `YEARS`, `YEAR_COL` | годы и колонки-флаги |
-| `HAS_ORDER` | условие «у строки есть заказ» |
+| `HAS_ORDER` | условие наличия заказа у строки |
 | `SAP_CFO` | отделы МТО (420–429) |
 
-`HAS_ORDER` продублирован в ORM как `HAS_ORDER_Q` в `views/pages.py` — при
+`HAS_ORDER` продублирован в ORM как `HAS_ORDER_Q` в `views/pages.py`. При
 изменении править оба.
 
-## Добавление нового года
+## 13. Добавление года
 
-Например, 2028:
+На примере 2028:
 
 1. `services/queries.py` — `YEARS = [2025, 2026, 2027, 2028]`
 2. `models.py` — поле `y28 = models.BooleanField(null=True)` в `IgkStatData`
 3. `services/normalize.py` — `y28` в распаковку `year_flags()`, в кортеж
-   `new_data.append(...)` и в список колонок INSERT
-4. `makemigrations` и `migrate`
-
-## Разработка
-
-```bash
-python -m black .
-python -m isort .
-python manage.py check
-python manage.py makemigrations --check --dry-run
-```
-
-Профиль isort задан в `pyproject.toml` и согласован с black.
+   `new_data.append(...)` и в перечень колонок INSERT
+4. `makemigrations`, затем перенос по регламенту из раздела 6
