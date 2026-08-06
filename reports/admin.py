@@ -8,7 +8,9 @@ from .models import (
     NsiIgk,
     StagingExcel,
     StagingZnpExcel,
+    StagingZnpSAPExcel,
     ZnpData,
+    ZnpDataSAP,
 )
 
 
@@ -65,3 +67,16 @@ class ZnpDataAdmin(admin.ModelAdmin):
 class ContractCountsSnapshotAdmin(admin.ModelAdmin):
     list_display = ("upload_date", "igk", "cfo", "year_col", "concluded_count")
     list_filter = ("upload_date", "year_col")
+
+
+@admin.register(ZnpDataSAP)
+class ZnpDataSAPAdmin(admin.ModelAdmin):
+    list_display = ("id", "reg_num", "igk", "cfo", "c_agent", "vv_sum")
+    list_filter = ("cfo", "stage_e", "stage_f")
+    search_fields = ("reg_num", "igk", "c_agent")
+
+
+@admin.register(StagingZnpSAPExcel)
+class StagingZnpSAPExcelAdmin(admin.ModelAdmin):
+    list_display = ("id", "reg_num", "igk", "cfo", "c_agent")
+    search_fields = ("reg_num", "igk", "c_agent")
