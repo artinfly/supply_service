@@ -19,6 +19,14 @@ HAS_ORDER = '"order" IS NOT NULL AND TRIM("order") != \'\''
 SAP_CFO = tuple(str(n) for n in range(420, 430))
 
 
+def needs_znp(alias="i"):
+    p = f"{alias}." if alias else ""
+    return (
+        f"COALESCE({p}remainder, 0) > "
+        f"GREATEST(COALESCE({p}tolerance, 0) * COALESCE({p}contract_sum, 0) / 100.0, 0)"
+    )
+
+
 def _sl(statuses):
     return ", ".join(f"'{s}'" for s in statuses)
 
