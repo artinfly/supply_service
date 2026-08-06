@@ -642,7 +642,6 @@ def znp_sap_table(request):
             "cfo_table": cfo_table,
             "cfo_total_row": cfo_total_row,
             "has_data": all_breakdown["total_count"] > 0,
-            "current_year": str(_resolve_year(request)),
             "no_data_hint": (
                 "Заявки на платёж из SAP ещё не загружены. "
                 "Нужен файл выгрузки ЗНП (SAP)."
