@@ -120,7 +120,8 @@ def normalize_contracts():
             """
             SELECT igk, kontragent, cfo, dogovor, sostoyanie,
                    tip_platezha, predmet, zakaz, plan, fakt,
-                   tol, etap_grafika, dataplan, summa_dogovora, god_igk
+                   tol, etap_grafika, dataplan, summa_dogovora, god_igk,
+                   ostatok
             FROM staging_excel
             WHERE tip_platezha IN (%s, %s)
             """,
@@ -153,6 +154,7 @@ def normalize_contracts():
                     norm(r[14]),
                     to_float(r[13]),
                     contract_hash(norm(r[0]), norm(r[1]), norm(r[3]), norm(r[11])),
+                    to_float(r[15]),
                 )
             )
 
@@ -249,8 +251,8 @@ def normalize_contracts():
                 (igk, c_agent, cfo, contract, status, payment_type,
                  item, "order", plan, fact, tolerance, stage,
                  y25, y26, y27, is_deleted, plan_date, c_date, contract_sum,
-                 crc32_hash)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 crc32_hash, remainder)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """,
             new_data,
         )
