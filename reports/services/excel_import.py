@@ -94,6 +94,11 @@ def _read_row(row, positions, fields, empty_as_null=False):
     return record
 
 
+def _is_blank(record, field):
+    value = record.get(field)
+    return value is None or str(value).strip() == ""
+
+
 def _replace_table(table, fields, data):
     insert_sql = (
         f"INSERT INTO {table} ({', '.join(fields)}) "
@@ -131,6 +136,8 @@ def import_znp(filepath):
             if not any(row):
                 continue
             record = _read_row(row, positions, fields)
+            if _is_blank(record, "plan_doc"):
+                continue
             record["crc32_hash"] = contract_hash(
                 record["igk"], record["c_agent"], record["contract"], record["stage"]
             )
@@ -143,7 +150,6 @@ def import_znp(filepath):
 
 def import_znp_sap(filepath):
     fields = list(ZNP_SAP_COLUMNS.values())
-    items_column = 4
     wb, rows = _open_sheet(filepath)
     try:
         positions = _find_columns(rows, ZNP_SAP_COLUMNS)
@@ -151,9 +157,9 @@ def import_znp_sap(filepath):
         for row in rows:
             if not any(row):
                 continue
-            if len(row) > items_column and row[items_column] == "":
-                continue
             record = _read_row(row, positions, fields, empty_as_null=True)
+            if _is_blank(record, "c_agent"):
+                continue
             data.append(tuple(record[f] for f in fields))
     finally:
         wb.close()
