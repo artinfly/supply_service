@@ -15,6 +15,7 @@ CONTRACT_COLUMNS = {
     "Заказ": "zakaz",
     "ПЛАН": "plan",
     "ФАКТ": "fakt",
+    "Остаток": "ostatok",
     "Тол": "tol",
     "Этап графика": "etap_grafika",
     "ДатаПланПодп": "dataplan",

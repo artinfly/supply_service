@@ -38,6 +38,7 @@ from ..services.queries import (
     igk_stat,
     igk_stat_total,
     kdr,
+    needs_znp,
     znp_list,
 )
 from ..services.sap_status import SAP_STATUS_CONDITIONS, sap_status
@@ -188,10 +189,14 @@ def api_all_contracts(request):
 
 
 ZNP_STATUS_CONDITIONS = {
-    "not_issued": "z.id IS NULL",
+    "not_issued": f"(z.id IS NULL AND {needs_znp()})",
     "in_progress": f"(z.id IS NOT NULL AND z.znp_status IS DISTINCT FROM '{ZNP_APPROVED}')",
-    "not_issued_advance": f"(z.id IS NULL AND i.payment_type = '{ADVANCE}')",
-    "not_issued_postpayment": f"(z.id IS NULL AND i.payment_type = '{POSTPAYMENT}')",
+    "not_issued_advance": (
+        f"(z.id IS NULL AND i.payment_type = '{ADVANCE}'" f" AND {needs_znp()})"
+    ),
+    "not_issued_postpayment": (
+        f"(z.id IS NULL AND i.payment_type = '{POSTPAYMENT}'" f" AND {needs_znp()})"
+    ),
     "advance": (
         f"(z.id IS NOT NULL AND i.payment_type = '{ADVANCE}'"
         f" AND z.znp_status = '{ZNP_APPROVED}')"

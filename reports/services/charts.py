@@ -5,6 +5,7 @@ from .queries import (
     POSTPAYMENT,
     SAP_CFO,
     ZNP_APPROVED,
+    needs_znp,
 )
 
 CONTRACT_AGE = (
@@ -75,6 +76,7 @@ def znp_by_cfo(year_col, igk):
               AND i.{year_col} = TRUE
               AND i.cfo IS NOT NULL AND TRIM(i.cfo) <> ''
               AND i.payment_type IN ('{ADVANCE}', '{POSTPAYMENT}')
+              AND (z.id IS NOT NULL OR {needs_znp()})
         ) src
         GROUP BY 1, 2
     """

@@ -9,6 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.management import call_command
 from django.db import connection
 from django.db.models import Count, Exists, OuterRef, Q, Sum
+from django.db.models.expressions import RawSQL
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 
@@ -44,6 +45,7 @@ from ..services.queries import (
     distinct_igk_suffixes,
     distinct_sap_cfo,
     distinct_sap_igk,
+    needs_znp,
 )
 from ..services.sap_status import sap_status_expr
 
@@ -409,6 +411,8 @@ def znp_table(request):
             IgkStatData.objects.filter(status__in=CONCLUDED)
             .annotate(has_znp=has_znp)
             .filter(has_znp=False)
+            .annotate(needs_znp=RawSQL(needs_znp("igk_stat_data"), []))
+            .filter(needs_znp=True)
         )
         if igk is not None:
             qs = qs.filter(igk=igk)
