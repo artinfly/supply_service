@@ -37,6 +37,7 @@ ZNP_COLUMNS = {
     "Сумма руб оплаты": "fact_sum",
     "ТипПлатежа": "znp_payment_type",
     "Статус": "znp_status",
+    "Дата": "znp_date",
 }
 
 ZNP_SAP_COLUMNS = {
