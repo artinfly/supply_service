@@ -114,6 +114,7 @@ class StagingZnpExcel(models.Model):
     plan_sum = models.FloatField(null=True)
     fact_sum = models.FloatField(null=True)
     znp_status = models.TextField(null=True)
+    znp_date = models.TextField(null=True)
     crc32_hash = models.BigIntegerField(null=False)
 
     class Meta:
@@ -146,6 +147,7 @@ class ZnpData(models.Model):
     znp_igk = models.TextField(null=True)
     znp_payment_type = models.CharField(null=True)
     znp_status = models.CharField(max_length=100, null=True)
+    znp_date = models.DateField(null=True)
 
     class Meta:
         managed = True

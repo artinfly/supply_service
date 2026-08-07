@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 
 from django.db import connection, transaction
 
@@ -98,6 +98,20 @@ def text_ru_date_to_date(val: str):
         return date(int(year_str), month, int(day_str))
     except ValueError:
         return None
+
+
+def dot_date_to_date(val):
+    if val is None:
+        return None
+    parts = str(val).strip().split()
+    if not parts:
+        return None
+    for fmt in ("%d.%m.%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(parts[0], fmt).date()
+        except ValueError:
+            continue
+    return None
 
 
 def normalize_contracts():
@@ -301,7 +315,8 @@ def normalize_znp():
                 stage,
                 znp_igk,
                 znp_payment_type,
-                znp_status
+                znp_status,
+                znp_date
             FROM staging_znp_excel sze;
         """)
         staging_rows = cur.fetchall()
@@ -325,6 +340,7 @@ def normalize_znp():
                     norm(r[9]),
                     norm(r[10]),
                     norm(r[11]),
+                    dot_date_to_date(r[12]),
                 )
             )
 
@@ -335,8 +351,8 @@ def normalize_znp():
                 (parent_id, plan_doc, payment_purpose,
                 plan_payment_date, fact_payment_date, plan_sum,
                 fact_sum, crc32_hash, stage, znp_igk, znp_payment_type,
-                znp_status)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                znp_status, znp_date)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """,
             new_data,
         )
