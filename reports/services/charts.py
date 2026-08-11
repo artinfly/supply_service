@@ -7,6 +7,7 @@ from .queries import (
     ZNP_APPROVED,
     needs_znp,
 )
+from .sap_status import SAP_STAGE_LABELS, SAP_STATUS_SQL
 
 CONTRACT_AGE = (
     ("overdue_12", "Просрочено более года"),
@@ -22,12 +23,7 @@ ZNP_STAGES = (
     ("paid", "Оплачено"),
 )
 
-SAP_STAGES = (
-    ("waiting", "На согласовании"),
-    ("sent", "Передано в 18 отдел"),
-    ("confirmed", "Подтверждено 18 отделом"),
-    ("paid", "Оплачено"),
-)
+SAP_STAGES = tuple(SAP_STAGE_LABELS.items())
 
 
 def contracts_by_cfo(year_col, igk):
@@ -90,13 +86,7 @@ def znp_sap_by_cfo(igk):
     if igk:
         params.append(igk)
     sql = f"""
-        SELECT cfo,
-               CASE
-                   WHEN stage_e IS NULL THEN 'waiting'
-                   WHEN stage_f IS NULL THEN 'sent'
-                   WHEN normalize_doc_num IS NOT NULL THEN 'paid'
-                   ELSE 'confirmed'
-               END AS stage,
+        SELECT cfo,{SAP_STATUS_SQL} AS stage,
                COUNT(*) AS cnt,
                COALESCE(SUM(vv_sum), 0) AS plan_sum
         FROM znp_data_sap

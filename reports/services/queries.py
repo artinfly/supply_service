@@ -1,3 +1,5 @@
+from datetime import date
+
 CONCLUDED = (
     "Исполняется",
     "Возвращен на уточнение",
@@ -17,6 +19,14 @@ YEAR_COL = {str(y): f"y{str(y)[2:]}" for y in YEARS}
 HAS_ORDER = '"order" IS NOT NULL AND TRIM("order") != \'\''
 
 SAP_CFO = tuple(str(n) for n in range(420, 430))
+
+
+def valid_year(value):
+    try:
+        year = int(value)
+    except (TypeError, ValueError):
+        year = date.today().year
+    return year if year in YEARS else YEARS[-1]
 
 
 def needs_znp(alias="i"):
@@ -70,10 +80,7 @@ def kdr(year):
     """
 
 
-def igk_stat(yc, statuses):
-    sl = _sl(statuses)
-    return f"""
-    SELECT igk,
+_IGK_STAT_COLS = f"""
         ROUND(CAST(COALESCE(SUM(plan), 0) AS numeric), 2) AS spec_sum,
         ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}'), 0) AS numeric), 2) AS pp_sum,
         ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}'), 0)*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS pp_percent,
@@ -85,27 +92,22 @@ def igk_stat(yc, statuses):
                   - COALESCE(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}'), 0))*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS remain_percent,
         COUNT(*) AS pp_quantity
     FROM igk_stat_data
-    WHERE {yc} = TRUE AND status IN ({sl})
+    WHERE {{yc}} = TRUE AND status IN ({{sl}})
+"""
+
+
+def igk_stat(yc, statuses):
+    body = _IGK_STAT_COLS.format(yc=yc, sl=_sl(statuses))
+    return f"""
+    SELECT igk,{body}
     GROUP BY igk ORDER BY igk
     """
 
 
 def igk_stat_total(yc, statuses):
-    sl = _sl(statuses)
+    body = _IGK_STAT_COLS.format(yc=yc, sl=_sl(statuses))
     return f"""
-    SELECT 'ИТОГО' AS igk,
-        ROUND(CAST(COALESCE(SUM(plan), 0) AS numeric), 2) AS spec_sum,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}'), 0) AS numeric), 2) AS pp_sum,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}'), 0)*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS pp_percent,
-        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}'), 0) AS numeric), 2) AS pp_fact,
-        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}'), 0)*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS fact_percent,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}' AND plan>=0), 0)
-                 - COALESCE(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}' AND plan>=0), 0) AS numeric), 2) AS pp_remain,
-        ROUND(CAST((COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}'), 0)
-                  - COALESCE(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}'), 0))*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS remain_percent,
-        COUNT(*) AS pp_quantity
-    FROM igk_stat_data
-    WHERE {yc} = TRUE AND status IN ({sl})
+    SELECT 'ИТОГО' AS igk,{body}
     """
 
 

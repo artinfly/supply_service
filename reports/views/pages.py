@@ -1,6 +1,5 @@
 import os
 import tempfile
-from datetime import date as _date
 from io import StringIO
 
 from django.contrib import messages
@@ -18,36 +17,40 @@ from ..services.dashboards import (
     EMPTY_CFO_STATS,
     EMPTY_NOT_ISSUED,
     EMPTY_ZNP,
-    SAP_STAGE_NAMES,
-    SAP_STAGE_PARAMS,
     ZNP_STAGE_LABELS,
     ZNP_STAGE_NAMES,
     breakdown_from_stats,
+    cfo_breakdown_row,
     cfo_row,
     cfo_totals_row,
     filter_by_year,
+    not_issued_aggregates,
     percent,
     sap_cards,
     to_mln,
+    znp_aggregates,
 )
 from ..services.excel_import import CONTRACT_COLUMNS, ZNP_COLUMNS, ZNP_SAP_COLUMNS
 from ..services.queries import (
     ADVANCE,
     CONCLUDED,
     NOT_CONCL,
-    POSTPAYMENT,
     SAP_CFO,
     TERMINATED,
     YEARS,
-    ZNP_APPROVED,
     distinct_agents,
     distinct_cfo,
     distinct_igk_suffixes,
     distinct_sap_cfo,
     distinct_sap_igk,
     needs_znp,
+    valid_year,
 )
-from ..services.sap_status import sap_status_expr
+from ..services.sap_status import (
+    SAP_STAGE_NAMES,
+    SAP_STAGE_PARAMS,
+    sap_status_expr,
+)
 
 
 def is_operator(user):
@@ -60,10 +63,6 @@ def _ctx(request):
         "year_cols": [(y, f"y{str(y)[2:]}") for y in YEARS],
         "is_operator": is_operator(request.user),
     }
-
-
-def _valid_year(year):
-    return year if year in YEARS else YEARS[-1]
 
 
 HAS_ORDER_Q = Q(order__isnull=False) & ~Q(order__regex=r"^\s*$")
@@ -98,7 +97,7 @@ def index(request):
 
 @login_required
 def kdr_table(request, year):
-    year = _valid_year(year)
+    year = valid_year(year)
     ctx = _ctx(request)
     ctx["year"] = year
     return render(request, "kdr_table.html", ctx)
@@ -106,7 +105,7 @@ def kdr_table(request, year):
 
 @login_required
 def igk_concluded_table(request, year):
-    year = _valid_year(year)
+    year = valid_year(year)
     ctx = _ctx(request)
     ctx.update(
         {"year": year, "report_type": "concluded", "title": f"ИГК {year} — Заключённые"}
@@ -116,7 +115,7 @@ def igk_concluded_table(request, year):
 
 @login_required
 def igk_not_concluded_table(request, year):
-    year = _valid_year(year)
+    year = valid_year(year)
     ctx = _ctx(request)
     ctx.update(
         {
@@ -130,7 +129,7 @@ def igk_not_concluded_table(request, year):
 
 @login_required
 def igk_terminated_table(request, year):
-    year = _valid_year(year)
+    year = valid_year(year)
     ctx = _ctx(request)
     ctx.update(
         {
@@ -258,14 +257,6 @@ def upload_excel(request):
     return render(request, "upload.html", ctx)
 
 
-def _resolve_year(request):
-    try:
-        year = int(request.GET.get("year", ""))
-    except (TypeError, ValueError):
-        year = _date.today().year
-    return _valid_year(year)
-
-
 @login_required
 def dashboard(request):
     if not request.user.is_superuser:
@@ -274,7 +265,7 @@ def dashboard(request):
     available_years = YEARS
     available_igk = NsiIgk.objects.all()
 
-    year = _resolve_year(request)
+    year = valid_year(request.GET.get("year"))
 
     selected_igk = request.GET.get("igk", "") or str(available_igk.first() or "")
 
@@ -398,7 +389,7 @@ def znp_table(request):
     available_years = YEARS
     available_igk = NsiIgk.objects.all()
 
-    year = _resolve_year(request)
+    year = valid_year(request.GET.get("year"))
 
     selected_igk = request.GET.get("igk", "") or str(available_igk.first() or "")
 
@@ -430,36 +421,10 @@ def znp_table(request):
     year_znp_qs = filter_by_year(all_znp_qs, year, field_prefix="parent__")
 
     def _breakdown(not_issued_qs, znp_qs):
-        pos_advance_q = Q(payment_type=ADVANCE)
-        pos_postpayment_q = Q(payment_type=POSTPAYMENT)
-        not_issued_agg = not_issued_qs.aggregate(
-            count=Count("pp_id"),
-            plan_sum=Sum("plan"),
-            advance_count=Count("pp_id", filter=pos_advance_q),
-            advance_sum=Sum("plan", filter=pos_advance_q),
-            postpayment_count=Count("pp_id", filter=pos_postpayment_q),
-            postpayment_sum=Sum("plan", filter=pos_postpayment_q),
+        return breakdown_from_stats(
+            not_issued_qs.aggregate(**not_issued_aggregates()),
+            znp_qs.aggregate(**znp_aggregates()),
         )
-        approved_q = Q(znp_status=ZNP_APPROVED)
-        pending_q = ~Q(znp_status=ZNP_APPROVED)
-        advance_q = Q(parent__payment_type=ADVANCE) & approved_q
-        postpayment_q = Q(parent__payment_type=POSTPAYMENT) & approved_q
-        paid_q = Q(fact_sum__isnull=False)
-        znp_agg = znp_qs.aggregate(
-            issued_count=Count("id", filter=approved_q),
-            issued_sum=Sum("plan_sum", filter=approved_q),
-            in_progress_count=Count("id", filter=pending_q),
-            in_progress_sum=Sum("plan_sum", filter=pending_q),
-            advance_count=Count("id", filter=advance_q),
-            advance_sum=Sum("plan_sum", filter=advance_q),
-            advance_paid_count=Count("id", filter=advance_q & paid_q),
-            advance_paid_sum=Sum("fact_sum", filter=advance_q & paid_q),
-            postpayment_count=Count("id", filter=postpayment_q),
-            postpayment_sum=Sum("plan_sum", filter=postpayment_q),
-            postpayment_paid_count=Count("id", filter=postpayment_q & paid_q),
-            postpayment_paid_sum=Sum("fact_sum", filter=postpayment_q & paid_q),
-        )
-        return breakdown_from_stats(not_issued_agg, znp_agg)
 
     all_breakdown = _breakdown(all_not_issued_qs, all_znp_qs)
     year_breakdown = _breakdown(year_not_issued_qs, year_znp_qs)
@@ -476,70 +441,28 @@ def znp_table(request):
         _znp_qs(igk=selected_igk), year, field_prefix="parent__"
     )
 
-    def _row_from_breakdown(label, breakdown):
-        return {
-            "cfo": label,
-            "total_count": breakdown["total_count"],
-            "total_sum": breakdown["total_sum"],
-            "cells": [
-                {
-                    "status_param": status,
-                    "count": breakdown[status]["count"],
-                    "sum": breakdown[status]["sum"],
-                }
-                for status in ZNP_STAGE_LABELS
-            ],
-        }
-
-    pos_advance_q = Q(payment_type=ADVANCE)
-    pos_postpayment_q = Q(payment_type=POSTPAYMENT)
     not_issued_stats = {
         row["cfo"]: row
-        for row in igk_not_issued_qs.values("cfo").annotate(
-            count=Count("pp_id"),
-            plan_sum=Sum("plan"),
-            advance_count=Count("pp_id", filter=pos_advance_q),
-            advance_sum=Sum("plan", filter=pos_advance_q),
-            postpayment_count=Count("pp_id", filter=pos_postpayment_q),
-            postpayment_sum=Sum("plan", filter=pos_postpayment_q),
-        )
+        for row in igk_not_issued_qs.values("cfo").annotate(**not_issued_aggregates())
     }
-
-    approved_q = Q(znp_status=ZNP_APPROVED)
-    pending_q = ~Q(znp_status=ZNP_APPROVED)
-    advance_q = Q(parent__payment_type=ADVANCE) & approved_q
-    postpayment_q = Q(parent__payment_type=POSTPAYMENT) & approved_q
-    paid_q = Q(fact_sum__isnull=False)
     znp_stats = {
         row["parent__cfo"]: row
-        for row in igk_znp_qs.values("parent__cfo").annotate(
-            issued_count=Count("id", filter=approved_q),
-            issued_sum=Sum("plan_sum", filter=approved_q),
-            in_progress_count=Count("id", filter=pending_q),
-            in_progress_sum=Sum("plan_sum", filter=pending_q),
-            advance_count=Count("id", filter=advance_q),
-            advance_sum=Sum("plan_sum", filter=advance_q),
-            advance_paid_count=Count("id", filter=advance_q & paid_q),
-            advance_paid_sum=Sum("fact_sum", filter=advance_q & paid_q),
-            postpayment_count=Count("id", filter=postpayment_q),
-            postpayment_sum=Sum("plan_sum", filter=postpayment_q),
-            postpayment_paid_count=Count("id", filter=postpayment_q & paid_q),
-            postpayment_paid_sum=Sum("fact_sum", filter=postpayment_q & paid_q),
-        )
+        for row in igk_znp_qs.values("parent__cfo").annotate(**znp_aggregates())
     }
 
     cfo_table = [
-        _row_from_breakdown(
+        cfo_breakdown_row(
             cfo,
             breakdown_from_stats(
                 not_issued_stats.get(cfo, EMPTY_NOT_ISSUED),
                 znp_stats.get(cfo, EMPTY_ZNP),
             ),
+            ZNP_STAGE_LABELS,
         )
         for cfo in available_cfo
     ]
-    cfo_total_row = _row_from_breakdown(
-        "ИТОГО", _breakdown(igk_not_issued_qs, igk_znp_qs)
+    cfo_total_row = cfo_breakdown_row(
+        "ИТОГО", _breakdown(igk_not_issued_qs, igk_znp_qs), ZNP_STAGE_LABELS
     )
 
     ctx.update(
@@ -598,21 +521,6 @@ def znp_sap_table(request):
         cfo_qs.values_list("cfo", flat=True).distinct().order_by("cfo")
     )
 
-    def _row_from_breakdown(label, breakdown):
-        return {
-            "cfo": label,
-            "total_count": breakdown["total_count"],
-            "total_sum": breakdown["total_sum"],
-            "cells": [
-                {
-                    "status_param": status,
-                    "count": breakdown[status]["count"],
-                    "sum": breakdown[status]["sum"],
-                }
-                for status in SAP_STAGE_PARAMS
-            ],
-        }
-
     cfo_totals = {
         row["cfo"]: row
         for row in cfo_qs.values("cfo").annotate(
@@ -626,12 +534,14 @@ def znp_sap_table(request):
         cfo_status.setdefault(row["cfo"], {})[row["sap_status"]] = row
 
     cfo_table = [
-        _row_from_breakdown(
-            cfo, sap_cards(cfo_totals.get(cfo), cfo_status.get(cfo, {}))
+        cfo_breakdown_row(
+            cfo,
+            sap_cards(cfo_totals.get(cfo), cfo_status.get(cfo, {})),
+            SAP_STAGE_PARAMS,
         )
         for cfo in available_cfo
     ]
-    cfo_total_row = _row_from_breakdown("ИТОГО", _breakdown(cfo_qs))
+    cfo_total_row = cfo_breakdown_row("ИТОГО", _breakdown(cfo_qs), SAP_STAGE_PARAMS)
 
     ctx.update(
         {
