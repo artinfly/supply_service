@@ -1,3 +1,9 @@
+from django.db.models import Count, Q, Sum
+
+from .queries import ADVANCE, POSTPAYMENT, ZNP_APPROVED
+from .sap_status import SAP_STAGE_PARAMS
+
+
 def to_mln(value):
     return (value or 0) / 1000000
 
@@ -90,6 +96,58 @@ ZNP_STAGE_LABELS = {
 }
 
 ZNP_STAGE_NAMES = list(ZNP_STAGE_LABELS.values())
+
+
+def not_issued_aggregates():
+    advance = Q(payment_type=ADVANCE)
+    postpayment = Q(payment_type=POSTPAYMENT)
+    return {
+        "count": Count("pp_id"),
+        "plan_sum": Sum("plan"),
+        "advance_count": Count("pp_id", filter=advance),
+        "advance_sum": Sum("plan", filter=advance),
+        "postpayment_count": Count("pp_id", filter=postpayment),
+        "postpayment_sum": Sum("plan", filter=postpayment),
+    }
+
+
+def znp_aggregates():
+    approved = Q(znp_status=ZNP_APPROVED)
+    pending = ~Q(znp_status=ZNP_APPROVED)
+    advance = Q(parent__payment_type=ADVANCE) & approved
+    postpayment = Q(parent__payment_type=POSTPAYMENT) & approved
+    paid = Q(fact_sum__isnull=False)
+    return {
+        "issued_count": Count("id", filter=approved),
+        "issued_sum": Sum("plan_sum", filter=approved),
+        "in_progress_count": Count("id", filter=pending),
+        "in_progress_sum": Sum("plan_sum", filter=pending),
+        "advance_count": Count("id", filter=advance),
+        "advance_sum": Sum("plan_sum", filter=advance),
+        "advance_paid_count": Count("id", filter=advance & paid),
+        "advance_paid_sum": Sum("fact_sum", filter=advance & paid),
+        "postpayment_count": Count("id", filter=postpayment),
+        "postpayment_sum": Sum("plan_sum", filter=postpayment),
+        "postpayment_paid_count": Count("id", filter=postpayment & paid),
+        "postpayment_paid_sum": Sum("fact_sum", filter=postpayment & paid),
+    }
+
+
+def cfo_breakdown_row(label, breakdown, statuses):
+    return {
+        "cfo": label,
+        "total_count": breakdown["total_count"],
+        "total_sum": breakdown["total_sum"],
+        "cells": [
+            {
+                "status_param": status,
+                "count": breakdown[status]["count"],
+                "sum": breakdown[status]["sum"],
+            }
+            for status in statuses
+        ],
+    }
+
 
 EMPTY_NOT_ISSUED = {
     "count": 0,
@@ -188,18 +246,6 @@ def breakdown_from_stats(ni, zs):
             percent=_pct(postpayment_paid_count, postpayment_count),
         ),
     }
-
-
-SAP_STAGE_LABELS = {
-    "waiting_agreement": "На согласовании",
-    "sent_18": "Передано в 18 отдел",
-    "confirmed_18": "Подтверждено 18 отделом",
-    "paid": "Оплачено",
-}
-
-SAP_STAGE_NAMES = list(SAP_STAGE_LABELS.values())
-
-SAP_STAGE_PARAMS = list(SAP_STAGE_LABELS.keys())
 
 
 def sap_cards(total_row, status_rows):

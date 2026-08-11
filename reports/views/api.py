@@ -1,5 +1,4 @@
 from collections import defaultdict
-from datetime import date as _date
 from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
@@ -16,7 +15,6 @@ from ..services.charts import (
     znp_by_cfo,
     znp_sap_by_cfo,
 )
-from ..services.dashboards import SAP_STAGE_LABELS
 from ..services.queries import (
     ADVANCE,
     CONCLUDED,
@@ -25,7 +23,6 @@ from ..services.queries import (
     SAP_CFO,
     TERMINATED,
     YEAR_COL,
-    YEARS,
     ZNP_APPROVED,
     all_contracts,
     contract_dupes,
@@ -39,9 +36,14 @@ from ..services.queries import (
     igk_stat_total,
     kdr,
     needs_znp,
+    valid_year,
     znp_list,
 )
-from ..services.sap_status import SAP_STATUS_CONDITIONS, sap_status
+from ..services.sap_status import (
+    SAP_STAGE_LABELS,
+    SAP_STATUS_CONDITIONS,
+    sap_status_expr,
+)
 
 
 def _to_json_types(rows):
@@ -271,7 +273,9 @@ def api_znp_sap_list(request):
         qs = qs.filter(status_q)
 
     data = list(
-        qs.order_by("cfo", "reg_num").values(
+        qs.annotate(status_key=sap_status_expr)
+        .order_by("cfo", "reg_num")
+        .values(
             "id",
             "igk",
             "cfo",
@@ -284,24 +288,12 @@ def api_znp_sap_list(request):
             "stage_f",
             "payment_possible",
             "normalize_doc_num",
+            "status_key",
         )
     )
     for row in data:
-        status = sap_status(
-            row["stage_e"],
-            row["stage_f"],
-            row["normalize_doc_num"],
-        )
-        row["sap_status"] = SAP_STAGE_LABELS[status]
+        row["sap_status"] = SAP_STAGE_LABELS[row.pop("status_key")]
     return JsonResponse(data, safe=False, json_dumps_params={"ensure_ascii": False})
-
-
-def _resolve_chart_year(request):
-    try:
-        year = int(request.GET.get("year", ""))
-    except (TypeError, ValueError):
-        year = _date.today().year
-    return year if year in YEARS else YEARS[-1]
 
 
 def _chart_response(labels, datasets, extra=None):
@@ -351,7 +343,7 @@ def _stacked_by_cfo(sql, params, stages, title):
 
 @login_required
 def api_chart_contracts(request):
-    year = _resolve_chart_year(request)
+    year = valid_year(request.GET.get("year"))
     igk = request.GET.get("igk", "").strip()
     if not igk:
         return _chart_response([], [])
@@ -366,7 +358,7 @@ def api_chart_contracts(request):
 
 @login_required
 def api_chart_znp(request):
-    year = _resolve_chart_year(request)
+    year = valid_year(request.GET.get("year"))
     igk = request.GET.get("igk", "").strip()
     if not igk:
         return _chart_response([], [])
