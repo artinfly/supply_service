@@ -126,11 +126,8 @@ def export_kdr(request, year):
     end_date = request.GET.get("end", "").strip()
     has_period = bool(start_date and end_date)
 
-    sql = kdr_export(year)
-    params = []
-
     with connection.cursor() as cur:
-        cur.execute(sql, params)
+        cur.execute(kdr_export(year))
         db_cols = [c[0] for c in cur.description]
         detail_rows = [dict(zip(db_cols, r)) for r in cur.fetchall()]
 
