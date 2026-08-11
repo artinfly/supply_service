@@ -1,0 +1,37 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Django: сервер",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\manage.py",
+            "args": [
+                "runserver"
+            ],
+            "django": true,
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Django: команда (спросить какую)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\manage.py",
+            "args": [
+                "${input:manageCommand}"
+            ],
+            "django": true,
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ],
+    "inputs": [
+        {
+            "id": "manageCommand",
+            "type": "promptString",
+            "description": "Команда manage.py",
+            "default": "check"
+        }
+    ]
+}
