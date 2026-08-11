@@ -3,7 +3,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = "django-insecure-local-dev-key-change-in-production"
-DEBUG = False
+DEBUG = True
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 
 INSTALLED_APPS = [
@@ -88,13 +88,3 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "/reports/login/"
 LOGIN_REDIRECT_URL = "/reports/"
 LOGOUT_REDIRECT_URL = "/reports/login/"
-
-try:
-    from . import local_settings
-except ImportError:
-    local_settings = None
-
-if local_settings is not None:
-    for _name in dir(local_settings):
-        if _name.isupper():
-            globals()[_name] = getattr(local_settings, _name)
