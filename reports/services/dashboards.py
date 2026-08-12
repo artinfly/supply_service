@@ -111,6 +111,13 @@ def not_issued_aggregates():
     }
 
 
+def stage_aggregates():
+    return {
+        "stage_count": Count("pp_id"),
+        "stage_sum": Sum("plan"),
+    }
+
+
 def znp_aggregates():
     approved = Q(znp_status=ZNP_APPROVED)
     pending = ~Q(znp_status=ZNP_APPROVED)
@@ -149,6 +156,11 @@ def cfo_breakdown_row(label, breakdown, statuses):
     }
 
 
+EMPTY_STAGES = {
+    "stage_count": 0,
+    "stage_sum": None,
+}
+
 EMPTY_NOT_ISSUED = {
     "count": 0,
     "plan_sum": None,
@@ -174,7 +186,7 @@ EMPTY_ZNP = {
 }
 
 
-def breakdown_from_stats(ni, zs):
+def breakdown_from_stats(ni, zs, st):
     not_issued_count = ni["count"] or 0
     not_issued_sum = to_mln(ni["plan_sum"])
     not_issued_advance_count = ni["advance_count"] or 0
@@ -188,7 +200,7 @@ def breakdown_from_stats(ni, zs):
     postpayment_count = zs["postpayment_count"] or 0
     postpayment_paid_count = zs["postpayment_paid_count"] or 0
 
-    total = not_issued_count + issued_count + in_progress_count
+    total = st["stage_count"] or 0
 
     def _pct(part, whole):
         return (part / whole * 100) if whole else 0
@@ -203,7 +215,7 @@ def breakdown_from_stats(ni, zs):
 
     return {
         "total_count": total,
-        "total_sum": not_issued_sum + issued_sum + to_mln(zs["in_progress_sum"]),
+        "total_sum": to_mln(st["stage_sum"]),
         "not_issued": _card(not_issued_count, not_issued_sum, "not_issued"),
         "not_issued_advance": _card(
             not_issued_advance_count,
