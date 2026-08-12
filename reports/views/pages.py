@@ -16,6 +16,7 @@ from ..models import IgkStatData, NsiIgk, ZnpData, ZnpDataSAP
 from ..services.dashboards import (
     EMPTY_CFO_STATS,
     EMPTY_NOT_ISSUED,
+    EMPTY_STAGES,
     EMPTY_ZNP,
     ZNP_STAGE_LABELS,
     ZNP_STAGE_NAMES,
@@ -27,6 +28,7 @@ from ..services.dashboards import (
     not_issued_aggregates,
     percent,
     sap_cards,
+    stage_aggregates,
     to_mln,
     znp_aggregates,
 )
@@ -415,19 +417,28 @@ def znp_table(request):
             qs = qs.filter(parent__igk=igk)
         return qs
 
+    def _stages_qs(igk=None):
+        qs = IgkStatData.objects.filter(status__in=CONCLUDED)
+        if igk is not None:
+            qs = qs.filter(igk=igk)
+        return qs
+
     all_not_issued_qs = _not_issued_qs()
     all_znp_qs = _znp_qs()
+    all_stages_qs = _stages_qs()
     year_not_issued_qs = filter_by_year(all_not_issued_qs, year)
     year_znp_qs = filter_by_year(all_znp_qs, year, field_prefix="parent__")
+    year_stages_qs = filter_by_year(all_stages_qs, year)
 
-    def _breakdown(not_issued_qs, znp_qs):
+    def _breakdown(not_issued_qs, znp_qs, stages_qs):
         return breakdown_from_stats(
             not_issued_qs.aggregate(**not_issued_aggregates()),
             znp_qs.aggregate(**znp_aggregates()),
+            stages_qs.aggregate(**stage_aggregates()),
         )
 
-    all_breakdown = _breakdown(all_not_issued_qs, all_znp_qs)
-    year_breakdown = _breakdown(year_not_issued_qs, year_znp_qs)
+    all_breakdown = _breakdown(all_not_issued_qs, all_znp_qs, all_stages_qs)
+    year_breakdown = _breakdown(year_not_issued_qs, year_znp_qs, year_stages_qs)
 
     available_cfo = list(
         IgkStatData.objects.filter(igk=selected_igk)
@@ -440,6 +451,7 @@ def znp_table(request):
     igk_znp_qs = filter_by_year(
         _znp_qs(igk=selected_igk), year, field_prefix="parent__"
     )
+    igk_stages_qs = filter_by_year(_stages_qs(igk=selected_igk), year)
 
     not_issued_stats = {
         row["cfo"]: row
@@ -449,6 +461,10 @@ def znp_table(request):
         row["parent__cfo"]: row
         for row in igk_znp_qs.values("parent__cfo").annotate(**znp_aggregates())
     }
+    stage_stats = {
+        row["cfo"]: row
+        for row in igk_stages_qs.values("cfo").annotate(**stage_aggregates())
+    }
 
     cfo_table = [
         cfo_breakdown_row(
@@ -456,13 +472,16 @@ def znp_table(request):
             breakdown_from_stats(
                 not_issued_stats.get(cfo, EMPTY_NOT_ISSUED),
                 znp_stats.get(cfo, EMPTY_ZNP),
+                stage_stats.get(cfo, EMPTY_STAGES),
             ),
             ZNP_STAGE_LABELS,
         )
         for cfo in available_cfo
     ]
     cfo_total_row = cfo_breakdown_row(
-        "ИТОГО", _breakdown(igk_not_issued_qs, igk_znp_qs), ZNP_STAGE_LABELS
+        "ИТОГО",
+        _breakdown(igk_not_issued_qs, igk_znp_qs, igk_stages_qs),
+        ZNP_STAGE_LABELS,
     )
 
     ctx.update(
