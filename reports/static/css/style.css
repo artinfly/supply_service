@@ -548,3 +548,15 @@ body.login-page {
 .stage-metric .dash-card-num { color: var(--text); }
 
 .dash-slot-empty { visibility: hidden; }
+
+.format-note {
+    display: flex; align-items: center; gap: 0.9rem;
+    background: var(--orange-soft); border: 1px solid var(--orange);
+    border-radius: 8px; padding: 0.85rem 1rem; margin-bottom: 1rem;
+}
+.format-note-ext {
+    font-size: 1.9rem; font-weight: 800; letter-spacing: 0.02em;
+    color: var(--orange-dark); line-height: 1; white-space: nowrap;
+}
+.format-note-text { font-size: 0.82rem; color: var(--text); line-height: 1.5; }
+.format-note-text b { color: var(--orange-dark); }
