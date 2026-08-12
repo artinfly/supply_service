@@ -14,6 +14,15 @@
     {% endfor %}
     {% endif %}
 
+    <div class="format-note">
+        <div class="format-note-ext">XLSX</div>
+        <div class="format-note-text">
+            Принимается <b>только .xlsx</b>. Старый формат <b>.xls</b> не читается.<br>
+            Если файл в .xls — откройте его в Excel и сохраните заново:
+            «Файл → Сохранить как → Книга Excel (*.xlsx)».
+        </div>
+    </div>
+
     <form method="post" enctype="multipart/form-data" onsubmit="return checkFile()">
         {% csrf_token %}
         <div class="mb-3">
@@ -34,9 +43,7 @@
         <div id="upload-progress" style="display:none;margin-top:0.75rem;font-size:0.82rem;color:#555">
             Идёт загрузка и обработка файла, подождите...
         </div>
-        <div id="file-error" style="display:none;color:#c0392b;font-size:0.8rem;margin-top:0.5rem">
-            Файл не прикреплён — выберите .xlsx файл перед загрузкой
-        </div>
+        <div id="file-error" style="display:none;color:#c0392b;font-size:0.8rem;margin-top:0.5rem"></div>
     </form>
 
     {% if result %}
@@ -68,9 +75,18 @@
 function checkFile() {
     const input = document.querySelector('input[name="excel_file"]');
     const err   = document.getElementById('file-error');
-    if (!input.files || !input.files.length) {
+    function fail(text) {
+        err.textContent = text;
         err.style.display = 'block';
         return false;
+    }
+    if (!input.files || !input.files.length) {
+        return fail('Файл не прикреплён — выберите .xlsx файл перед загрузкой');
+    }
+    const name = input.files[0].name;
+    if (!name.toLowerCase().endsWith('.xlsx')) {
+        const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : 'без расширения';
+        return fail('Это ' + ext + ', а нужен .xlsx. Откройте файл в Excel и сохраните как «Книга Excel (*.xlsx)».');
     }
     err.style.display = 'none';
     document.getElementById('upload-btn').disabled = true;
