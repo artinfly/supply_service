@@ -117,13 +117,6 @@ def dot_date_to_date(val):
 def normalize_contracts():
     with transaction.atomic(), connection.cursor() as cur:
         cur.execute("""
-            INSERT INTO nsi_cfo (cfo)
-            SELECT DISTINCT TRIM(cfo) FROM staging_excel
-            WHERE cfo IS NOT NULL AND TRIM(cfo) <> ''
-            ON CONFLICT DO NOTHING
-        """)
-
-        cur.execute("""
             INSERT INTO nsi_igk (igk)
             SELECT DISTINCT TRIM(igk) FROM staging_excel
             WHERE igk IS NOT NULL AND TRIM(igk) <> ''
@@ -264,7 +257,7 @@ def normalize_contracts():
             INSERT INTO igk_stat_data
                 (igk, c_agent, cfo, contract, status, payment_type,
                  item, "order", plan, fact, tolerance, stage,
-                 y25, y26, y27, is_deleted, plan_date, c_date, contract_sum,
+                 y25, y26, y27, plan_date, c_date, contract_sum,
                  crc32_hash, remainder)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """,
