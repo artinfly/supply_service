@@ -4,7 +4,6 @@ from .models import (
     ContractCountsSnapshot,
     ContractsHistory,
     IgkStatData,
-    NsiCfo,
     NsiIgk,
     StagingExcel,
     StagingZnpExcel,
@@ -12,12 +11,6 @@ from .models import (
     ZnpData,
     ZnpDataSAP,
 )
-
-
-@admin.register(NsiCfo)
-class NsiCfoAdmin(admin.ModelAdmin):
-    list_display = ("cfo",)
-    search_fields = ("cfo",)
 
 
 @admin.register(NsiIgk)
@@ -29,7 +22,7 @@ class NsiIgkAdmin(admin.ModelAdmin):
 @admin.register(IgkStatData)
 class IgkStatDataAdmin(admin.ModelAdmin):
     list_display = ("igk", "c_agent", "cfo", "contract", "status", "y25", "y26", "y27")
-    list_filter = ("status", "payment_type", "y25", "y26", "y27", "is_deleted")
+    list_filter = ("status", "payment_type", "y25", "y26", "y27")
     search_fields = ("igk", "c_agent", "contract")
 
 
