@@ -255,7 +255,7 @@ def advances(year):
                               WHEN payment_type='{ADVANCE}' THEN plan ELSE 0 END) AS numeric),2) AS advance_plan,
             ROUND(CAST(SUM(CASE WHEN payment_type='{ADVANCE}' THEN COALESCE(fact,0) ELSE 0 END) AS numeric),2) AS advance_fact
         FROM igk_stat_data
-        WHERE {yc}=TRUE AND is_deleted=FALSE AND status!='Расторгнут'
+        WHERE {yc}=TRUE AND status!='Расторгнут'
           AND payment_type IN ('{ADVANCE}','{POSTPAYMENT}')
           AND igk IS NOT NULL AND TRIM(igk)!=''
           AND cfo IS NOT NULL AND TRIM(cfo)!=''
@@ -320,7 +320,6 @@ def kdr_delta(yc, start_date, end_date):
 def contracts_by_agent_filter(yc, agent):
     conditions = [
         f"{yc}=TRUE",
-        "is_deleted=FALSE",
         "contract IS NOT NULL AND TRIM(contract)!=''",
         "payment_type IS NOT NULL AND TRIM(payment_type)!=''",
     ]

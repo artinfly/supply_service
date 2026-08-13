@@ -1,20 +1,6 @@
 from django.db import models
 
 
-class NsiCfo(models.Model):
-    cfo_id = models.AutoField(primary_key=True)
-    cfo = models.CharField(max_length=50, unique=True)
-
-    class Meta:
-        managed = True
-        db_table = "nsi_cfo"
-        verbose_name = "ЦФО"
-        verbose_name_plural = "ЦФО"
-
-    def __str__(self):
-        return self.cfo
-
-
 class NsiIgk(models.Model):
     igk_id = models.AutoField(primary_key=True)
     igk = models.CharField(max_length=50, unique=True)
@@ -47,7 +33,6 @@ class IgkStatData(models.Model):
     y25 = models.BooleanField(null=True)
     y26 = models.BooleanField(null=True)
     y27 = models.BooleanField(null=True)
-    is_deleted = models.BooleanField(default=False)
     plan_date = models.CharField(max_length=50, null=True)
     c_date = models.CharField(max_length=256, null=True)
     contract_sum = models.FloatField(null=True)
