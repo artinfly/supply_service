@@ -23,13 +23,6 @@
         "django-html": "html"
     },
 
-    "files.exclude": {
-        "**/__pycache__": true,
-        "**/*.pyc": true,
-        ".venv": true,
-        "staticfiles": true,
-        "wheels": true
-    },
     "search.exclude": {
         "**/.venv": true,
         "**/staticfiles": true,
