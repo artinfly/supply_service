@@ -1,4 +1,8 @@
+from django import forms
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.forms import UserChangeForm
+from django.contrib.auth.models import Permission, User
 
 from .models import (
     ContractCountsSnapshot,
@@ -73,3 +77,46 @@ class ZnpDataSAPAdmin(admin.ModelAdmin):
 class StagingZnpSAPExcelAdmin(admin.ModelAdmin):
     list_display = ("id", "reg_num", "igk", "cfo", "c_agent")
     search_fields = ("reg_num", "igk", "c_agent")
+
+
+class SectionChoiceField(forms.ModelMultipleChoiceField):
+    def label_from_instance(self, obj):
+        return obj.name.replace("Раздел: ", "")
+
+
+class AccessUserForm(UserChangeForm):
+    sections = SectionChoiceField(
+        queryset=Permission.objects.filter(codename__startswith="access_"),
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label="Доступ к разделам",
+        help_text="Отметьте разделы, которые будут видны этому пользователю.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields["sections"].initial = self.instance.user_permissions.filter(
+                codename__startswith="access_"
+            )
+
+
+admin.site.unregister(User)
+
+
+@admin.register(User)
+class UserWithSectionsAdmin(UserAdmin):
+    form = AccessUserForm
+    fieldsets = (
+        (None, {"fields": ("username", "password")}),
+        ("Личные данные", {"fields": ("first_name", "last_name", "email")}),
+        ("Доступ к разделам", {"fields": ("sections",)}),
+        ("Служебное", {"fields": ("is_active", "is_staff", "is_superuser", "groups")}),
+        ("Важные даты", {"fields": ("last_login", "date_joined")}),
+    )
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        user = form.instance
+        keep = list(user.user_permissions.exclude(codename__startswith="access_"))
+        user.user_permissions.set(keep + list(form.cleaned_data.get("sections") or []))
