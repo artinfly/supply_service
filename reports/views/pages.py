@@ -9,7 +9,6 @@ from django.core.management import call_command
 from django.db import connection
 from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.db.models.expressions import RawSQL
-from django.http import JsonResponse
 from django.shortcuts import redirect, render
 
 from ..models import IgkStatData, NsiIgk, ZnpData, ZnpDataSAP
@@ -46,6 +45,7 @@ from ..services.queries import (
     distinct_sap_cfo,
     distinct_sap_igk,
     needs_znp,
+    valid_date,
     valid_year,
 )
 from ..services.sap_status import (
@@ -55,15 +55,10 @@ from ..services.sap_status import (
 )
 
 
-def is_operator(user):
-    return user.is_superuser or user.groups.filter(name="operator").exists()
-
-
 def _ctx(request):
     return {
         "years": YEARS,
         "year_cols": [(y, f"y{str(y)[2:]}") for y in YEARS],
-        "is_operator": is_operator(request.user),
     }
 
 
@@ -225,8 +220,6 @@ FILE_TYPE_LABELS = {
 
 @login_required
 def upload_excel(request):
-    if not is_operator(request.user):
-        return JsonResponse({"error": "нет прав на загрузку файлов"}, status=403)
     result = None
     file_type = request.POST.get("file_type", "contracts")
     if request.method == "POST" and request.FILES.get("excel_file"):
@@ -261,9 +254,6 @@ def upload_excel(request):
 
 @login_required
 def dashboard(request):
-    if not request.user.is_superuser:
-        return render(request, "access_denied.html", _ctx(request))
-
     available_years = YEARS
     available_igk = NsiIgk.objects.all()
 
@@ -385,9 +375,6 @@ def dashboard(request):
 
 @login_required
 def znp_table(request):
-    if not request.user.is_superuser:
-        return render(request, "access_denied.html", _ctx(request))
-
     available_years = YEARS
     available_igk = NsiIgk.objects.all()
 
@@ -484,12 +471,19 @@ def znp_table(request):
         ZNP_STAGE_LABELS,
     )
 
+    chart_start = request.GET.get("start", "").strip()
+    chart_end = request.GET.get("end", "").strip()
+    if not (valid_date(chart_start) and valid_date(chart_end)):
+        chart_start = chart_end = ""
+
     ctx.update(
         {
             "available_years": available_years,
             "selected_year": str(year),
             "available_igk": available_igk,
             "selected_igk": selected_igk,
+            "chart_start": chart_start,
+            "chart_end": chart_end,
             "stage_names": ZNP_STAGE_NAMES,
             "all": all_breakdown,
             "year": year_breakdown,
@@ -507,9 +501,6 @@ def znp_table(request):
 
 @login_required
 def znp_sap_table(request):
-    if not request.user.is_superuser:
-        return render(request, "access_denied.html", _ctx(request))
-
     ctx = _ctx(request)
     qs = ZnpDataSAP.objects.annotate(sap_status=sap_status_expr).filter(cfo__in=SAP_CFO)
 

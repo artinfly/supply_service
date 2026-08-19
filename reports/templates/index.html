@@ -13,6 +13,7 @@
         <img src="{% static 'img/tank.png' %}" alt="УВЗ">
     </div>
 
+    {% if perms.reports.access_dashboard %}
     <div class="idx-card idx-card-accent">
         <div class="idx-label">Договорная работа</div>
         <div class="idx-desc">Всего / заключено / не заключено договоров, % контрактации и авансирования, разрез по ЦФО</div>
@@ -20,7 +21,9 @@
             <a href="{% url 'dashboard' %}" class="idx-btn">Открыть дашборд</a>
         </div>
     </div>
+    {% endif %}
 
+    {% if perms.reports.access_znp %}
     <div class="idx-card idx-card-accent">
         <div class="idx-label">Заявки на платёж (ФЗД)</div>
         <div class="idx-desc">Оформлено / оплачено по авансу и постоплате, разрез по ЦФО</div>
@@ -28,7 +31,9 @@
             <a href="{% url 'znp_table' %}" class="idx-btn">Открыть дашборд</a>
         </div>
     </div>
+    {% endif %}
 
+    {% if perms.reports.access_znp_sap %}
     <div class="idx-card idx-card-accent">
         <div class="idx-label">Заявки на платёж (SAP)</div>
         <div class="idx-desc">Этап согласования: 421 отдел → 18 отдел → согласовано → оплата возможна</div>
@@ -36,7 +41,9 @@
             <a href="{% url 'znp_sap_table' %}" class="idx-btn">Открыть дашборд</a>
         </div>
     </div>
+    {% endif %}
 
+    {% if perms.reports.access_export %}
     <div class="idx-card idx-card-accent">
         <div class="idx-label">КДР — контроль договорной работы</div>
         <div class="idx-desc">По каждому ИГК и ЦФО: договоры, суммы, % контрактации, авансирование</div>
@@ -60,7 +67,9 @@
             {% endfor %}
         </div>
     </div>
+    {% endif %}
 
+    {% if perms.reports.access_igk %}
     <div class="idx-card">
         <div class="idx-label">ИГК — заключённые</div>
         <div class="idx-row">
@@ -87,7 +96,9 @@
             {% endfor %}
         </div>
     </div>
+    {% endif %}
 
+    {% if perms.reports.access_dashboard %}
     <div class="idx-card">
         <div class="idx-label">Все договоры</div>
         <div class="idx-desc">Фильтрация по контрагенту, ИГК, году, статусу</div>
@@ -95,7 +106,9 @@
             <a href="{% url 'all_contracts_table' %}" class="idx-btn">Открыть</a>
         </div>
     </div>
+    {% endif %}
 
+    {% if perms.reports.access_history %}
     <div class="idx-card">
         <div class="idx-label">История изменений</div>
         <div class="idx-row">
@@ -104,7 +117,9 @@
             <a href="{% url 'history_fact_table' %}" class="idx-btn">Факт</a>
         </div>
     </div>
+    {% endif %}
 
+    {% if perms.reports.access_dupes %}
     <div class="idx-card">
         <div class="idx-label">Контроль качества</div>
         <div class="idx-desc">Дубликаты по комбинации ИГК + договор + предмет + заказ + этап</div>
@@ -112,18 +127,18 @@
             <a href="{% url 'contract_dupes_table' %}" class="idx-btn">Дубли договоров</a>
         </div>
     </div>
+    {% endif %}
 
+    {% if perms.reports.access_upload %}
     <div class="idx-card">
         <div class="idx-label">Загрузка данных</div>
         <div class="idx-row">
-            {% if is_operator %}
             <a href="{% url 'upload_excel' %}" class="idx-btn">Загрузить Excel</a>
-            {% else %}
-            <span class="idx-disabled">Недостаточно прав</span>
-            {% endif %}
         </div>
     </div>
+    {% endif %}
 
+    {% if perms.reports.access_export %}
     <div class="idx-card idx-card-wide idx-card-accent">
         <div class="idx-label">Скачивание отчётов</div>
         <div class="idx-row">
@@ -135,7 +150,7 @@
             <a href="{% url 'export_page' %}" class="idx-btn idx-btn-dashed">Все отчёты →</a>
         </div>
     </div>
-
+    {% endif %}
 </div>
 {% endblock %}
 
