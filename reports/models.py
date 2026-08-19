@@ -247,3 +247,20 @@ class ContractCountsSnapshot(models.Model):
 
     def __str__(self):
         return f"{self.igk}/{self.cfo} {self.year_col} — {self.concluded_count} на {self.upload_date}"
+
+
+class Access(models.Model):
+    class Meta:
+        managed = False
+        default_permissions = ()
+        permissions = [
+            ("access_dashboard", "Раздел: Договорная работа"),
+            ("access_znp", "Раздел: ЗнП (ФЗД)"),
+            ("access_znp_sap", "Раздел: ЗнП (SAP)"),
+            ("access_kdr", "Раздел: КДР по годам"),
+            ("access_igk", "Раздел: ИГК по годам"),
+            ("access_history", "Раздел: История изменений"),
+            ("access_dupes", "Раздел: Дубликаты"),
+            ("access_export", "Раздел: Отчёты в Excel"),
+            ("access_upload", "Раздел: Загрузка данных"),
+        ]
