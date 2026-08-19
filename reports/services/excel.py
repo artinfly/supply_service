@@ -1,8 +1,8 @@
-from datetime import date
 from io import BytesIO
 from urllib.parse import quote
 
 from django.http import HttpResponse
+from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -74,7 +74,7 @@ def make_wb(sheet_name, headers, col_widths, rows_data, kinds=None, formats=None
 
 
 def xlsx_response(data, filename_ru):
-    today = date.today().strftime("%d_%m_%Y")
+    today = timezone.localdate().strftime("%d_%m_%Y")
     fname_ascii = f"{filename_ru.translate(_TRANSLIT)}_{today}.xlsx"
     fname_utf8 = quote(f"{filename_ru}_{today}.xlsx")
     response = HttpResponse(

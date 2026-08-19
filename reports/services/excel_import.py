@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 import openpyxl
 from django.core.management.base import CommandError
 from django.db import connection, transaction
@@ -58,14 +60,20 @@ ZNP_SAP_COLUMNS = {
 BAD_FORMAT = "Документ не соответствует формату"
 
 
-def _open_sheet(filepath):
+@contextmanager
+def _sheet(filepath):
     try:
         wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
     except FileNotFoundError:
         raise CommandError(f"файл не найден: {filepath}")
     except Exception as exc:
         raise CommandError(str(exc))
-    return wb, wb.active.iter_rows(values_only=True)
+    rows = wb.active.iter_rows(values_only=True)
+    try:
+        yield rows
+    finally:
+        rows.close()
+        wb.close()
 
 
 def _find_columns(rows, column_map):
@@ -113,24 +121,20 @@ def _replace_table(table, fields, data):
 
 def import_contracts(filepath):
     fields = list(CONTRACT_COLUMNS.values())
-    wb, rows = _open_sheet(filepath)
-    try:
+    with _sheet(filepath) as rows:
         positions = _find_columns(rows, CONTRACT_COLUMNS)
         data = [
             tuple(_read_row(row, positions, fields)[f] for f in fields)
             for row in rows
             if any(row)
         ]
-    finally:
-        wb.close()
     _replace_table("staging_excel", fields, data)
     return len(data)
 
 
 def import_znp(filepath):
     fields = list(ZNP_COLUMNS.values()) + ["crc32_hash"]
-    wb, rows = _open_sheet(filepath)
-    try:
+    with _sheet(filepath) as rows:
         positions = _find_columns(rows, ZNP_COLUMNS)
         data = []
         for row in rows:
@@ -143,16 +147,13 @@ def import_znp(filepath):
                 record["igk"], record["c_agent"], record["contract"], record["stage"]
             )
             data.append(tuple(record[f] for f in fields))
-    finally:
-        wb.close()
     _replace_table("staging_znp_excel", fields, data)
     return len(data)
 
 
 def import_znp_sap(filepath):
     fields = list(ZNP_SAP_COLUMNS.values())
-    wb, rows = _open_sheet(filepath)
-    try:
+    with _sheet(filepath) as rows:
         positions = _find_columns(rows, ZNP_SAP_COLUMNS)
         data = []
         for row in rows:
@@ -162,7 +163,5 @@ def import_znp_sap(filepath):
             if _is_blank(record, "c_agent"):
                 continue
             data.append(tuple(record[f] for f in fields))
-    finally:
-        wb.close()
     _replace_table("staging_znp_sap_excel", fields, data)
     return len(data)
