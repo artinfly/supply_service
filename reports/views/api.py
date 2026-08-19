@@ -36,6 +36,7 @@ from ..services.queries import (
     igk_stat_total,
     kdr,
     needs_znp,
+    valid_date,
     valid_year,
     znp_list,
 )
@@ -143,7 +144,8 @@ def api_igk_detail(request, year, igk):
 def api_all_contracts(request):
     agent = request.GET.get("agent", "").strip()
     igk_filter = request.GET.get("igk", "").strip()
-    statuses = request.GET.getlist("status")
+    raw_statuses = request.GET.getlist("status")
+    statuses = [s for s in raw_statuses if s]
     year_filter = request.GET.get("year", "").strip()
     cfo_filter = request.GET.get("cfo", "").strip()
 
@@ -162,6 +164,8 @@ def api_all_contracts(request):
     if statuses:
         conditions.append(f"status IN ({','.join(['%s'] * len(statuses))})")
         params.extend(statuses)
+    elif raw_statuses:
+        conditions.append("FALSE")
     if year_filter in YEAR_COL:
         conditions.append(f"{YEAR_COL[year_filter]} = TRUE")
 
@@ -224,7 +228,8 @@ def api_znp_list(request):
     igk_filter = request.GET.get("igk", "").strip()
     cfo_filter = request.GET.get("cfo", "").strip()
     year_filter = request.GET.get("year", "").strip()
-    statuses = request.GET.getlist("status")
+    raw_statuses = request.GET.getlist("status")
+    statuses = [s for s in raw_statuses if s]
 
     conditions = [f"i.status IN ({','.join(['%s'] * len(CONCLUDED))})"]
     params = list(CONCLUDED)
@@ -245,6 +250,8 @@ def api_znp_list(request):
     ]
     if status_conditions:
         conditions.append("(" + " OR ".join(status_conditions) + ")")
+    elif raw_statuses:
+        conditions.append("FALSE")
 
     where = "WHERE " + " AND ".join(conditions)
     return _json_response(znp_list(where), params)
@@ -255,7 +262,8 @@ def api_znp_sap_list(request):
     agent = request.GET.get("agent", "").strip()
     igk_filter = request.GET.get("igk", "").strip()
     cfo_filter = request.GET.get("cfo", "").strip()
-    statuses = request.GET.getlist("status")
+    raw_statuses = request.GET.getlist("status")
+    statuses = [s for s in raw_statuses if s]
 
     qs = ZnpDataSAP.objects.filter(cfo__in=SAP_CFO)
     if agent:
@@ -271,6 +279,8 @@ def api_znp_sap_list(request):
             status_q |= SAP_STATUS_CONDITIONS[s]
     if status_q:
         qs = qs.filter(status_q)
+    elif raw_statuses:
+        qs = qs.none()
 
     data = list(
         qs.annotate(status_key=sap_status_expr)
@@ -360,12 +370,17 @@ def api_chart_contracts(request):
 def api_chart_znp(request):
     year = valid_year(request.GET.get("year"))
     igk = request.GET.get("igk", "").strip()
+    start = request.GET.get("start", "").strip()
+    end = request.GET.get("end", "").strip()
+    if (start or end) and not (valid_date(start) and valid_date(end)):
+        return JsonResponse({"error": "недопустимая дата периода"}, status=400)
     if not igk:
         return _chart_response([], [])
-    sql, params = znp_by_cfo(YEAR_COL[str(year)], igk)
-    return _stacked_by_cfo(
-        sql, params, ZNP_STAGES, f"Заявки по ЦФО и стадиям, ГодИГК {year}"
-    )
+    sql, params = znp_by_cfo(YEAR_COL[str(year)], igk, start, end)
+    title = f"Заявки по ЦФО и стадиям, ГодИГК {year}"
+    if start and end:
+        title += f", заявки с {start} по {end}"
+    return _stacked_by_cfo(sql, params, ZNP_STAGES, title)
 
 
 @login_required

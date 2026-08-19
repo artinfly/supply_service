@@ -101,6 +101,7 @@ function buildUrl() {
     if (cfo)   params.append('cfo', cfo);
     for (const [id, status] of STATUS_BOXES)
         if (document.getElementById(id).checked) params.append('status', status);
+    if (!params.has('status')) params.append('status', '');
     const qs = params.toString();
     return apiUrl + (qs ? '?' + qs : '');
 }

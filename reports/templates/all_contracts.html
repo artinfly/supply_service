@@ -116,6 +116,7 @@ function buildUrl() {
         NOT_CONCL_STATUSES.forEach(s => params.append('status', s));
     if (document.getElementById('cb-terminated').checked)
         TERMINATED_STATUSES.forEach(s => params.append('status', s));
+    if (!params.has('status')) params.append('status', '');
     const year = document.getElementById('filter-year').value;
     if (year !== 'all') params.append('year', year);
     const qs = params.toString();
