@@ -560,3 +560,17 @@ body.login-page {
 }
 .format-note-text { font-size: 0.82rem; color: var(--text); line-height: 1.5; }
 .format-note-text b { color: var(--orange-dark); }
+
+.chart-period {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: flex-end;
+    margin-bottom: 14px;
+}
+.chart-period .filter-group { gap: 0.15rem; }
+.chart-period-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding-bottom: 0.35rem;
+}

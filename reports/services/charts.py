@@ -52,8 +52,13 @@ def contracts_by_cfo(year_col, igk):
     return sql, [igk, *NOT_CONCL]
 
 
-def znp_by_cfo(year_col, igk):
+def znp_by_cfo(year_col, igk, start=None, end=None):
     concluded = ", ".join(["%s"] * len(CONCLUDED))
+    params = [igk, *CONCLUDED]
+    period = ""
+    if start and end:
+        period = "AND (z.id IS NULL OR z.znp_date BETWEEN %s AND %s)"
+        params += [start, end]
     sql = f"""
         SELECT cfo, stage, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS plan_sum
         FROM (
@@ -73,10 +78,11 @@ def znp_by_cfo(year_col, igk):
               AND i.cfo IS NOT NULL AND TRIM(i.cfo) <> ''
               AND i.payment_type IN ('{ADVANCE}', '{POSTPAYMENT}')
               AND (z.id IS NOT NULL OR {needs_znp()})
+              {period}
         ) src
         GROUP BY 1, 2
     """
-    return sql, [igk, *CONCLUDED]
+    return sql, params
 
 
 def znp_sap_by_cfo(igk):
