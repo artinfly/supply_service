@@ -107,24 +107,24 @@
                 <tr>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ row.cfo }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ row.total_count }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ row.total_sum|floatformat:2|intspace }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
                     </td>
                     {% for cell in row.cells %}
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cell.count }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses={{ cell.status_param }}"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses={{ cell.status_param }}"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cell.sum|floatformat:2|intspace }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?cfo={{ row.cfo }}&statuses={{ cell.status_param }}"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses={{ cell.status_param }}"></a>
                     </td>
                     {% endfor %}
                 </tr>
@@ -132,24 +132,24 @@
                 <tr class="row-total">
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cfo_total_row.cfo }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cfo_total_row.total_count }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cfo_total_row.total_sum|floatformat:2|intspace }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
                     </td>
                     {% for cell in cfo_total_row.cells %}
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cell.count }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?statuses={{ cell.status_param }}"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses={{ cell.status_param }}"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cell.sum|floatformat:2|intspace }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?statuses={{ cell.status_param }}"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses={{ cell.status_param }}"></a>
                     </td>
                     {% endfor %}
                 </tr>

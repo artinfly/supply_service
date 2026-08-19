@@ -17,6 +17,8 @@
                 <option value="{{ i }}" {% if selected_igk == i|stringformat:"s" %}selected{% endif %}>{{ i }}</option>
                 {% endfor %}
             </select>
+            <input type="hidden" name="start" id="opt-start" value="{{ chart_start }}">
+            <input type="hidden" name="end" id="opt-end" value="{{ chart_end }}">
         </form>
     </div>
 
@@ -293,6 +295,19 @@
     <div class="table-container mt-4 mb-4" style="padding:18px 20px 22px">
         <h6 style="margin:0 0 2px;font-size:14px;font-weight:700">Заявки по ЦФО</h6>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Стадии заявок в разрезе ЦФО — те же, что на карточках выше</div>
+        <div class="chart-period">
+            <div class="filter-group">
+                <label class="filter-label" for="chart-start">Дата заявки с</label>
+                <input type="date" id="chart-start" class="filter-input" style="width:160px" value="{{ chart_start }}">
+            </div>
+            <div class="filter-group">
+                <label class="filter-label" for="chart-end">по</label>
+                <input type="date" id="chart-end" class="filter-input" style="width:160px" value="{{ chart_end }}">
+            </div>
+            <button type="button" id="chart-apply" class="btn-orange">Применить</button>
+            <button type="button" id="chart-reset" class="btn-ghost">Сбросить</button>
+            <span class="chart-period-note" id="chart-period-note"></span>
+        </div>
         <div style="position:relative;height:300px">
             <canvas id="chart-znp"></canvas>
         </div>
@@ -305,13 +320,47 @@
 <script src="{% static 'vendor/chartjs-plugin-datalabels.min.js' %}"></script>
 <script src="{% static 'js/charts.js' %}"></script>
 <script>
+const chartUrl = '{% url "api_chart_znp" %}';
+const startEl  = document.getElementById('chart-start');
+const endEl    = document.getElementById('chart-end');
+const noteEl   = document.getElementById('chart-period-note');
+
 function drawChart() {
+    const start = startEl.value;
+    const end   = endEl.value;
     const params = new URLSearchParams({
         igk:  '{{ selected_igk|escapejs }}',
         year: '{{ selected_year|escapejs }}',
     });
-    loadChart('chart-znp', '{% url "api_chart_znp" %}?' + params);
+    if (start && end) {
+        params.append('start', start);
+        params.append('end', end);
+    }
+    document.getElementById('opt-start').value = start && end ? start : '';
+    document.getElementById('opt-end').value   = start && end ? end : '';
+    noteEl.textContent = start && end
+        ? 'Не оформленные показаны целиком — у них нет даты заявки'
+        : '';
+    const page = new URLSearchParams(window.location.search);
+    page.set('start', start && end ? start : '');
+    page.set('end',   start && end ? end : '');
+    if (!start || !end) { page.delete('start'); page.delete('end'); }
+    history.replaceState(null, '', page.toString() ? '?' + page : window.location.pathname);
+    loadChart('chart-znp', chartUrl + '?' + params);
 }
+
+document.getElementById('chart-apply').addEventListener('click', () => {
+    if (Boolean(startEl.value) !== Boolean(endEl.value)) {
+        alert('Укажите обе даты периода');
+        return;
+    }
+    drawChart();
+});
+document.getElementById('chart-reset').addEventListener('click', () => {
+    startEl.value = '';
+    endEl.value = '';
+    drawChart();
+});
 drawChart();
 </script>
 {% endblock %}
