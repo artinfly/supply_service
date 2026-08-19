@@ -1,10 +1,38 @@
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = "django-insecure-local-dev-key-change-in-production"
-DEBUG = True
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
+
+def _load_env_file(path):
+    if not path.exists():
+        return
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_env_file(BASE_DIR / ".env")
+
+
+def _flag(name, default):
+    return os.getenv(name, default).strip().lower() in ("1", "true", "yes", "on", "да")
+
+
+SECRET_KEY = os.getenv(
+    "DJANGO_SECRET_KEY", "django-insecure-local-dev-key-change-in-production"
+)
+DEBUG = _flag("DEBUG", "True")
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.getenv(
+        "ALLOWED_HOSTS", "localhost,127.0.0.1,testserver,10.109.42.67,10.10.10.37"
+    ).split(",")
+    if h.strip()
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -26,6 +54,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "reports.middleware.SectionAccessMiddleware",
 ]
 
 ROOT_URLCONF = "supply_service.urls"
@@ -51,11 +80,11 @@ WSGI_APPLICATION = "supply_service.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": "supply_service_test",
-        "USER": "root",
-        "PASSWORD": "root",
-        "HOST": "localhost",
-        "PORT": "5432",
+        "NAME": os.getenv("DB_NAME", "supply_service_test"),
+        "USER": os.getenv("DB_USER", "root"),
+        "PASSWORD": os.getenv("DB_PASSWORD", "root"),
+        "HOST": os.getenv("DB_HOST", "localhost"),
+        "PORT": os.getenv("DB_PORT", "5432"),
         "OPTIONS": {"client_encoding": "UTF8"},
     }
 }
@@ -80,9 +109,15 @@ STATICFILES_DIRS = [BASE_DIR / "reports" / "static"]
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        "BACKEND": (
+            "django.contrib.staticfiles.storage.StaticFilesStorage"
+            if DEBUG
+            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        )
     },
 }
+WHITENOISE_USE_FINDERS = DEBUG
+WHITENOISE_AUTOREFRESH = DEBUG
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
