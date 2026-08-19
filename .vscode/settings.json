@@ -26,6 +26,7 @@
     "files.exclude": {
         "**/__pycache__": true,
         "**/*.pyc": true,
+        ".venv": true,
         "staticfiles": true,
         "wheels": true
     },

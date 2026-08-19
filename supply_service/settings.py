@@ -1,38 +1,10 @@
-import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-def _load_env_file(path):
-    if not path.exists():
-        return
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
-
-
-_load_env_file(BASE_DIR / ".env")
-
-
-def _flag(name, default):
-    return os.getenv(name, default).strip().lower() in ("1", "true", "yes", "on", "да")
-
-
-SECRET_KEY = os.getenv(
-    "DJANGO_SECRET_KEY", "django-insecure-local-dev-key-change-in-production"
-)
-DEBUG = _flag("DEBUG", "True")
-ALLOWED_HOSTS = [
-    h.strip()
-    for h in os.getenv(
-        "ALLOWED_HOSTS", "localhost,127.0.0.1,testserver,10.109.42.67,10.10.10.37"
-    ).split(",")
-    if h.strip()
-]
+SECRET_KEY = "django-insecure-local-dev-key-change-in-production"
+DEBUG = True
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -80,11 +52,11 @@ WSGI_APPLICATION = "supply_service.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME", "supply_service_test"),
-        "USER": os.getenv("DB_USER", "root"),
-        "PASSWORD": os.getenv("DB_PASSWORD", "root"),
-        "HOST": os.getenv("DB_HOST", "localhost"),
-        "PORT": os.getenv("DB_PORT", "5432"),
+        "NAME": "supply_service_test",
+        "USER": "root",
+        "PASSWORD": "root",
+        "HOST": "localhost",
+        "PORT": "5432",
         "OPTIONS": {"client_encoding": "UTF8"},
     }
 }
