@@ -1,4 +1,6 @@
-from datetime import date
+from datetime import datetime
+
+from django.utils import timezone
 
 CONCLUDED = (
     "Исполняется",
@@ -21,11 +23,19 @@ HAS_ORDER = '"order" IS NOT NULL AND TRIM("order") != \'\''
 SAP_CFO = tuple(str(n) for n in range(420, 430))
 
 
+def valid_date(value):
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
 def valid_year(value):
     try:
         year = int(value)
     except (TypeError, ValueError):
-        year = date.today().year
+        year = timezone.localdate().year
     return year if year in YEARS else YEARS[-1]
 
 
@@ -169,11 +179,13 @@ def history_fact():
 
 def contract_dupes():
     return """
-        SELECT c_agent, contract, item, "order", TRIM(stage) AS stage,
-               plan_date, encode(digest(concat(
-               c_agent, contract, item, "order", TRIM(stage), plan_date), 'md5'), 'hex') AS hash
+        SELECT RIGHT(igk, 4) AS igk, c_agent, contract, item, "order",
+               TRIM(stage) AS stage, plan_date,
+               encode(digest(concat(
+               igk, c_agent, contract, item, "order", TRIM(stage), plan_date),
+               'md5'), 'hex') AS hash
         FROM igk_stat_data
-        GROUP BY igk, c_agent, contract, item, "order", stage, plan_date
+        GROUP BY igk, c_agent, contract, item, "order", TRIM(stage), plan_date
         HAVING COUNT(*) > 1
         ORDER BY contract, c_agent
     """

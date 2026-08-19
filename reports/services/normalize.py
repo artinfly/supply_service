@@ -2,13 +2,14 @@ from collections import defaultdict
 from datetime import date, datetime
 
 from django.db import connection, transaction
+from django.utils import timezone
 
 from reports.services.linking import contract_hash, relink_znp_parents
 from reports.services.queries import ADVANCE, CONCLUDED, POSTPAYMENT, YEARS
 
 
 def to_float(val):
-    if not val or str(val).strip() in ("", "-", "None"):
+    if val is None or str(val).strip() in ("", "-", "None"):
         return None
     try:
         return float(str(val).replace("\xa0", "").replace(" ", "").replace(",", "."))
@@ -156,7 +157,6 @@ def normalize_contracts():
                     y25,
                     y26,
                     y27,
-                    False,
                     plan_month(r[12]),
                     norm(r[14]),
                     to_float(r[13]),
@@ -194,12 +194,12 @@ def normalize_contracts():
                 r[6] or "",
                 r[7] or "",
                 r[11] or "",
-                r[16] or "",
+                r[15] or "",
             ),
-            value_fn=lambda r: (r[4], r[8], r[9], r[18]),
+            value_fn=lambda r: (r[4], r[8], r[9], r[17]),
         )
 
-        today = date.today()
+        today = timezone.localdate()
         history = []
         for key, new_vals in new_lookup.items():
             if key not in old_lookup:
@@ -259,7 +259,7 @@ def normalize_contracts():
                  item, "order", plan, fact, tolerance, stage,
                  y25, y26, y27, plan_date, c_date, contract_sum,
                  crc32_hash, remainder)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """,
             new_data,
         )

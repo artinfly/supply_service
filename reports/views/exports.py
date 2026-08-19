@@ -20,6 +20,7 @@ from ..services.queries import (
     history_status,
     kdr_delta,
     kdr_export,
+    valid_date,
 )
 
 
@@ -111,8 +112,17 @@ def export_contract_dupes(request):
         contract_dupes(),
         [],
         "дубли_договоров",
-        ["Контрагент", "Договор", "Предмет", "Заказ", "Этап", "Дата плана", "Хеш"],
-        [40, 50, 50, 20, 15, 12, 12],
+        [
+            "ИГК",
+            "Контрагент",
+            "Договор",
+            "Предмет",
+            "Заказ",
+            "Этап",
+            "Дата плана",
+            "Хеш",
+        ],
+        [10, 40, 50, 50, 20, 15, 12, 12],
     )
 
 
@@ -125,6 +135,8 @@ def export_kdr(request, year):
     start_date = request.GET.get("start", "").strip()
     end_date = request.GET.get("end", "").strip()
     has_period = bool(start_date and end_date)
+    if has_period and not (valid_date(start_date) and valid_date(end_date)):
+        return JsonResponse({"error": "недопустимая дата периода"}, status=400)
 
     with connection.cursor() as cur:
         cur.execute(kdr_export(year))
@@ -224,7 +236,7 @@ def export_kdr(request, year):
         end_date = datetime.strptime(end_date, "%Y-%m-%d").strftime("%d.%m.%Y")
 
     yy = str(year)
-    period_text = f"с {start_date} по {end_date})" if has_period else ""
+    period_text = f" с {start_date} по {end_date}" if has_period else ""
 
     headers = [
         "ИГК",
@@ -239,7 +251,7 @@ def export_kdr(request, year):
         f"% контрактации {yy}г.",
         f"Сумма заключенных договоров на {yy}г., млн.руб.",
         f"% контрактации {yy}г.",
-        f"Заключено {period_text} шт.",
+        f"Заключено{period_text}, шт.",
         "Не заключено, шт.",
         "Сумма не заключенных договоров, млн.руб.",
         f"Плановая сумма аванса в {yy}г., млн.руб.",
