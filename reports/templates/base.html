@@ -120,6 +120,17 @@ function fmt(val, format) {
     return val;
 }
 
+function downloadKDR(url, year, startId, endId) {
+    const start = document.getElementById(startId).value;
+    const end = document.getElementById(endId).value;
+    if (!start || !end) {
+        alert('Для формирования КДР необходимо выбрать обе даты периода');
+        return;
+    }
+    const params = new URLSearchParams({start: start, end: end});
+    window.location.href = url.replace('/0/', `/${year}/`) + '?' + params;
+}
+
 function pageSize() {
     const v = parseInt(document.getElementById('page-size').value);
     return v === 0 ? Infinity : v;
