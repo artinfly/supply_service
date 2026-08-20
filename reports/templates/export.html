@@ -35,7 +35,7 @@
         </div>
         <div class="d-flex gap-2 flex-wrap">
             {% for y in years %}
-            <button class="btn-index" onclick="downloadKDR('{{ y }}')">КДР {{ y }} ↓</button>
+            <button class="btn-index" onclick="downloadKDR('{% url "export_kdr" 0 %}', '{{ y }}', 'kdr-start', 'kdr-end')">КДР {{ y }} ↓</button>
             {% endfor %}
         </div>
     </div>
@@ -98,21 +98,6 @@ function downloadAgent(year) {
 function clearKdrDates() {
     document.getElementById('kdr-start').value = '';
     document.getElementById('kdr-end').value = '';
-}
-
-function downloadKDR(year) {
-    const start = document.getElementById('kdr-start').value;
-    const end = document.getElementById('kdr-end').value;
-    if (!start || !end) {
-        alert('Для формирования КДР необходимо выбрать обе даты периода');
-        return;
-    }
-    let url = '{% url "export_kdr" 0 %}'.replace('/0/', `/${year}/`);
-    const params = new URLSearchParams();
-    if (start) params.append('start', start);
-    if (end) params.append('end', end);
-    if (params.toString()) url += '?' + params.toString();
-    window.location.href = url;
 }
 </script>
 {% endblock %}
