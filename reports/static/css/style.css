@@ -383,11 +383,6 @@ body.login-page {
     padding-right: 0.3rem;
 }
 
-.idx-disabled {
-    font-size: 0.78rem;
-    color: #ccc;
-}
-
 .idx-btn {
     padding: 0.3rem 0.75rem;
     border-radius: 5px;

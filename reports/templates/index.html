@@ -63,7 +63,7 @@
         </div>
         <div class="idx-row">
             {% for y in years %}
-            <button class="idx-btn" onclick="downloadIdxKDR('{{ y }}')">КДР {{ y }} ↓</button>
+            <button class="idx-btn" onclick="downloadKDR('{% url "export_kdr" 0 %}', '{{ y }}', 'idx-kdr-start', 'idx-kdr-end')">КДР {{ y }} ↓</button>
             {% endfor %}
         </div>
     </div>
@@ -152,23 +152,4 @@
     </div>
     {% endif %}
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-function downloadIdxKDR(year) {
-    var start = document.getElementById('idx-kdr-start').value;
-    var end = document.getElementById('idx-kdr-end').value;
-    if (!start || !end) {
-        alert('Для формирования КДР необходимо выбрать обе даты периода');
-        return;
-    }
-    var url = '{% url "export_kdr" 0 %}'.replace('/0/', '/' + year + '/');
-    var params = new URLSearchParams();
-    if (start) params.append('start', start);
-    if (end) params.append('end', end);
-    if (params.toString()) url += '?' + params.toString();
-    window.location.href = url;
-}
-</script>
 {% endblock %}
