@@ -188,6 +188,11 @@ def history_fact_table(request):
 
 @login_required
 def contract_dupes_table(request):
+    with connection.cursor() as cur:
+        cur.execute(distinct_cfo())
+        cfo_list = [r[0] for r in cur.fetchall()]
+    ctx = _ctx(request)
+    ctx["cfo_list"] = cfo_list
     return render(request, "contract_dupes.html", _ctx(request))
 
 

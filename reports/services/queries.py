@@ -177,23 +177,42 @@ def history_fact():
     """
 
 
-def contract_dupes():
-    return """
-        SELECT RIGHT(igk, 4) AS igk, c_agent, contract, item, "order",
+def dupes_filter(cfo, year):
+    conditions = []
+    params = []
+    if cfo:
+        conditions.append("TRIM(cfo) = %s")
+        params.append(cfo)
+    if year in YEAR_COL:
+        conditions.append(f"{YEAR_COL[year]} = TRUE")
+    return conditions, params
+
+
+def contract_dupes(cfo=None, year=None):
+    conditions, params = dupes_filter(cfo, year)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    sql = f"""
+        SELECT RIGHT(igk, 4) AS igk,
+               STRING_AGG(DISTINCT TRIM(cfo), ', ') AS cfo, c_agent, contract, item, "order",
                TRIM(stage) AS stage, plan_date,
                encode(digest(concat(
                igk, c_agent, contract, item, "order", TRIM(stage), plan_date),
                'md5'), 'hex') AS hash
         FROM igk_stat_data
+        {where}
         GROUP BY igk, c_agent, contract, item, "order", TRIM(stage), plan_date
         HAVING COUNT(*) > 1
         ORDER BY contract, c_agent
     """
+    return sql, params
 
 
-def contract_dupes_by_order():
-    return f"""
-        SELECT RIGHT(igk, 4) AS igk, item, "order",
+def contract_dupes_by_order(cfo=None, year=None):
+    conditions, params = dupes_filter(cfo, year)
+    extra = ("AND " + " AND ".join(conditions)) if conditions else ""
+    sql = f"""
+        SELECT RIGHT(igk, 4) AS igk,
+               STRING_AGG(DISTINCT TRIM(cfo), ', ') AS cfo, item, "order",
                COUNT(*) AS rows_count,
                COUNT(DISTINCT contract) AS contracts_count,
                COUNT(DISTINCT c_agent) AS agents_count,
@@ -202,10 +221,12 @@ def contract_dupes_by_order():
         WHERE igk IS NOT NULL AND TRIM(igk) != ''
           AND item IS NOT NULL AND TRIM(item) != ''
           AND {HAS_ORDER}
+          {extra}
         GROUP BY RIGHT(igk, 4), item, "order"
         HAVING COUNT(*) > 1
         ORDER BY COUNT(*) DESC, igk, item
     """
+    return sql, params
 
 
 def igk_detail(year, igk, statuses):
@@ -422,3 +443,14 @@ def znp_list(where):
         {where}
         ORDER BY i.contract, z.plan_payment_date NULLS LAST
     """
+
+
+def contracts_appeared(kind):
+    return """
+        SELECT upload_date, reason, RIGHT(igk, 4) AS igk, cfo, c_agent, contract, item, order_num, stage, plan_date, status, plan, contract_sum
+        FROM contracts_appeared
+        WHERE kind = %s
+        ORDER BY upload_date DESC, igk, contract, item
+    """, [
+        kind
+    ]
