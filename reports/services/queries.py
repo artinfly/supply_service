@@ -221,6 +221,7 @@ def contract_dupes_by_order(cfo=None, year=None):
         WHERE igk IS NOT NULL AND TRIM(igk) != ''
           AND item IS NOT NULL AND TRIM(item) != ''
           AND {HAS_ORDER}
+          {extra}
         GROUP BY RIGHT(igk, 4), item, "order"
         HAVING COUNT(*) > 1
         ORDER BY COUNT(*) DESC, igk, item

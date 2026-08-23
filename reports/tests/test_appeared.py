@@ -109,8 +109,8 @@ class DupeFilterTests(TestCase):
                     contract_row(cfo="421"),
                     contract_row(cfo="422", dogovor="Д-9", zakaz="З-9"),
                     contract_row(cfo="422", dogovor="Д-9", zakaz="З-9"),
-                    contract_row(cfo="423", dogovor="Д-7", god_igk="2025"),
-                    contract_row(cfo="423", dogovor="Д-7", god_igk="2025"),
+                    contract_row(cfo="423", dogovor="Д-7", zakaz="З-7", god_igk="2025"),
+                    contract_row(cfo="423", dogovor="Д-7", zakaz="З-7", god_igk="2025"),
                 ]
             ),
         )
@@ -122,6 +122,16 @@ class DupeFilterTests(TestCase):
         отобрано = rows(contract_dupes("422", ""))
         self.assertEqual(len(отобрано), 1)
         self.assertEqual(отобрано[0]["contract"], "Д-9")
+
+    def test_фильтр_цфо_работает_для_дублей_по_заказу(self):
+        отобрано = rows(contract_dupes_by_order("422", ""))
+        self.assertEqual(len(отобрано), 1)
+        self.assertEqual(отобрано[0]["order"], "З-9")
+
+    def test_фильтр_года_работает_для_дублей_по_заказу(self):
+        отобрано = rows(contract_dupes_by_order("", "2025"))
+        self.assertEqual(len(отобрано), 1)
+        self.assertEqual(отобрано[0]["order"], "З-7")
 
     def test_фильтр_года_работает(self):
         отобрано = rows(contract_dupes("", "2025"))
