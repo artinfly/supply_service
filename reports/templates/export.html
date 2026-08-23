@@ -72,8 +72,18 @@
 
     <div class="index-card">
         <div class="index-card-title">Дубликаты</div>
+        <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">Фильтры года и ЦФО задаются на странице "Дубликаты" и переносятся в файл</p>
         <div class="d-flex gap-2 flex-wrap">
-            <a href="{% url 'export_contract_dupes' %}" class="btn-index">Скачать xlsx ↓</a>
+            <a href="{% url 'export_contract_dupes' %}" class="btn-index">Полные повторы ↓</a>
+            <a href="{% url 'export_contract_dupes_by_order' %}" class="btn-index">По ИГК, предмету и заказу ↓</a>
+        </div>
+    </div>
+    <div class="index-card">
+        <div class="index-card-title">Появившиеся договоры</div>
+        <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">Позиции, которые стали заключнными и незаключёнными с прошлой загрузки</p>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'export_appeared_concluded' %}" class="btn-index">Новые заключённые из Новокольцово ↓</a>
+            <a href="{% url 'export_appeared_not_concluded' %}" class="btn-index">Новые незаключённые из Новокольцово ↓</a>
         </div>
     </div>
 

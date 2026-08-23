@@ -11,6 +11,8 @@ from ..services.queries import (
     YEAR_COL,
     advances,
     contract_dupes,
+    contract_dupes_by_order,
+    contracts_appeared,
     contracts_by_agent_filter,
 )
 from ..services.queries import export_contracts_by_agent as query_contracts_by_agent
@@ -106,14 +108,38 @@ def export_history_fact(request):
     )
 
 
+APPEARED_HEADERS = [
+    "Дата загрузки",
+    "Причина",
+    "ИГК",
+    "ЦФО",
+    "Контрагент",
+    "Договор",
+    "Предмет",
+    "Заказ",
+    "Этап",
+    "Дата плана",
+    "Состояние",
+    "План, руб.",
+    "Сумма договора, руб.",
+]
+APPEARED_WIDTHS = [14, 12, 10, 8, 40, 50, 50, 20, 15, 12, 18, 16, 20]
+
+
+def _dupes_args(request):
+    return request.GET.get("cfo", "").strip(), request.GET.get("year", "").strip()
+
+
 @login_required
 def export_contract_dupes(request):
+    sql, params = contract_dupes(*_dupes_args(request))
     return _export_simple(
-        contract_dupes(),
-        [],
+        sql,
+        params,
         "дубли_договоров",
         [
             "ИГК",
+            "ЦФО",
             "Контрагент",
             "Договор",
             "Предмет",
@@ -122,7 +148,44 @@ def export_contract_dupes(request):
             "Дата плана",
             "Хеш",
         ],
-        [10, 40, 50, 50, 20, 15, 12, 12],
+        [10, 8, 40, 50, 50, 20, 15, 12, 12],
+    )
+
+
+@login_required
+def export_contract_dupes_by_order(request):
+    sql, params = contract_dupes_by_order(*_dupes_args(request))
+    return _export_simple(
+        sql,
+        params,
+        "дубли_по_заказу",
+        [
+            "ИГК",
+            "ЦФО",
+            "Предмет",
+            "Заказ",
+            "Строк",
+            "Договоров",
+            "Контрагентов",
+            "Сумма плана, руб.",
+        ],
+        [10, 8, 50, 20, 10, 12, 14, 20],
+    )
+
+
+@login_required
+def export_appeared_concluded(request):
+    sql, params = contracts_appeared("concluded")
+    return _export_simple(
+        sql, params, "новые_заключённые", APPEARED_HEADERS, APPEARED_WIDTHS
+    )
+
+
+@login_required
+def export_appeared_not_concluded(request):
+    sql, params = contracts_appeared("not_concluded")
+    return _export_simple(
+        sql, params, "новые_незаключённые", APPEARED_HEADERS, APPEARED_WIDTHS
     )
 
 

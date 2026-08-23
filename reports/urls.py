@@ -59,6 +59,21 @@ urlpatterns = [
         exports.export_contract_dupes,
         name="export_contract_dupes",
     ),
+    path(
+        "export/contract-dupes-by-order/",
+        exports.export_contract_dupes_by_order,
+        name="export_contract_dupes_by_order",
+    ),
+    path(
+        "export/appeared-concluded/",
+        exports.export_appeared_concluded,
+        name="export_appeared_concluded",
+    ),
+    path(
+        "export/appeared-not-concluded/",
+        exports.export_appeared_not_concluded,
+        name="export_appeared_not_concluded",
+    ),
     path("api/kdr/<str:year>/", api.api_kdr, name="api_kdr"),
     path(
         "api/igk-concluded/<str:year>/", api.api_igk_concluded, name="api_igk_concluded"
