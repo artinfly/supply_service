@@ -191,7 +191,7 @@ def dupes_filter(cfo, year):
 def contract_dupes(cfo=None, year=None):
     conditions, params = dupes_filter(cfo, year)
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    sql = """
+    sql = f"""
         SELECT RIGHT(igk, 4) AS igk,
                STRING_AGG(DISTINCT TRIM(cfo), ', ') AS cfo, c_agent, contract, item, "order",
                TRIM(stage) AS stage, plan_date,
@@ -199,6 +199,7 @@ def contract_dupes(cfo=None, year=None):
                igk, c_agent, contract, item, "order", TRIM(stage), plan_date),
                'md5'), 'hex') AS hash
         FROM igk_stat_data
+        {where}
         GROUP BY igk, c_agent, contract, item, "order", TRIM(stage), plan_date
         HAVING COUNT(*) > 1
         ORDER BY contract, c_agent

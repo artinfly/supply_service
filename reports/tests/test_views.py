@@ -73,7 +73,8 @@ class DupeHashTests(TestCase):
         load("load_contracts", contracts_file([contract_row(), contract_row()]))
 
         with connection.cursor() as cur:
-            cur.execute(contract_dupes())
+            sql, params = contract_dupes()
+            cur.execute(sql, params)
             cols = [c[0] for c in cur.description]
             rows = [dict(zip(cols, r)) for r in cur.fetchall()]
         self.assertEqual(len(rows), 1)

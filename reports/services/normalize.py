@@ -65,7 +65,7 @@ def status_group(status):
     if status in CONCLUDED:
         return "concluded"
     if status in NOT_CONCL:
-        return "not_concl"
+        return "not_concluded"
     return None
 
 
@@ -227,14 +227,24 @@ def normalize_contracts():
                     continue
                 else:
                     reason = "смена статуса"
-                    appeared.append(
-                        (
-                            today, kind, reason
-                            row[0], row[2], row[1], row[3],
-                            row[6], row[7], row[11], row[15],
-                            row[4], row[8], row[17],
-                        )
+                appeared.append(
+                    (
+                        today,
+                        kind,
+                        reason,
+                        row[0],
+                        row[2],
+                        row[1],
+                        row[3],
+                        row[6],
+                        row[7],
+                        row[11],
+                        row[15],
+                        row[4],
+                        row[8],
+                        row[17],
                     )
+                )
         if appeared:
             cur.executemany(
                 """

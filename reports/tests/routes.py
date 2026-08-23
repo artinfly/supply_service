@@ -29,6 +29,9 @@ EXPORTS = [
     ("export_history_plan", []),
     ("export_history_fact", []),
     ("export_contract_dupes", []),
+    ("export_contract_dupes_by_order", []),
+    ("export_appeared_concluded", []),
+    ("export_appeared_not_concluded", []),
 ]
 
 APIS = [

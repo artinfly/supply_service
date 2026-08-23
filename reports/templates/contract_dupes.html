@@ -6,26 +6,33 @@
     <h5>Дубликаты</h5>
 </div>
 
-<div class="filter-panel">
-    <div class="filter-group">
-        <label class="filter-label" for ="filter-year">Год</label>
-        <select id="filter-year" class="filter-select">
-            <option value="">Все</option>
-            {% for y in years %}
-            <option value="{{ y }}">{{ y }}</option>
-            {% endfor %}
-        </select>
+<div class="filter-panel mb-3">
+    <div class="d-flex flex-wrap gap-3 align-items-end">
+        <div class="filter-group">
+            <label class="filter-label" for="filter-year">Год</label>
+            <select id="filter-year" class="filter-select">
+                <option value="">Все</option>
+                {% for y in years %}
+                <option value="{{ y }}">{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label" for="filter-cfo">ЦФО</label>
+            <select id="filter-cfo" class="filter-select">
+                <option value="">Все</option>
+                {% for c in cfo_list %}
+                <option value="{{ c }}">{{ c }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group" style="flex-direction:row;align-items:flex-end;gap:0.4rem">
+            <button type="button" id="filter-reset" class="btn-ghost">Сбросить</button>
+        </div>
     </div>
-    <div class="filter-group">
-        <label class="filter-label" for ="filter-cfo">ЦФО</label>
-        <select id="filter-cfo" class="filter-select">
-            <option value="">Все</option>
-            {% for c in cfo_list %}
-            <option value="{{ c }}">{{ c }}</option>
-            {% endfor %}
-        </select>
+    <div class="filter-hint" style="font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem">
+        Фильтр применяется к таблице «Повторы по ИГК, предмету и заказу». «Полные повторы строк» показаны без фильтра.
     </div>
-    <button type="button" id="filter-reset" class="btn-ghost">Сбросить</button>
 </div>
 
 <div class="dupes-block">
@@ -86,21 +93,20 @@ function query() {
     return qs ? '?' + qs : '';
 }
 
-function reload(){
-    const qs = query();
-    loadTable(data.fullUrl + qs,  'wrap-full',  COLS_FULL);
-    loadTable(data.orderUrl + qs, 'wrap-order', COLS_ORDER);
+function reloadOrder(){
+    loadTable(data.orderUrl + query(), 'wrap-order', COLS_ORDER);
 }
 
-document.getElementById('filter-year').addEventListener('change', reload);
-document.getElementById('filter-cfo').addEventListener('change', reload);
+document.getElementById('filter-year').addEventListener('change', reloadOrder);
+document.getElementById('filter-cfo').addEventListener('change', reloadOrder);
 document.getElementById('filter-reset').addEventListener('click', () => {
     document.getElementById('filter-year').value = '';
     document.getElementById('filter-cfo').value = '';
-    reload();
+    reloadOrder();
 });
 
-reload();
+loadTable(data.fullUrl, 'wrap-full', COLS_FULL);
+reloadOrder();
 
 </script>
 {% endblock %}
