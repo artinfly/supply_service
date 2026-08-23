@@ -6,6 +6,28 @@
     <h5>Дубликаты</h5>
 </div>
 
+<div class="filter-panel">
+    <div class="filter-group">
+        <label class="filter-label" for ="filter-year">Год</label>
+        <select id="filter-year" class="filter-select">
+            <option value="">Все</option>
+            {% for y in years %}
+            <option value="{{ y }}">{{ y }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="filter-group">
+        <label class="filter-label" for ="filter-cfo">ЦФО</label>
+        <select id="filter-cfo" class="filter-select">
+            <option value="">Все</option>
+            {% for c in cfo_list %}
+            <option value="{{ c }}">{{ c }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="button" id="filter-reset" class="btn-ghost">Сбросить</button>
+</div>
+
 <div class="dupes-block">
     <div class="dupes-head">
         <h6>Полные повторы строк</h6>
@@ -32,6 +54,7 @@
 <script>
 const COLS_FULL = [
     { field: 'igk',       title: 'ИГК' },
+    { field: 'cfo',       title: 'ЦФО' },
     { field: 'c_agent',   title: 'Контрагент' },
     { field: 'contract',  title: 'Договор' },
     { field: 'item',      title: 'Предмет' },
@@ -42,6 +65,7 @@ const COLS_FULL = [
 
 const COLS_ORDER = [
     { field: 'igk',             title: 'ИГК' },
+    { field: 'cfo',             title: 'ЦФО' },
     { field: 'item',            title: 'Предмет' },
     { field: 'order',           title: 'Заказ' },
     { field: 'rows_count',      title: 'Строк',        format: 'int' },
@@ -51,7 +75,32 @@ const COLS_ORDER = [
 ];
 
 const data = document.getElementById('page-data').dataset;
-loadTable(data.fullUrl,  'wrap-full',  COLS_FULL);
-loadTable(data.orderUrl, 'wrap-order', COLS_ORDER);
+
+function query() {
+    const params = new URLSearchParams();
+    const year = document.getElementById('filter-year').value;
+    const cfo = document.getElementById('filter-cfo').value;
+    if (year) params.append('year', year);
+    if(cfo) params.append('cfo', cfo);
+    const qs = params.toString();
+    return qs ? '?' + qs : '';
+}
+
+function reload(){
+    const qs = query();
+    loadTable(data.fullUrl + qs,  'wrap-full',  COLS_FULL);
+    loadTable(data.orderUrl + qs, 'wrap-order', COLS_ORDER);
+}
+
+document.getElementById('filter-year').addEventListener('change', reload);
+document.getElementById('filter-cfo').addEventListener('change', reload);
+document.getElementById('filter-reset').addEventListener('click', () => {
+    document.getElementById('filter-year').value = '';
+    document.getElementById('filter-cfo').value = '';
+    reload();
+});
+
+reload();
+
 </script>
 {% endblock %}

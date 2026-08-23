@@ -264,3 +264,31 @@ class Access(models.Model):
             ("access_export", "Раздел: Отчёты в Excel"),
             ("access_upload", "Раздел: Загрузка данных"),
         ]
+
+
+class ContractsAppeared(models.Model):
+    id = models.AutoField(primary_key=True)
+    upload_date = models.DateField()
+    kind = models.CharField(max_length=20)
+    reason = models.CharField(max_length=20)
+    igk = models.CharField(max_length=500, null=True)
+    cfo = models.CharField(max_length=500, null=True)
+    c_agent = models.CharField(max_length=500, null=True)
+    contract = models.CharField(max_length=500, null=True)
+    item = models.CharField(max_length=500, null=True)
+    order_num = models.CharField(max_length=500, null=True)
+    stage = models.CharField(max_length=500, null=True)
+    plan_date = models.CharField(max_length=20, null=True)
+    status = models.CharField(max_length=500, null=True)
+    plan = models.FloatField(null=True)
+    contract_sum = models.FloatField(null=True)
+
+    class Meta:
+        managed = True
+        db_table = "contracts_appeared"
+        verbose_name = "Появившийся договор"
+        verbose_name_plural = "Появившиеся договоры"
+        indexes = [models.Index(fields=["upload_date", "kind"])]
+
+    def __str__(self):
+        return f"{self.contract} - {self.kind} на {self.upload_date}"

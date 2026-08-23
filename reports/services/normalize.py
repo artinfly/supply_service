@@ -5,7 +5,13 @@ from django.db import connection, transaction
 from django.utils import timezone
 
 from reports.services.linking import contract_hash, relink_znp_parents
-from reports.services.queries import ADVANCE, CONCLUDED, POSTPAYMENT, YEARS
+from reports.services.queries import (
+    ADVANCE,
+    CONCLUDED,
+    NOT_CONCL,
+    POSTPAYMENT,
+    YEARS,
+)
 
 
 def to_float(val):
@@ -53,6 +59,14 @@ CONCLUDED_SQL = ", ".join(f"'{s}'" for s in CONCLUDED)
 
 
 YEAR_MAP = [(f"y{str(y)[2:]}", y) for y in YEARS]
+
+
+def status_group(status):
+    if status in CONCLUDED:
+        return "concluded"
+    if status in NOT_CONCL:
+        return "not_concl"
+    return None
 
 
 def _indexed_lookup(rows, key_fn, value_fn):
@@ -196,18 +210,53 @@ def normalize_contracts():
                 r[11] or "",
                 r[15] or "",
             ),
-            value_fn=lambda r: (r[4], r[8], r[9], r[17]),
+            value_fn=lambda r: r,
         )
 
         today = timezone.localdate()
+        appeared = []
+        if old_lookup:
+            for key, row in new_lookup.items():
+                kind = status_group(row[4])
+                if kind is None:
+                    continue
+                old_row = old_lookup.get(key)
+                if old_row is None:
+                    reason = "новая позиция"
+                elif status_group(old_row[0]) == kind:
+                    continue
+                else:
+                    reason = "смена статуса"
+                    appeared.append(
+                        (
+                            today, kind, reason
+                            row[0], row[2], row[1], row[3],
+                            row[6], row[7], row[11], row[15],
+                            row[4], row[8], row[17],
+                        )
+                    )
+        if appeared:
+            cur.executemany(
+                """
+                INSERT INTO contracts_appeared
+                (upload_date, kind, reason, igk, cfo, c_agent, contract, item, order_num, stage, plan_date, status, plan, contract_sum)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+                appeared,
+            )
         history = []
-        for key, new_vals in new_lookup.items():
+        for key, new_row in new_lookup.items():
             if key not in old_lookup:
                 continue
             old_vals = old_lookup[key]
 
             old_status, old_plan, old_fact, old_sum = old_vals
-            new_status, new_plan, new_fact, new_sum = new_vals
+            new_status, new_plan, new_fact, new_sum = (
+                new_row[4],
+                new_row[8],
+                new_row[9],
+                new_row[17],
+            )
 
             status_changed = old_status != new_status
             plan_changed = not floats_equal(old_plan, new_plan)

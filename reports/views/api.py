@@ -120,12 +120,20 @@ def api_history_fact(request):
 
 @login_required
 def api_contract_dupes(request):
-    return _json_response(contract_dupes())
+    sql, params = contract_dupes(
+        request.GET.get("cfo", "").strip(),
+        request.GET.get("year", "").strip(),
+    )
+    return _json_response(sql, params)
 
 
 @login_required
 def api_contract_dupes_by_order(request):
-    return _json_response(contract_dupes_by_order())
+    sql, params = contract_dupes_by_order(
+        request.GET.get("cfo", "").strip(),
+        request.GET.get("year", "").strip(),
+    )
+    return _json_response(sql, params)
 
 
 @login_required
