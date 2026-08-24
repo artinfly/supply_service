@@ -5,7 +5,7 @@
 
 {% block content %}
     <div class="page-header">
-        <h5>Заявки на платёж (SAP)</h5>
+        <h5>Заявки на платёж (SAP) {% if sap_load_time %}<span style="font-size:14px;color:var(--text-muted);font-weight:400">(Актуально на {{ sap_load_time|date:"d.m.Y H:i" }})</span>{% endif %}</h5>
         <form method="get" class="d-flex gap-2 align-items-center" id='options'>
             <select class="form-select form-select-sm" name="igk" onchange="this.form.submit()" style="width:auto">
                 {% for i in available_igk %}
@@ -23,7 +23,7 @@
         <div class="block-title">Все заявки</div>
         <div class="card-block">
             <div class="dash-row">
-                <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,paid" class="text-decoration-none">
+                <a href="{% url 'znp_sap_list_table' %}?statuses=waiting_agreement,sent_18,confirmed_18,paid, ready_18" class="text-decoration-none">
                     <div class="dash-card stage-total">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
@@ -56,8 +56,6 @@
                         </div>
                     </div>
                 </a>
-            </div>
-            <div class="dash-row">
                 <a href="{% url 'znp_sap_list_table' %}?statuses=confirmed_18" class="text-decoration-none">
                     <div class="dash-card stage-ready">
                         <div class="dash-card-icon">
@@ -69,6 +67,8 @@
                         </div>
                     </div>
                 </a>
+            </div>
+            <div class="dash-row">
                 <a href="{% url 'znp_sap_list_table' %}?statuses=paid" class="text-decoration-none">
                     <div class="dash-card stage-done">
                         <div class="dash-card-icon">
@@ -77,6 +77,17 @@
                         <div>
                             <div class="dash-card-num">Оплачено: {{ all.paid.count }}</div>
                             <div class="dash-card-lbl">{{ all.paid.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.paid.percent|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="{% url 'znp_sap_list_table' %}?statuses=ready_18" class="text-decoration-none">
+                    <div class="dash-card stage-upnext">
+                        <div class="dash-card-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+                        </div>
+                        <div>
+                            <div class="dash-card-num">Готово к передаче в 18 отдел: {{ all.ready_18.count }}</div>
+                            <div class="dash-card-lbl">{{ all.ready_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ all.ready_18.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
                 </a>
@@ -107,15 +118,15 @@
                 <tr>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ row.cfo }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid, ready_18"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ row.total_count }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid, ready_18"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ row.total_sum|floatformat:2|intspace }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid, ready_18"></a>
                     </td>
                     {% for cell in row.cells %}
                     <td class="clickable-cell">
@@ -132,15 +143,15 @@
                 <tr class="row-total">
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cfo_total_row.cfo }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,sent_18,confirmed_18,paid, ready_18"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cfo_total_row.total_count }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,sent_18,confirmed_18,paid, ready_18"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cfo_total_row.total_sum|floatformat:2|intspace }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,sent_18,confirmed_18,paid"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,sent_18,confirmed_18,paid, ready_18"></a>
                     </td>
                     {% for cell in cfo_total_row.cells %}
                     <td class="clickable-cell">

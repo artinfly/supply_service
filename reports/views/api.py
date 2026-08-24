@@ -42,7 +42,7 @@ from ..services.queries import (
 )
 from ..services.sap_status import (
     SAP_STAGE_LABELS,
-    SAP_STATUS_CONDITIONS,
+    sap_status_conditions,
     sap_status_expr,
 )
 
@@ -281,17 +281,18 @@ def api_znp_sap_list(request):
     if cfo_filter:
         qs = qs.filter(cfo__icontains=cfo_filter)
 
+    conditions = sap_status_conditions()
     status_q = Q()
     for s in statuses:
-        if s in SAP_STATUS_CONDITIONS:
-            status_q |= SAP_STATUS_CONDITIONS[s]
+        if s in conditions:
+            status_q |= conditions[s]
     if status_q:
         qs = qs.filter(status_q)
     elif raw_statuses:
         qs = qs.none()
 
     data = list(
-        qs.annotate(status_key=sap_status_expr)
+        qs.annotate(status_key=sap_status_expr())
         .order_by("cfo", "reg_num")
         .values(
             "id",

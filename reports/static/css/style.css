@@ -569,3 +569,6 @@ body.login-page {
     color: var(--text-muted);
     padding-bottom: 0.35rem;
 }
+
+.stage-upnext .dash-card-icon {background:rgba(202,138,4,.12);color:#ca8a04;}
+.stage-upnext .dash-card-num {color:#ca8a04}

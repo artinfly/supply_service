@@ -292,3 +292,18 @@ class ContractsAppeared(models.Model):
 
     def __str__(self):
         return f"{self.contract} - {self.kind} на {self.upload_date}"
+
+
+class SystemEvent(models.Model):
+    id = models.AutoField(primary_key=True)
+    event_key = models.CharField(max_length=50, unique=True)
+    event_time = models.DateTimeField()
+
+    class Meta:
+        managed = True
+        db_table = "system_events"
+        verbose_name = "Системные события"
+        verbose_name_plural = "Системные события"
+
+    def __str__(self):
+        return f"{self.event_key}-{self.event_time}"
