@@ -11,7 +11,7 @@ from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.db.models.expressions import RawSQL
 from django.shortcuts import redirect, render
 
-from ..models import IgkStatData, NsiIgk, ZnpData, ZnpDataSAP
+from ..models import IgkStatData, NsiIgk, SystemEvent, ZnpData, ZnpDataSAP
 from ..services.dashboards import (
     EMPTY_CFO_STATS,
     EMPTY_NOT_ISSUED,
@@ -507,7 +507,9 @@ def znp_table(request):
 @login_required
 def znp_sap_table(request):
     ctx = _ctx(request)
-    qs = ZnpDataSAP.objects.annotate(sap_status=sap_status_expr).filter(cfo__in=SAP_CFO)
+    qs = ZnpDataSAP.objects.annotate(sap_status=sap_status_expr()).filter(
+        cfo__in=SAP_CFO
+    )
 
     def _breakdown(qs):
         return sap_cards(
@@ -573,6 +575,11 @@ def znp_sap_table(request):
             ),
         }
     )
+    try:
+        sap_load_event = SystemEvent.objects.filter(event_key="sap_load").first()
+        ctx["sap_load_time"] = sap_load_event.event_time if sap_load_event else None
+    except Exception:
+        ctx["sap_load_time"] = None
     return render(request, "znp_sap_table.html", ctx)
 
 

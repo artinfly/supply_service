@@ -7,7 +7,7 @@ from .queries import (
     ZNP_APPROVED,
     needs_znp,
 )
-from .sap_status import SAP_STAGE_LABELS, SAP_STATUS_SQL
+from .sap_status import SAP_STAGE_LABELS, sap_status_sql
 
 CONTRACT_AGE = (
     ("overdue_12", "Просрочено более года"),
@@ -92,7 +92,7 @@ def znp_sap_by_cfo(igk):
     if igk:
         params.append(igk)
     sql = f"""
-        SELECT cfo,{SAP_STATUS_SQL} AS stage,
+        SELECT cfo,{sap_status_sql()} AS stage,
                COUNT(*) AS cnt,
                COALESCE(SUM(vv_sum), 0) AS plan_sum
         FROM znp_data_sap
