@@ -312,6 +312,8 @@ def api_znp_sap_list(request):
     )
     for row in data:
         row["sap_status"] = SAP_STAGE_LABELS[row.pop("status_key")]
+        if row.get("igk"):
+            row["igk"] = str(row["igk"])[-4:]
     return JsonResponse(data, safe=False, json_dumps_params={"ensure_ascii": False})
 
 

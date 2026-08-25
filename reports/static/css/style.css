@@ -570,5 +570,12 @@ body.login-page {
     padding-bottom: 0.35rem;
 }
 
-.stage-upnext .dash-card-icon {background:rgba(202,138,4,.12);color:#ca8a04;}
-.stage-upnext .dash-card-num {color:#ca8a04}
+.stage-upnext .dash-card-icon {background:rgba(202,138,4,.12);color: #1e1e1e;}
+.stage-upnext .dash-card-num {color: #1e1e1e;}
+
+.truncate-cell {
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

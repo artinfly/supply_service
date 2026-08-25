@@ -81,20 +81,20 @@
 {% block extra_js %}
 <script>
 const COLS = [
-    { field: 'igk',              title: 'ИГК договора',           style: 'style="width: 80px;"' },
-    { field: 'znp_igk',          title: 'ИГК оплаты',             style: 'style="width: 80px;"' },
-    { field: 'c_agent',          title: 'Контрагент' },
-    { field: 'contract',         title: 'Договор' },
-    { field: 'cfo',              title: 'ЦФО',                    style: 'style="width: 80px;"' },
-    { field: 'payment_type',     title: 'Тип платежа',            style: 'style="width: 100px;"' },
-    { field: 'znp_status',       title: 'Статус ЗнП',             style: 'style="width: 130px;"' },
-    { field: 'plan_doc',         title: 'Документ планирования' },
-    { field: 'payment_purpose',  title: 'Назначение платежа' },
-    { field: 'plan_payment_date', title: 'Дата оплаты (план)',    style: 'style="width: 110px;"' },
-    { field: 'fact_payment_date', title: 'Дата оплаты (факт)',    style: 'style="width: 110px;"' },
-    { field: 'position_sum',     title: 'Сумма позиции, руб.',    format: 'number' },
-    { field: 'znp_plan_sum',     title: 'Сумма ЗнП план, руб.',   format: 'number' },
-    { field: 'znp_fact_sum',     title: 'Сумма ЗнП факт, руб.',   format: 'number' },
+    { field: 'igk',               title: 'ИГК дог.',         style: 'style="width: 40px;"' },
+    { field: 'znp_igk',           title: 'ИГК опл.',         style: 'style="width: 40px;"' },
+    { field: 'c_agent',           title: 'Контрагент' },
+    { field: 'contract',          title: 'Договор' },
+    { field: 'cfo',               title: 'ЦФО',              style: 'style="width: 40px;"' },
+    { field: 'payment_type',      title: 'Тип',              style: 'style="width: 60px;"' },
+    { field: 'znp_status',        title: 'Статус',           style: 'style="width: 80px;"' },
+    { field: 'plan_doc',          title: 'Док. план.',       style: 'style="width: 80px;"' },
+    { field: 'payment_purpose',   title: 'Назначение' },
+    { field: 'plan_payment_date', title: 'Дата план',        style: ' style="width: 80px;"' },
+    { field: 'fact_payment_date', title: 'Дата факт',        style: ' style="width: 80px;"' },
+    { field: 'position_sum',      title: 'Сумма поз., руб.', format: 'number' },
+    { field: 'znp_plan_sum',      title: 'План, руб.',       format: 'number' },
+    { field: 'znp_fact_sum',      title: 'Факт, руб.',       format: 'number' },
 ];
 
 const apiUrl    = document.getElementById('page-data').dataset.apiUrl;

@@ -68,17 +68,16 @@
 {% block extra_js %}
 <script>
 const COLS = [
-    { field: 'igk',               title: 'ИГК',                 style: 'style="width: 90px;"' },
-    { field: 'cfo',                title: 'ЦФО',                 style: 'style="width: 70px;"' },
-    { field: 'c_agent',           title: 'Контрагент' },
-    { field: 'reg_num',           title: 'Рег. номер' },
-    { field: 'items',             title: 'Текст' },
-    { field: 'sap_status',        title: 'Этап',                style: 'style="width: 160px;"' },
-    { field: 'bank_name',         title: 'Банк' },
-    { field: 'stage_e',           title: 'Передано в 18 отдел', style: 'style="width: 110px;"' },
-    { field: 'stage_f',           title: 'Подтверждено 18 отделом', style: 'style="width: 110px;"' },
-    { field: 'normalize_doc_num', title: 'Документ выравнивания', style: 'style="width: 130px;"' },
-    { field: 'vv_sum',            title: 'Сумма во ВВ, руб.',   format: 'number' },
+    { field: 'igk',                title: 'ИГК',                      style: 'style="width: 55px;"' },
+    { field: 'cfo',                title: 'ЦФО',                      style: 'style="width: 50px;"' },
+    { field: 'c_agent',            title: 'Контрагент' },
+    { field: 'reg_num',            title: 'Рег. номер' },
+    { field: 'items',              title: 'Текст' },
+    { field: 'sap_status',         title: 'Этап',                     style: 'style="width: 140px;"' },
+    { field: 'bank_name',          title: 'Банк' },
+    { field: 'stage_e',            title: 'Передано в 18 отдел',      style: 'style="width: 100px;"' },
+    { field: 'stage_f',            title: 'Подтверждено 18 отделом',  style: 'style="width: 100px;"' },
+    { field: 'vv_sum',             title: 'Сумма во ВВ, руб.',        format: 'number' },
 ];
 
 const apiUrl = document.getElementById('page-data').dataset.apiUrl;
