@@ -157,6 +157,7 @@ class ZnpDataSAP(models.Model):
     stage_e = models.DateField(null=True)
     stage_f = models.DateField(null=True)
     payment_possible = models.DateField(null=True)
+    init_payment_date = models.DateField(null=True)
     normalize_doc_num = models.CharField(null=True)
 
     class Meta:
@@ -186,6 +187,7 @@ class StagingZnpSAPExcel(models.Model):
     stage_e = models.DateField(null=True)
     stage_f = models.DateField(null=True)
     payment_possible = models.DateField(null=True)
+    init_payment_date = models.DateField(null=True)
     normalize_doc_num = models.CharField(null=True)
 
     class Meta:

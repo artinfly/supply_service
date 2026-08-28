@@ -1,5 +1,6 @@
 import os
 import tempfile
+from datetime import datetime
 from io import StringIO
 
 from django.contrib import messages
@@ -10,6 +11,7 @@ from django.db import connection
 from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.db.models.expressions import RawSQL
 from django.shortcuts import redirect, render
+from django.utils import timezone
 
 from ..models import IgkStatData, NsiIgk, SystemEvent, ZnpData, ZnpDataSAP
 from ..services.dashboards import (
@@ -51,6 +53,7 @@ from ..services.queries import (
 from ..services.sap_status import (
     SAP_STAGE_NAMES,
     SAP_STAGE_PARAMS,
+    sap_second_date,
     sap_status_expr,
 )
 
@@ -193,7 +196,7 @@ def contract_dupes_table(request):
         cfo_list = [r[0] for r in cur.fetchall()]
     ctx = _ctx(request)
     ctx["cfo_list"] = cfo_list
-    return render(request, "contract_dupes.html", _ctx(request))
+    return render(request, "contract_dupes.html", ctx)
 
 
 @login_required
@@ -523,6 +526,16 @@ def znp_sap_table(request):
         )
 
     all_breakdown = _breakdown(qs)
+    date_param = request.GET.get("date", "")
+    first_date = (
+        datetime.strptime(date_param, "%Y-%m-%d").date()
+        if valid_date(date_param)
+        else timezone.localdate()
+    )
+    second_date = sap_second_date(first_date)
+    first_date_breakdown = _breakdown(qs.filter(init_payment_date=first_date))
+    second_date_breakdown = _breakdown(qs.filter(init_payment_date=second_date))
+
     available_igk = list(
         qs.exclude(igk__isnull=True)
         .exclude(igk="")
@@ -566,6 +579,10 @@ def znp_sap_table(request):
             "available_igk": available_igk,
             "selected_igk": selected_igk,
             "all": all_breakdown,
+            "first_date": first_date,
+            "second_date": second_date,
+            "first_date_breakdown": first_date_breakdown,
+            "second_date_breakdown": second_date_breakdown,
             "cfo_table": cfo_table,
             "cfo_total_row": cfo_total_row,
             "has_data": all_breakdown["total_count"] > 0,
