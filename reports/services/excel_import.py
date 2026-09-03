@@ -53,6 +53,7 @@ ZNP_SAP_COLUMNS = {
     "ЗнП 421 отдел (ГОЗ) - (E)": "stage_e",
     "ЗнП 18 отдел (ГОЗ) - (F)": "stage_f",
     "Платеж возможен - ( )": "payment_possible",
+    "Иниц-но для платежа - (B)": "init_payment_date",
     "СП/ГП": "c_type",
     "ДокумВыравнивания": "normalize_doc_num",
 }

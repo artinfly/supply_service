@@ -426,6 +426,7 @@ def normalize_znp_sap():
                 stage_e,
                 stage_f,
                 payment_possible,
+                init_payment_date,
                 normalize_doc_num
             FROM staging_znp_sap_excel szse
             WHERE c_type = 'ГОЗ';
@@ -450,6 +451,7 @@ def normalize_znp_sap():
                     r[8],
                     r[9],
                     r[10],
+                    r[11],
                 )
             )
 
@@ -459,9 +461,9 @@ def normalize_znp_sap():
             INSERT INTO znp_data_sap
                 (igk, cfo, c_agent, reg_num,
                 items, vv_sum, bank_name, stage_e, 
-                stage_f, payment_possible, normalize_doc_num
+                stage_f, payment_possible, init_payment_date, normalize_doc_num
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """,
             new_data,
         )
