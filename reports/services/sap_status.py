@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.db.models import Case, CharField, Q, Value, When
 from django.utils import timezone
 
@@ -43,6 +45,21 @@ def sap_status_expr():
         default=Value("waiting_agreement"),
         output_field=CharField(),
     )
+
+
+def sap_second_date(first_date):
+    """
+    Вторая дата карточек SAP считается от первой даты (той, что выбрана в фильтре) по дням недели первой даты:
+    """
+
+    weekday = first_date.weekday()
+    if weekday == 0:
+        offset = 3
+    elif weekday == 6:
+        offset = 2
+    else:
+        offset = 1
+    return first_date - timedelta(days=offset)
 
 
 def sap_status_sql():
