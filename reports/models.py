@@ -12,11 +12,8 @@
 - nsi_igk: справочник ИГК для фильтров на страницах
 """
 
+from django.contrib.auth.models import User
 from django.db import models
-
-# ============================================================================
-# Справочники и служебные таблицы
-# ============================================================================
 
 
 class NsiIgk(models.Model):
@@ -539,3 +536,23 @@ class SystemEvent(models.Model):
 
     def __str__(self):
         return f"{self.event_key}-{self.event_time}"
+
+
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    api_key = models.CharField("API ключ", max_length=64, blank=True)
+    patronymic = models.CharField("Отчество", max_length=255, blank=True)
+    is_fired = models.BooleanField("Уволен?", default=False)
+
+    def __str__(self):
+        return f"Profile({self.user.username})"
+
+
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    api_key = models.CharField("API ключ", max_length=64, blank=True)
+    patronymic = models.CharField("Отчество", max_length=255, blank=True)
+    is_fired = models.BooleanField("Уволен?", default=False)
+
+    def __str__(self):
+        return f"Profile({self.user.username})"

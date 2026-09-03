@@ -1,23 +1,19 @@
-"""
-Административный интерфейс приложения reports.
-
-Регистрирует все модели для управления через /admin/:
-- Справочники и основные данные (ИГК, договоры, заявки)
-- История изменений и снимки количества договоров
-- Кастомная админка пользователей с чекбоксами прав доступа к разделам
-"""
-
+import requests
 from django import forms
+from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from django.contrib.auth.forms import UserChangeForm
+from django.contrib.auth.forms import UserChangeForm, UserCreationForm
 from django.contrib.auth.models import Permission, User
+from django.http import JsonResponse
+from django.urls import path
 
 from .models import (
     ContractCountsSnapshot,
     ContractsHistory,
     IgkStatData,
     NsiIgk,
+    Profile,
     StagingExcel,
     StagingZnpExcel,
     StagingZnpSAPExcel,
@@ -25,9 +21,7 @@ from .models import (
     ZnpDataSAP,
 )
 
-# ============================================================================
-# Справочники и основные данные
-# ============================================================================
+API_PATH = settings.HR_SERVICE_API_URL
 
 
 @admin.register(NsiIgk)
@@ -161,18 +155,25 @@ class SectionChoiceField(forms.ModelMultipleChoiceField):
         return obj.name.replace("Раздел: ", "")
 
 
+class CustomUserCreationForm(UserCreationForm):
+    patronymic = forms.CharField(label="Отчество", max_length=255, required=False)
+    api_key = forms.CharField(label="API-ключ", max_length=64, required=False)
+    is_fired = forms.BooleanField(
+        label="Уволен?", required=False, widget=forms.CheckboxInput
+    )
+
+    class Meta:
+        model = User
+        fields = ("username", "first_name", "last_name")
+
+
 class AccessUserForm(UserChangeForm):
-    """
-    Форма редактирования пользователя с чекбоксами доступа к разделам.
+    patronymic = forms.CharField(label="Отчество", max_length=255, required=False)
+    api_key = forms.CharField(label="API-ключ", max_length=64, required=False)
+    is_fired = forms.BooleanField(
+        label="Уволен?", required=False, widget=forms.CheckboxInput
+    )
 
-    Добавляет поле "Доступ к разделам" с чекбоксами всех прав вида
-    "access_*". Пользователь может отметить галочками разделы,
-    которые будут видны этому пользователю.
-
-    При сохранении выбранные права добавляются в user_permissions.
-    """
-
-    # Поле с чекбоксами для выбора прав доступа к разделам
     sections = SectionChoiceField(
         # Все права, начинающиеся с "access_"
         queryset=Permission.objects.filter(codename__startswith="access_"),
@@ -184,6 +185,10 @@ class AccessUserForm(UserChangeForm):
         help_text="Отметьте разделы, которые будут видны этому пользователю.",
     )
 
+    class Meta:
+        model = User
+        fields = "__all__"
+
     def __init__(self, *args, **kwargs):
         """Инициализация формы с предустановленными значениями."""
         super().__init__(*args, **kwargs)
@@ -193,6 +198,11 @@ class AccessUserForm(UserChangeForm):
                 codename__startswith="access_"
             )
 
+            profile, _ = Profile.objects.get_or_create(user=self.instance)
+            self.fields["patronymic"].initial = profile.patronymic
+            self.fields["api_key"].initial = profile.api_key
+            self.fields["is_fired"].initial = profile.is_fired
+
 
 # Отменяем стандартную регистрацию модели User, чтобы заменить на кастомную
 admin.site.unregister(User)
@@ -200,26 +210,83 @@ admin.site.unregister(User)
 
 @admin.register(User)
 class UserWithSectionsAdmin(UserAdmin):
-    """
-    Кастомная админка пользователей с разделами доступа.
-
-    Переопределяет стандартный UserAdmin, чтобы добавить чекбоксы
-    для выбора прав доступа к разделам. Сохраняет все стандартные
-    возможности: управление паролями, группами, флагами активности.
-    """
-
-    # Используем кастомную форму с чекбоксами разделов
+    add_form = CustomUserCreationForm
     form = AccessUserForm
+    add_form_template = "admin/auth/user/add_form.html"
+    change_form_template = "admin/auth/user/change_form.html"
 
-    # Переопределяем структуру полей в форме редактирования
+    list_display = (
+        "username",
+        "get_full_name",
+        "is_active",
+        "is_superuser",
+        "get_is_fired",
+    )
+    list_filter = ("is_active", "is_staff", "is_superuser", "profile__is_fired")
+
     fieldsets = (
         (None, {"fields": ("username", "password")}),
-        ("Личные данные", {"fields": ("first_name", "last_name", "email")}),
-        # Новая секция с чекбоксами доступа к разделам
+        (
+            "Личные данные",
+            {
+                "fields": (
+                    "last_name",
+                    "first_name",
+                    "patronymic",
+                    "api_key",
+                    "is_fired",
+                )
+            },
+        ),
         ("Доступ к разделам", {"fields": ("sections",)}),
         ("Служебное", {"fields": ("is_active", "is_staff", "is_superuser", "groups")}),
         ("Важные даты", {"fields": ("last_login", "date_joined")}),
     )
+
+    add_fieldsets = (
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": (
+                    "username",
+                    "last_name",
+                    "first_name",
+                    "patronymic",
+                    "is_fired",
+                    "api_key",
+                    "password1",
+                    "password2",
+                ),
+            },
+        ),
+    )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("profile")
+
+    def get_full_name(self, obj):
+        patronymic = (
+            getattr(obj.profile, "patronymic", "") if hasattr(obj, "profile") else ""
+        )
+        parts = [obj.last_name, obj.first_name, patronymic]
+        return " ".join(p for p in parts if p)
+
+    get_full_name.short_description = "ФИО"
+    get_full_name.admin_order_field = "last_name"
+
+    def get_api_key(self, obj):
+        return getattr(obj.profile, "api_key", "")
+
+    get_api_key.short_description = "API ключ"
+    get_api_key.admin_order_field = "profile__api_key"
+
+    def get_is_fired(self, obj):
+        return bool(getattr(obj.profile, "is_fired", False))
+
+    get_is_fired.short_description = "Уволен?"
+    get_is_fired.boolean = True
+    get_is_fired.admin_order_field = "profile__is_fired"
 
     def save_related(self, request, form, formsets, change):
         """
@@ -238,3 +305,64 @@ class UserWithSectionsAdmin(UserAdmin):
         keep = list(user.user_permissions.exclude(codename__startswith="access_"))
         # Устанавливаем полный список прав: старые + новые разделы
         user.user_permissions.set(keep + list(form.cleaned_data.get("sections") or []))
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        Profile.objects.update_or_create(
+            user=obj,
+            defaults={
+                "patronymic": form.cleaned_data.get("patronymic", ""),
+                "api_key": form.cleaned_data.get("api_key", ""),
+                "is_fired": form.cleaned_data.get("is_fired", ""),
+            },
+        )
+
+    def get_urls(self):
+        custom_urls = [
+            path(
+                "fetch-external-data/<str:tab_number>/",
+                self.admin_site.admin_view(self.fetch_external_data),
+                name="auth_user_fetch_external_data",
+            ),
+        ]
+        return custom_urls + super().get_urls()
+
+    def fetch_external_data(self, request, tab_number):
+        api_key = getattr(getattr(request.user, "profile", None), "api_key", None)
+        if not api_key:
+            return JsonResponse(
+                {"error": "У текущего пользователя не задан API ключ"}, status=400
+            )
+
+        url = f"{API_PATH}{tab_number}/"
+
+        try:
+            response = requests.get(
+                url,
+                params={"api_key": api_key},
+                timeout=5,
+            )
+            response.raise_for_status()
+        except requests.RequestException as e:
+            return JsonResponse({"error": f"Ошибка обращения к API: {e}"}, status=502)
+
+        try:
+            data = response.json()
+        except ValueError:
+            return JsonResponse({"error": "Некорректный ответ от API"}, status=502)
+
+        result = {
+            "surname": data.get("surname", ""),
+            "name": data.get("name", ""),
+            "patronymic": data.get("patronymic", ""),
+            "birth_date": data.get("birth_date", ""),
+            "hire_date": data.get("hire_date", ""),
+            "dismissal_date": data.get("dismissal_date", ""),
+            "production": data.get("production", ""),
+            "department": data.get("department", ""),
+            "position": data.get("position", ""),
+            "is_fired": data.get("is_fired", ""),
+            "api_key": data.get("api_key", ""),
+        }
+
+        return JsonResponse(result)
