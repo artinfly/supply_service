@@ -96,3 +96,5 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "/reports/login/"
 LOGIN_REDIRECT_URL = "/reports/"
 LOGOUT_REDIRECT_URL = "/reports/login/"
+
+HR_SERVICE_API_URL = "http://localhost:8001/api/"

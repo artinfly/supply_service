@@ -549,10 +549,36 @@ class Profile(models.Model):
 
 
 class Profile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
-    api_key = models.CharField("API ключ", max_length=64, blank=True)
-    patronymic = models.CharField("Отчество", max_length=255, blank=True)
-    is_fired = models.BooleanField("Уволен?", default=False)
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='profile'
+    )
+    api_key = models.CharField(
+        "API ключ",
+        max_length=64,
+        blank=True,
+        null=True
+    )
+    patronymic = models.CharField(
+        "Отчество",
+        max_length=255,
+        blank=True
+    )
+    is_fired = models.BooleanField(
+        "Уволен?",
+        default=False
+    )
+
+    last_synced_at = models.DateTimeField(
+        "Последняя синхронизация",
+        null=True,
+        blank=True
+    )
+    sync_error = models.TextField(
+        "Ошибка последней синхронизации",
+        blank=True
+    )
 
     def __str__(self):
         return f"Profile({self.user.username})"
