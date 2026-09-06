@@ -7,6 +7,9 @@ from django.contrib.auth.forms import UserChangeForm, UserCreationForm
 from django.contrib.auth.models import Permission, User
 from django.http import JsonResponse
 from django.urls import path
+from django.conf import settings
+from django.contrib import messages
+from django.utils import timezone
 
 from .models import (
     ContractCountsSnapshot,
@@ -22,7 +25,7 @@ from .models import (
 )
 
 API_PATH = settings.HR_SERVICE_API_URL
-
+BULK_SYNC_LIMIT = 100
 
 @admin.register(NsiIgk)
 class NsiIgkAdmin(admin.ModelAdmin):
@@ -215,14 +218,10 @@ class UserWithSectionsAdmin(UserAdmin):
     add_form_template = "admin/auth/user/add_form.html"
     change_form_template = "admin/auth/user/change_form.html"
 
-    list_display = (
-        "username",
-        "get_full_name",
-        "is_active",
-        "is_superuser",
-        "get_is_fired",
-    )
-    list_filter = ("is_active", "is_staff", "is_superuser", "profile__is_fired")
+    list_display = ('username', 'get_full_name', 'is_active', 'is_superuser', 'get_is_fired', 'get_last_synced_at')
+    list_filter = ('is_active', 'is_staff', 'is_superuser', 'profile__is_fired')
+
+    actions = ['sync_with_external_api']
 
     fieldsets = (
         (None, {"fields": ("username", "password")}),
@@ -288,6 +287,11 @@ class UserWithSectionsAdmin(UserAdmin):
     get_is_fired.boolean = True
     get_is_fired.admin_order_field = "profile__is_fired"
 
+    def get_last_synced_at(self, obj):
+        return getattr(obj.profile, "last_synced_at", "")
+    get_last_synced_at.short_description = "Дата синхронизации"
+    get_last_synced_at.admin_order_field = "profile__last_synced_at"
+
     def save_related(self, request, form, formsets, change):
         """
         Переопределяет сохранение связанных объектов (включая права).
@@ -339,7 +343,9 @@ class UserWithSectionsAdmin(UserAdmin):
         try:
             response = requests.get(
                 url,
-                params={"api_key": api_key},
+                headers={
+                    "X-API-Key": api_key
+                },
                 timeout=5,
             )
             response.raise_for_status()
@@ -366,3 +372,64 @@ class UserWithSectionsAdmin(UserAdmin):
         }
 
         return JsonResponse(result)
+    
+    def sync_with_external_api(self, request, queryset):
+        queryset = queryset.select_related("profile").order_by("profile__last_synced_at")
+        total_selected = queryset.count()
+        to_process = list(queryset[:BULK_SYNC_LIMIT])
+
+        update_count = 0
+        error_count = 0
+
+        api_key = getattr(getattr(request.user, "profile", None), "api_key", None)
+        if not api_key:
+            self.message_user(request, "У вас не задан API-ключ!", level=messages.ERROR)
+            return
+        
+        for user in to_process:
+            profile, _ = Profile.objects.get_or_create(user=user)
+            tab_number = profile.user.username
+
+            if not tab_number:
+                profile.sync_error = "Не указано имя пользователя"
+                profile.save(update_fields=["sync_error"])
+                error_count += 1
+                continue
+
+            url = f"{API_PATH}{tab_number}/"
+            try:
+                response = requests.get(
+                    url,
+                    headers={
+                        "X-API-Key": api_key
+                    },
+                    timeout=5
+                )
+                response.raise_for_status()
+                data = response.json()
+            except (requests.RequestException, ValueError) as e:
+                profile.sync_error = str(e)
+                profile.save(update_fields=["sync_error"])
+                error_count += 1
+                continue
+
+            profile.user.first_name = data.get("name", profile.user.first_name)
+            profile.user.last_name = data.get("surname", profile.user.last_name)
+            profile.user.save(update_fields=["first_name", "last_name"])
+
+            profile.patronymic = data.get("patronymic", profile.patronymic)
+            profile.is_fired = data.get("is_fired", profile.is_fired)
+            profile.api_key = data.get("api_key", profile.api_key)
+            profile.last_synced_at = timezone.now()
+            profile.sync_error = ""
+            profile.save()
+
+            update_count += 1
+
+        skipped = total_selected - len(to_process)
+        msg = f"Обновлено: {update_count}. Ошибок: {error_count}."
+        if skipped > 0:
+            msg += f" Не обработано(Превышен лимит {BULK_SYNC_LIMIT} за раз): {skipped}"
+        self.message_user(request, msg)
+
+    sync_with_external_api.short_description = f"Синхронизация с сервисом персонала (До {BULK_SYNC_LIMIT} за раз)"

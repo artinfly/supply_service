@@ -1,3 +1,4 @@
+import re
 from contextlib import contextmanager
 
 import openpyxl
@@ -48,7 +49,7 @@ ZNP_SAP_COLUMNS = {
     "Наименование кредитора": "c_agent",
     "Регистрационный номер": "reg_num",
     "Текст": "items",
-    "Сумма во ВВ": "vv_sum",
+    "Сумма": "vv_sum",
     "Наименование Банка": "bank_name",
     "ЗнП 421 отдел (ГОЗ) - (E)": "stage_e",
     "ЗнП 18 отдел (ГОЗ) - (F)": "stage_f",
@@ -77,18 +78,31 @@ def _sheet(filepath):
         wb.close()
 
 
+def clean_header(text):
+    """
+    Очищает заголовок от лишних символов, оставляя только нужные.
+    """
+    for char in text:
+        hex_utf8 = char.encode("utf-8").hex().upper()
+        print(hex_utf8)
+    if not text:
+        return ""
+    text = str(text)
+    text = re.sub(r'[^a-zA-Zа-яА-ЯёЁ0-9\s/()"«»\'\-\_]', "", text)
+    text = re.sub(r"\s+", "", text).strip()
+    return text.casefold()
+
+
 def _find_columns(rows, column_map):
-    lookup = {name.strip().casefold(): field for name, field in column_map.items()}
+    lookup = {clean_header(name): field for name, field in column_map.items()}
     known = set(lookup)
-    header = next(
-        (r for r in rows if known & {str(c).strip().casefold() for c in r if c}), None
-    )
+    header = next((r for r in rows if known & {clean_header(c) for c in r if c}), None)
     if header is None:
         raise CommandError(BAD_FORMAT)
     positions = {
-        i: lookup[str(cell).strip().casefold()]
+        i: lookup[clean_header(cell)]
         for i, cell in enumerate(header)
-        if cell and str(cell).strip().casefold() in lookup
+        if cell and clean_header(cell) in lookup
     }
     if set(column_map.values()) - set(positions.values()):
         raise CommandError(BAD_FORMAT)
