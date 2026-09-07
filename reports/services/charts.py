@@ -1,3 +1,9 @@
+"""
+Модуль для построения SQL-запросов к графикам и диаграммам.
+Содержит запросы для группировки данных по ЦФО и статусам (возраст договоров,
+этапы заявок ФЗД, статусы заявок SAP).
+"""
+
 from .queries import (
     ADVANCE,
     CONCLUDED,
@@ -9,6 +15,7 @@ from .queries import (
 )
 from .sap_status import SAP_STAGE_LABELS, sap_status_sql
 
+# Кортежи для выпадающих списков (используются в интерфейсе)
 CONTRACT_AGE = (
     ("overdue_12", "Просрочено более года"),
     ("overdue_6", "Просрочено 6-12 месяцев"),
@@ -27,6 +34,17 @@ SAP_STAGES = tuple(SAP_STAGE_LABELS.items())
 
 
 def contracts_by_cfo(year_col, igk):
+    """
+    Возвращает SQL-запрос для группировки договоров по возрасту (просрочке).
+    Группировка по ЦФО и корзине (bucket).
+    Используется для построения графика на странице KDR.
+
+    Аргументы:
+        year_col — имя колонки-флага года (например, 'y25')
+        igk — суффикс ИГК (например, '1234')
+
+    Возвращает: (sql, params)
+    """
     not_concl = ", ".join(["%s"] * len(NOT_CONCL))
     sql = f"""
         SELECT cfo,
@@ -53,6 +71,17 @@ def contracts_by_cfo(year_col, igk):
 
 
 def znp_by_cfo(year_col, igk, start=None, end=None):
+    """
+    Возвращает SQL-запрос для группировки заявок ФЗД по этапам (не оформлено,
+    на оформлении, оформлено, оплачено) и ЦФО.
+
+    Аргументы:
+        year_col — имя колонки-флага года (например, 'y25')
+        igk — суффикс ИГК
+        start, end — опциональные даты для фильтрации по дате заявки (znp_date)
+
+    Возвращает: (sql, params)
+    """
     concluded = ", ".join(["%s"] * len(CONCLUDED))
     params = [igk, *CONCLUDED]
     period = ""
@@ -85,7 +114,16 @@ def znp_by_cfo(year_col, igk, start=None, end=None):
     return sql, params
 
 
-def znp_sap_by_cfo(igk):
+def znp_sap_by_cfo(igk=None):
+    """
+    Возвращает SQL-запрос для группировки заявок SAP по ЦФО и статусу.
+    Использует sap_status_sql() для вычисления статуса.
+
+    Аргументы:
+        igk — опциональный суффикс ИГК для фильтрации.
+
+    Возвращает: (sql, params)
+    """
     cfo_ph = ", ".join(["%s"] * len(SAP_CFO))
     igk_filter = "AND igk = %s" if igk else ""
     params = list(SAP_CFO)

@@ -13,11 +13,16 @@
     1234567.89  → "1 234 567,89"
     1000        → "1 000,00"
     "1234,56"   → "1 234,56"
+    -1234.5     → "-1 234,50"
+
+Дополнительные фильтры:
+    intspace0 — форматирует без десятичной части (целые числа).
 """
+
+import math
 
 from django import template
 
-# Регистрация библиотеки шаблонных фильтров
 register = template.Library()
 
 
@@ -30,14 +35,45 @@ def intspace(value):
     Если значение не является числом, возвращает его как есть.
     """
     if value is None:
-        return "0"
+        return "0,00"
+
+    # Парсим значение
     try:
-        # Парсим значение: запятые и пробелы из исходной строки
-        # не должны мешать парсингу
-        num = float(str(value).replace(",", ".").replace(" ", ""))
-    except ValueError:
-        # Не удалось распарсить как число — возвращаем как есть
+        # Если это строка, заменяем запятые на точки и убираем пробелы
+        if isinstance(value, str):
+            num = float(value.replace(",", ".").replace(" ", ""))
+        else:
+            num = float(value)
+    except (ValueError, TypeError):
         return value
-    # Форматируем: {:,} ставит запятые между разрядами, .2f — два знака.
-    # Затем заменяем запятые на пробелы, а точку на запятую.
+
+    # Проверяем на бесконечность и NaN
+    if not math.isfinite(num):
+        return str(num)
+
+    # Форматируем с двумя знаками после запятой
     return f"{num:,.2f}".replace(",", " ").replace(".", ",")
+
+
+@register.filter
+def intspace0(value):
+    """
+    Форматирует число как целое (без десятичной части) в русском стиле.
+    Пример: 1234.56 → "1 235" (округляет по математическим правилам)
+    """
+    if value is None:
+        return "0"
+
+    try:
+        if isinstance(value, str):
+            num = float(value.replace(",", ".").replace(" ", ""))
+        else:
+            num = float(value)
+    except (ValueError, TypeError):
+        return value
+
+    if not math.isfinite(num):
+        return str(num)
+
+    # Округляем до целого и форматируем с пробелами
+    return f"{round(num):,}".replace(",", " ")

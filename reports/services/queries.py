@@ -1,7 +1,15 @@
+"""
+Модуль содержит все SQL-запросы для отчётов и реестров.
+Здесь задаются общие константы (статусы, годы, условия) и строятся динамические запросы.
+Внимание: при добавлении нового года необходимо обновить YEARS, YEAR_COL,
+а также все запросы, где используются поля y25, y26, y27.
+"""
+
 from datetime import datetime
 
 from django.utils import timezone
 
+# --- Константы ---
 CONCLUDED = (
     "Исполняется",
     "Возвращен на уточнение",
@@ -15,15 +23,18 @@ ADVANCE = "Аванс"
 ZNP_APPROVED = "Утвержден"
 POSTPAYMENT = "Постоплата"
 TERMINATED = ("Расторгнут",)
-YEARS = [2025, 2026, 2027]
+YEARS = [2025, 2026, 2027]  # Актуальные годы для флагов
 YEAR_COL = {str(y): f"y{str(y)[2:]}" for y in YEARS}
 
+# Условие «есть заказ»
 HAS_ORDER = '"order" IS NOT NULL AND TRIM("order") != \'\''
 
+# ЦФО для сводки SAP (420–429)
 SAP_CFO = tuple(str(n) for n in range(420, 430))
 
 
 def valid_date(value):
+    """Проверяет, что строка является датой в формате YYYY-MM-DD."""
     try:
         datetime.strptime(value, "%Y-%m-%d")
     except (TypeError, ValueError):
@@ -32,6 +43,10 @@ def valid_date(value):
 
 
 def valid_year(value):
+    """
+    Приводит значение к году из списка YEARS.
+    Если значение невалидно, возвращает последний год из списка.
+    """
     try:
         year = int(value)
     except (TypeError, ValueError):
@@ -40,6 +55,10 @@ def valid_year(value):
 
 
 def needs_znp(alias="i"):
+    """
+    Условие «остаток превышает допуск» для позиции договора.
+    Используется в SQL-запросах для фильтрации строк, по которым нужно оформлять ЗнП.
+    """
     p = f"{alias}." if alias else ""
     return (
         f"COALESCE({p}remainder, 0) > "
@@ -48,14 +67,25 @@ def needs_znp(alias="i"):
 
 
 def _sl(statuses):
+    """Вспомогательная функция: оборачивает список строк в кавычки для SQL IN."""
     return ", ".join(f"'{s}'" for s in statuses)
 
 
 def escape_like(value):
+    """Экранирует спецсимволы для оператора LIKE (%, _, \)"""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+# ----------------------------------------------------------------------
+# Запросы для KDR (контроль договорной работы)
+# ----------------------------------------------------------------------
+
+
 def kdr(year):
+    """
+    Возвращает SQL-запрос для страницы KDR (сводка по ИГК).
+    Группирует по ИГК, считает количество договоров, суммы и проценты.
+    """
     yc = YEAR_COL.get(str(year))
     cl = _sl(CONCLUDED)
     nl = _sl(NOT_CONCL)
@@ -90,6 +120,10 @@ def kdr(year):
     """
 
 
+# ----------------------------------------------------------------------
+# Запросы для ИГК (заключённые, незаключённые, расторгнутые)
+# ----------------------------------------------------------------------
+
 _IGK_STAT_COLS = f"""
         ROUND(CAST(COALESCE(SUM(plan), 0) AS numeric), 2) AS spec_sum,
         ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}'), 0) AS numeric), 2) AS pp_sum,
@@ -107,6 +141,9 @@ _IGK_STAT_COLS = f"""
 
 
 def igk_stat(yc, statuses):
+    """
+    Запрос для сводки по ИГК (заключённые/незаключённые) с разбивкой по ИГК.
+    """
     body = _IGK_STAT_COLS.format(yc=yc, sl=_sl(statuses))
     return f"""
     SELECT igk,{body}
@@ -115,11 +152,18 @@ def igk_stat(yc, statuses):
 
 
 def igk_stat_total(yc, statuses):
+    """
+    Запрос для итоговой строки по ИГК (сумма по всем ИГК).
+    """
     body = _IGK_STAT_COLS.format(yc=yc, sl=_sl(statuses))
     return f"""
     SELECT 'ИТОГО' AS igk,{body}
     """
 
+
+# ----------------------------------------------------------------------
+# Запросы для истории изменений
+# ----------------------------------------------------------------------
 
 _HISTORY_JOIN = """
     FROM contracts_history ch
@@ -135,6 +179,7 @@ _HISTORY_GROUP = """
 
 
 def history_status():
+    """Запрос для истории изменений статуса."""
     return f"""
         SELECT RIGHT(isd.igk, 4) AS igk, isd.c_agent, isd.cfo, isd.contract,
             ch.old_status, ch.new_status, isd.payment_type, isd.item,
@@ -149,6 +194,7 @@ def history_status():
 
 
 def history_plan():
+    """Запрос для истории изменений плана."""
     return f"""
         SELECT RIGHT(isd.igk, 4) AS igk, isd.c_agent, isd.cfo, isd.contract,
             isd.payment_type, isd.item, ch.old_plan, ch.new_plan,
@@ -166,6 +212,7 @@ def history_plan():
 
 
 def history_fact():
+    """Запрос для истории изменений факта."""
     return f"""
         SELECT RIGHT(isd.igk, 4) AS igk, isd.c_agent, isd.cfo, isd.contract,
             isd.payment_type, isd.item, ch.old_fact, ch.new_fact,
@@ -177,7 +224,13 @@ def history_fact():
     """
 
 
+# ----------------------------------------------------------------------
+# Запросы для дубликатов
+# ----------------------------------------------------------------------
+
+
 def dupes_filter(cfo, year):
+    """Вспомогательная функция для формирования условий фильтрации дубликатов."""
     conditions = []
     params = []
     if cfo:
@@ -189,6 +242,9 @@ def dupes_filter(cfo, year):
 
 
 def contract_dupes(cfo=None, year=None):
+    """
+    Запрос для дубликатов договоров (повторяющиеся комбинации полей).
+    """
     conditions, params = dupes_filter(cfo, year)
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     sql = f"""
@@ -208,6 +264,9 @@ def contract_dupes(cfo=None, year=None):
 
 
 def contract_dupes_by_order(cfo=None, year=None):
+    """
+    Запрос для дубликатов по заказу (повторяющиеся item+order).
+    """
     conditions, params = dupes_filter(cfo, year)
     extra = ("AND " + " AND ".join(conditions)) if conditions else ""
     sql = f"""
@@ -229,7 +288,13 @@ def contract_dupes_by_order(cfo=None, year=None):
     return sql, params
 
 
+# ----------------------------------------------------------------------
+# Детализация ИГК
+# ----------------------------------------------------------------------
+
+
 def igk_detail(year, igk, statuses):
+    """Запрос для детализации по конкретному ИГК (договоры, суммы)."""
     yc = YEAR_COL.get(str(year))
     sl = _sl(statuses)
     return f"""
@@ -247,7 +312,16 @@ def igk_detail(year, igk, statuses):
     """
 
 
+# ----------------------------------------------------------------------
+# Реестр договоров (все договоры)
+# ----------------------------------------------------------------------
+
+
 def all_contracts(where):
+    """
+    Возвращает два запроса: детализированный (по позициям) и итоговый (по договорам).
+    where — строка с условиями фильтрации (например, 'WHERE ...').
+    """
     detail = f"""
         SELECT igk, c_agent, contract, status,
             COALESCE(payment_type,'ИНОЕ') AS payment_type,
@@ -277,7 +351,16 @@ def all_contracts(where):
     return detail, total
 
 
+# ----------------------------------------------------------------------
+# Выгрузка авансов (используется в pivot.py)
+# ----------------------------------------------------------------------
+
+
 def advances(year):
+    """
+    Запрос для получения данных для выгрузки авансов по шаблону.
+    Группирует по договору и заказу.
+    """
     yc = YEAR_COL.get(str(year))
     return f"""
         SELECT MAX(igk) AS igk, MAX(c_agent) AS c_agent, MAX(cfo) AS cfo, contract,
@@ -298,7 +381,15 @@ def advances(year):
     """
 
 
+# ----------------------------------------------------------------------
+# Выгрузка KDR
+# ----------------------------------------------------------------------
+
+
 def kdr_export(year):
+    """
+    Запрос для экспорта KDR (сводка по ЦФО).
+    """
     yc = YEAR_COL.get(str(year))
     cl = _sl(CONCLUDED)
     nl = _sl(NOT_CONCL)
@@ -325,6 +416,9 @@ def kdr_export(year):
 
 
 def kdr_delta(yc, start_date, end_date):
+    """
+    Запрос для расчёта дельты заключённых договоров между двумя датами.
+    """
     return """
         with data_t1 as (
             select igk, cfo, concluded_count as count_t1
@@ -350,7 +444,13 @@ def kdr_delta(yc, start_date, end_date):
     ]
 
 
+# ----------------------------------------------------------------------
+# Вспомогательные запросы для фильтров
+# ----------------------------------------------------------------------
+
+
 def contracts_by_agent_filter(yc, agent):
+    """Формирует условия для фильтрации по контрагенту."""
     conditions = [
         f"{yc}=TRUE",
         "contract IS NOT NULL AND TRIM(contract)!=''",
@@ -364,6 +464,7 @@ def contracts_by_agent_filter(yc, agent):
 
 
 def export_contracts_by_agent(conditions):
+    """Запрос для экспорта договоров по контрагенту."""
     return f"""
         SELECT igk, c_agent, cfo, contract, status, payment_type, item,
                "order", TRIM(stage) AS stage,
@@ -377,7 +478,13 @@ def export_contracts_by_agent(conditions):
     """
 
 
+# ----------------------------------------------------------------------
+# Запросы для получения уникальных значений (для фильтров)
+# ----------------------------------------------------------------------
+
+
 def distinct_igk_suffixes():
+    """Возвращает уникальные суффиксы ИГК (последние 4 символа)."""
     return """
         SELECT DISTINCT RIGHT(igk, 4) FROM igk_stat_data
         WHERE igk IS NOT NULL ORDER BY RIGHT(igk, 4)
@@ -385,6 +492,7 @@ def distinct_igk_suffixes():
 
 
 def distinct_cfo():
+    """Возвращает уникальные ЦФО из договоров."""
     return """
         SELECT DISTINCT cfo FROM igk_stat_data
         WHERE cfo IS NOT NULL AND TRIM(cfo) != ''
@@ -393,6 +501,7 @@ def distinct_cfo():
 
 
 def distinct_sap_igk():
+    """Возвращает уникальные суффиксы ИГК из заявок SAP."""
     return """
         SELECT DISTINCT RIGHT(igk, 4) FROM znp_data_sap
         WHERE igk IS NOT NULL AND TRIM(igk) != ''
@@ -401,6 +510,7 @@ def distinct_sap_igk():
 
 
 def distinct_sap_cfo():
+    """Возвращает уникальные ЦФО из заявок SAP (только из диапазона 420–429)."""
     return f"""
         SELECT DISTINCT cfo FROM znp_data_sap
         WHERE cfo IN ({_sl(SAP_CFO)})
@@ -409,6 +519,7 @@ def distinct_sap_cfo():
 
 
 def distinct_agents():
+    """Возвращает уникальных контрагентов из договоров."""
     return """
         SELECT DISTINCT c_agent FROM igk_stat_data
         WHERE c_agent IS NOT NULL AND TRIM(c_agent) != ''
@@ -416,7 +527,16 @@ def distinct_agents():
     """
 
 
+# ----------------------------------------------------------------------
+# Реестр заявок ФЗД (связка договор-заявка)
+# ----------------------------------------------------------------------
+
+
 def znp_list(where):
+    """
+    Запрос для реестра заявок ФЗД с вычислением статуса на основе наличия заявки и её полей.
+    where — условие фильтрации (например, 'WHERE i.igk = ...').
+    """
     return f"""
         SELECT
             i.pp_id, i.igk, i.contract, i.c_agent, i.cfo, i.payment_type,
@@ -445,7 +565,13 @@ def znp_list(where):
     """
 
 
+# ----------------------------------------------------------------------
+# Появившиеся договоры (используется в normalize)
+# ----------------------------------------------------------------------
+
+
 def contracts_appeared(kind):
+    """Запрос для получения списка появившихся договоров (по виду: concluded или not_concluded)."""
     return """
         SELECT upload_date, reason, RIGHT(igk, 4) AS igk, cfo, c_agent, contract, item, order_num, stage, plan_date, status, plan, contract_sum
         FROM contracts_appeared

@@ -1,3 +1,8 @@
+"""
+Вспомогательные функции для построения дашбордов (сводок).
+Содержат агрегации для договоров и заявок, форматирование чисел и процентов.
+"""
+
 from django.db.models import Count, Q, Sum
 
 from .queries import ADVANCE, POSTPAYMENT, ZNP_APPROVED
@@ -5,18 +10,22 @@ from .sap_status import SAP_STAGE_PARAMS
 
 
 def to_mln(value):
+    """Переводит сумму в миллионы рублей."""
     return (value or 0) / 1000000
 
 
 def percent(part, whole):
+    """Вычисляет процент part от whole. Если whole=0, возвращает 0."""
     return (part / whole * 100) if whole else 0
 
 
 def filter_by_year(queryset, year, field_prefix=""):
+    """Фильтрует queryset по флагу года (y25, y26, ...)."""
     field_name = f"{field_prefix}y{str(year)[-2:]}"
     return queryset.filter(**{field_name: True})
 
 
+# Шаблон пустой статистики для ЦФО
 EMPTY_CFO_STATS = {
     "all_count": 0,
     "all_sum": None,
@@ -32,6 +41,7 @@ EMPTY_CFO_STATS = {
     "curr_fact": None,
 }
 
+# Поля, которые суммируются в итоговой строке
 CFO_SUMMED = (
     "all_count",
     "all_sum",
@@ -49,6 +59,7 @@ CFO_SUMMED = (
 
 
 def cfo_row(label, s):
+    """Формирует строку таблицы по ЦФО из агрегированной статистики."""
     row = {
         "cfo": label,
         "all_count": s["all_count"],
@@ -68,6 +79,7 @@ def cfo_row(label, s):
 
 
 def with_cfo_percents(row):
+    """Добавляет процентные поля в строку ЦФО."""
     row["year_concluded_percent"] = percent(
         row["year_concluded_count"], row["year_count"]
     )
@@ -79,12 +91,14 @@ def with_cfo_percents(row):
 
 
 def cfo_totals_row(rows):
+    """Суммирует строки ЦФО для получения итоговой строки."""
     totals = {"cfo": "ИТОГО"}
     for key in CFO_SUMMED:
         totals[key] = sum(r[key] for r in rows)
     return with_cfo_percents(totals)
 
 
+# Названия этапов ЗнП для отображения
 ZNP_STAGE_LABELS = {
     "not_issued_advance": "Не оформлено (Аванс)",
     "not_issued_postpayment": "Не оформлено (Постоплата)",
@@ -99,6 +113,7 @@ ZNP_STAGE_NAMES = list(ZNP_STAGE_LABELS.values())
 
 
 def not_issued_aggregates():
+    """Агрегации для неоформленных заявок (по типу платежа)."""
     advance = Q(payment_type=ADVANCE)
     postpayment = Q(payment_type=POSTPAYMENT)
     return {
@@ -112,6 +127,7 @@ def not_issued_aggregates():
 
 
 def stage_aggregates():
+    """Агрегации по этапам (общее количество и сумма)."""
     return {
         "stage_count": Count("pp_id"),
         "stage_sum": Sum("plan"),
@@ -119,6 +135,10 @@ def stage_aggregates():
 
 
 def znp_aggregates():
+    """
+    Агрегации для оформленных заявок ФЗД.
+    Разбивка по статусу утверждения, типу платежа и оплате.
+    """
     approved = Q(znp_status=ZNP_APPROVED)
     pending = ~Q(znp_status=ZNP_APPROVED)
     advance = Q(parent__payment_type=ADVANCE) & approved
@@ -141,6 +161,10 @@ def znp_aggregates():
 
 
 def cfo_breakdown_row(label, breakdown, statuses):
+    """
+    Формирует строку для разбивки по ЦФО в сводке ЗнП.
+    breakdown — словарь с полями total_count, total_sum и statuses.
+    """
     return {
         "cfo": label,
         "total_count": breakdown["total_count"],
@@ -156,11 +180,11 @@ def cfo_breakdown_row(label, breakdown, statuses):
     }
 
 
+# Пустые значения для агрегаций (используются при отсутствии данных)
 EMPTY_STAGES = {
     "stage_count": 0,
     "stage_sum": None,
 }
-
 EMPTY_NOT_ISSUED = {
     "count": 0,
     "plan_sum": None,
@@ -169,7 +193,6 @@ EMPTY_NOT_ISSUED = {
     "postpayment_count": 0,
     "postpayment_sum": None,
 }
-
 EMPTY_ZNP = {
     "issued_count": 0,
     "issued_sum": None,
@@ -187,6 +210,10 @@ EMPTY_ZNP = {
 
 
 def breakdown_from_stats(ni, zs, st):
+    """
+    Формирует структуру карточек для сводки ЗнП на основе агрегированных статистик.
+    ni — not_issued_aggregates, zs — znp_aggregates, st — stage_aggregates.
+    """
     not_issued_count = ni["count"] or 0
     not_issued_sum = to_mln(ni["plan_sum"])
     not_issued_advance_count = ni["advance_count"] or 0
@@ -261,6 +288,11 @@ def breakdown_from_stats(ni, zs, st):
 
 
 def sap_cards(total_row, status_rows):
+    """
+    Формирует карточки для сводки SAP на основе итоговой строки и строк по статусам.
+    total_row — словарь с total и total_sum.
+    status_rows — словарь {status: {'count': ..., 'vv_sum': ...}}.
+    """
     total = (total_row or {}).get("total") or 0
     total_sum = ((total_row or {}).get("total_sum") or 0) / 1000000
 

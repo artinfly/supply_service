@@ -1,14 +1,22 @@
+"""
+Административный интерфейс для приложения reports.
+
+Здесь регистрируются модели для отображения в админке Django,
+а также кастомизируется форма редактирования пользователей для управления
+правами доступа к разделам и интеграции с внешним API (сервис персонала).
+"""
+
+import logging
+
 import requests
 from django import forms
 from django.conf import settings
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm
 from django.contrib.auth.models import Permission, User
 from django.http import JsonResponse
 from django.urls import path
-from django.conf import settings
-from django.contrib import messages
 from django.utils import timezone
 
 from .models import (
@@ -24,54 +32,36 @@ from .models import (
     ZnpDataSAP,
 )
 
-API_PATH = settings.HR_SERVICE_API_URL
+logger = logging.getLogger(__name__)
+
+# API-адрес для интеграции с сервисом персонала
+API_PATH = getattr(settings, "HR_SERVICE_API_URL", None)
 BULK_SYNC_LIMIT = 100
+
 
 @admin.register(NsiIgk)
 class NsiIgkAdmin(admin.ModelAdmin):
     """Админка для справочника ИГК."""
 
-    # Колонки в списке
     list_display = ("igk",)
-    # Поля для поиска
     search_fields = ("igk",)
 
 
 @admin.register(IgkStatData)
 class IgkStatDataAdmin(admin.ModelAdmin):
-    """
-    Админка для позиций договоров.
+    """Админка для позиций договоров."""
 
-    Показывает основные поля и позволяет фильтровать по статусу,
-    типу платежа и годам. Используется для отладки и просмотра данных.
-    """
-
-    # Колонки в списке: основные поля позиции
     list_display = ("igk", "c_agent", "cfo", "contract", "status", "y25", "y26", "y27")
-    # Фильтры в правой панели
     list_filter = ("status", "payment_type", "y25", "y26", "y27")
-    # Поля для поиска
     search_fields = ("igk", "c_agent", "contract")
 
 
 @admin.register(ContractsHistory)
 class ContractsHistoryAdmin(admin.ModelAdmin):
-    """
-    Админка для истории изменений договоров.
+    """Админка для истории изменений договоров."""
 
-    Показывает изменения статуса с датами. Используется для просмотра
-    и отладки истории изменений.
-    """
-
-    # Колонки в списке: изменение статуса и даты
     list_display = ("id", "old_status", "new_status", "update_date", "upload_date")
-    # Фильтры по датам
     list_filter = ("update_date", "upload_date")
-
-
-# ============================================================================
-# Staging таблицы (импорт)
-# ============================================================================
 
 
 @admin.register(StagingExcel)
@@ -97,24 +87,14 @@ class StagingZnpSAPExcelAdmin(admin.ModelAdmin):
     search_fields = ("reg_num", "igk", "c_agent")
 
 
-# ============================================================================
-# Рабочие таблицы заявок
-# ============================================================================
-
-
 @admin.register(ZnpData)
 class ZnpDataAdmin(admin.ModelAdmin):
-    """
-    Админка для заявок ФЗД.
-
-    Показывает плановый документ и связь с позицией договора (parent).
-    Позволяет проверять корректность привязки заявок.
-    """
+    """Админка для заявок ФЗД."""
 
     list_display = (
         "id",
         "plan_doc",
-        "parent",  # Связь с позицией договора
+        "parent",
         "plan_payment_date",
         "fact_payment_date",
     )
@@ -139,26 +119,24 @@ class ContractCountsSnapshotAdmin(admin.ModelAdmin):
     list_filter = ("upload_date", "year_col")
 
 
-# ============================================================================
+# =============================================================================
 # Кастомная админка пользователей с правами доступа к разделам
-# ============================================================================
+# =============================================================================
 
 
 class SectionChoiceField(forms.ModelMultipleChoiceField):
     """
     Кастомное поле для выбора прав доступа к разделам.
-
-    Наследуется от ModelMultipleChoiceField, чтобы переопределить
-    отображение меток. Вместо полного названия права ("Раздел: Договорная работа")
-    показываем только название раздела ("Договорная работа").
+    Отображает только название раздела (без префикса "Раздел: ").
     """
 
     def label_from_instance(self, obj):
-        """Убирает префикс "Раздел: " из названия права."""
         return obj.name.replace("Раздел: ", "")
 
 
 class CustomUserCreationForm(UserCreationForm):
+    """Форма создания пользователя с дополнительными полями профиля."""
+
     patronymic = forms.CharField(label="Отчество", max_length=255, required=False)
     api_key = forms.CharField(label="API-ключ", max_length=64, required=False)
     is_fired = forms.BooleanField(
@@ -171,6 +149,8 @@ class CustomUserCreationForm(UserCreationForm):
 
 
 class AccessUserForm(UserChangeForm):
+    """Форма редактирования пользователя с правами доступа к разделам."""
+
     patronymic = forms.CharField(label="Отчество", max_length=255, required=False)
     api_key = forms.CharField(label="API-ключ", max_length=64, required=False)
     is_fired = forms.BooleanField(
@@ -178,11 +158,8 @@ class AccessUserForm(UserChangeForm):
     )
 
     sections = SectionChoiceField(
-        # Все права, начинающиеся с "access_"
         queryset=Permission.objects.filter(codename__startswith="access_"),
-        # Отображение в виде чекбоксов (не выпадающего списка)
         widget=forms.CheckboxSelectMultiple,
-        # Необязательное поле — пользователь может не иметь доступа
         required=False,
         label="Доступ к разделам",
         help_text="Отметьте разделы, которые будут видны этому пользователю.",
@@ -193,35 +170,45 @@ class AccessUserForm(UserChangeForm):
         fields = "__all__"
 
     def __init__(self, *args, **kwargs):
-        """Инициализация формы с предустановленными значениями."""
         super().__init__(*args, **kwargs)
-        # Если редактируем существующего пользователя, загружаем его текущие права
         if self.instance.pk:
             self.fields["sections"].initial = self.instance.user_permissions.filter(
                 codename__startswith="access_"
             )
-
             profile, _ = Profile.objects.get_or_create(user=self.instance)
             self.fields["patronymic"].initial = profile.patronymic
             self.fields["api_key"].initial = profile.api_key
             self.fields["is_fired"].initial = profile.is_fired
 
 
-# Отменяем стандартную регистрацию модели User, чтобы заменить на кастомную
+# Отменяем стандартную регистрацию User и регистрируем кастомную
 admin.site.unregister(User)
 
 
 @admin.register(User)
 class UserWithSectionsAdmin(UserAdmin):
+    """
+    Кастомизированный администратор пользователей.
+
+    Добавляет управление правами доступа к разделам и интеграцию
+    с внешним сервисом персонала (синхронизация данных).
+    """
+
     add_form = CustomUserCreationForm
     form = AccessUserForm
     add_form_template = "admin/auth/user/add_form.html"
     change_form_template = "admin/auth/user/change_form.html"
 
-    list_display = ('username', 'get_full_name', 'is_active', 'is_superuser', 'get_is_fired', 'get_last_synced_at')
-    list_filter = ('is_active', 'is_staff', 'is_superuser', 'profile__is_fired')
-
-    actions = ['sync_with_external_api']
+    list_display = (
+        "username",
+        "get_full_name",
+        "is_active",
+        "is_superuser",
+        "get_is_fired",
+        "get_last_synced_at",
+    )
+    list_filter = ("is_active", "is_staff", "is_superuser", "profile__is_fired")
+    actions = ["sync_with_external_api"]
 
     fieldsets = (
         (None, {"fields": ("username", "password")}),
@@ -264,7 +251,10 @@ class UserWithSectionsAdmin(UserAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("profile")
 
+    # ---------- Кастомные методы для отображения полей профиля ----------
+
     def get_full_name(self, obj):
+        """Возвращает полное ФИО (фамилия + имя + отчество)."""
         patronymic = (
             getattr(obj.profile, "patronymic", "") if hasattr(obj, "profile") else ""
         )
@@ -289,39 +279,38 @@ class UserWithSectionsAdmin(UserAdmin):
 
     def get_last_synced_at(self, obj):
         return getattr(obj.profile, "last_synced_at", "")
+
     get_last_synced_at.short_description = "Дата синхронизации"
     get_last_synced_at.admin_order_field = "profile__last_synced_at"
 
+    # ---------- Сохранение профиля и прав ----------
+
     def save_related(self, request, form, formsets, change):
         """
-        Переопределяет сохранение связанных объектов (включая права).
-
-        Сохраняет все права пользователя, НЕ начинающиеся с "access_",
-        и добавляет выбранные права доступа к разделам.
-
-        Это позволяет не потерять другие права пользователя (например,
-        из групп) при изменении доступа к разделам.
+        Сохраняет права пользователя, оставляя существующие права,
+        не связанные с разделами, и добавляя выбранные разделы.
         """
         super().save_related(request, form, formsets, change)
         user = form.instance
-
-        # Сохраняем права, не связанные с разделами
         keep = list(user.user_permissions.exclude(codename__startswith="access_"))
-        # Устанавливаем полный список прав: старые + новые разделы
         user.user_permissions.set(keep + list(form.cleaned_data.get("sections") or []))
 
     def save_model(self, request, obj, form, change):
+        """Сохраняет пользователя и обновляет профиль."""
         super().save_model(request, obj, form, change)
         Profile.objects.update_or_create(
             user=obj,
             defaults={
                 "patronymic": form.cleaned_data.get("patronymic", ""),
                 "api_key": form.cleaned_data.get("api_key", ""),
-                "is_fired": form.cleaned_data.get("is_fired", ""),
+                "is_fired": form.cleaned_data.get("is_fired", False),
             },
         )
 
+    # ---------- Интеграция с внешним API (сервис персонала) ----------
+
     def get_urls(self):
+        """Добавляет кастомный URL для получения данных из внешнего API."""
         custom_urls = [
             path(
                 "fetch-external-data/<str:tab_number>/",
@@ -332,24 +321,34 @@ class UserWithSectionsAdmin(UserAdmin):
         return custom_urls + super().get_urls()
 
     def fetch_external_data(self, request, tab_number):
+        """
+        Получает данные о сотруднике из внешнего API по табельному номеру.
+        Доступно только суперпользователям или для самого пользователя.
+        """
+        if not API_PATH:
+            return JsonResponse({"error": "API-адрес не настроен"}, status=500)
+
+        if not tab_number:
+            return JsonResponse({"error": "Табельный номер не указан"}, status=400)
+
+        # Проверяем, что запрос делает суперпользователь или сам сотрудник
+        if not request.user.is_superuser and request.user.username != tab_number:
+            return JsonResponse(
+                {"error": "Нет прав на просмотр данных другого сотрудника"}, status=403
+            )
+
         api_key = getattr(getattr(request.user, "profile", None), "api_key", None)
         if not api_key:
             return JsonResponse(
-                {"error": "У текущего пользователя не задан API ключ"}, status=400
+                {"error": "У текущего пользователя не задан API-ключ"}, status=400
             )
 
         url = f"{API_PATH}{tab_number}/"
-
         try:
-            response = requests.get(
-                url,
-                headers={
-                    "X-API-Key": api_key
-                },
-                timeout=5,
-            )
+            response = requests.get(url, headers={"X-API-Key": api_key}, timeout=5)
             response.raise_for_status()
         except requests.RequestException as e:
+            logger.error(f"Ошибка при запросе к API: {e}")
             return JsonResponse({"error": f"Ошибка обращения к API: {e}"}, status=502)
 
         try:
@@ -357,35 +356,49 @@ class UserWithSectionsAdmin(UserAdmin):
         except ValueError:
             return JsonResponse({"error": "Некорректный ответ от API"}, status=502)
 
-        result = {
-            "surname": data.get("surname", ""),
-            "name": data.get("name", ""),
-            "patronymic": data.get("patronymic", ""),
-            "birth_date": data.get("birth_date", ""),
-            "hire_date": data.get("hire_date", ""),
-            "dismissal_date": data.get("dismissal_date", ""),
-            "production": data.get("production", ""),
-            "department": data.get("department", ""),
-            "position": data.get("position", ""),
-            "is_fired": data.get("is_fired", ""),
-            "api_key": data.get("api_key", ""),
-        }
+        return JsonResponse(
+            {
+                "surname": data.get("surname", ""),
+                "name": data.get("name", ""),
+                "patronymic": data.get("patronymic", ""),
+                "birth_date": data.get("birth_date", ""),
+                "hire_date": data.get("hire_date", ""),
+                "dismissal_date": data.get("dismissal_date", ""),
+                "production": data.get("production", ""),
+                "department": data.get("department", ""),
+                "position": data.get("position", ""),
+                "is_fired": data.get("is_fired", False),
+                "api_key": data.get("api_key", ""),
+            }
+        )
 
-        return JsonResponse(result)
-    
     def sync_with_external_api(self, request, queryset):
-        queryset = queryset.select_related("profile").order_by("profile__last_synced_at")
-        total_selected = queryset.count()
-        to_process = list(queryset[:BULK_SYNC_LIMIT])
+        """
+        Действие администратора: синхронизирует данные выбранных пользователей
+        с внешним сервисом персонала (обновляет ФИО, статус увольнения, API-ключ).
+        Ограничение: не более BULK_SYNC_LIMIT пользователей за один раз.
+        """
+        if not API_PATH:
+            self.message_user(request, "API-адрес не настроен", level=messages.ERROR)
+            return
 
-        update_count = 0
-        error_count = 0
-
+        # Проверяем, что у текущего пользователя есть API-ключ
         api_key = getattr(getattr(request.user, "profile", None), "api_key", None)
         if not api_key:
             self.message_user(request, "У вас не задан API-ключ!", level=messages.ERROR)
             return
-        
+
+        total_selected = queryset.count()
+        # Берем только первые BULK_SYNC_LIMIT записей (упорядоченных по дате синхронизации)
+        queryset = queryset.select_related("profile").order_by(
+            "profile__last_synced_at"
+        )
+        to_process = list(queryset[:BULK_SYNC_LIMIT])
+        skipped = total_selected - len(to_process)
+
+        update_count = 0
+        error_count = 0
+
         for user in to_process:
             profile, _ = Profile.objects.get_or_create(user=user)
             tab_number = profile.user.username
@@ -398,13 +411,7 @@ class UserWithSectionsAdmin(UserAdmin):
 
             url = f"{API_PATH}{tab_number}/"
             try:
-                response = requests.get(
-                    url,
-                    headers={
-                        "X-API-Key": api_key
-                    },
-                    timeout=5
-                )
+                response = requests.get(url, headers={"X-API-Key": api_key}, timeout=5)
                 response.raise_for_status()
                 data = response.json()
             except (requests.RequestException, ValueError) as e:
@@ -413,10 +420,12 @@ class UserWithSectionsAdmin(UserAdmin):
                 error_count += 1
                 continue
 
+            # Обновляем пользователя
             profile.user.first_name = data.get("name", profile.user.first_name)
             profile.user.last_name = data.get("surname", profile.user.last_name)
             profile.user.save(update_fields=["first_name", "last_name"])
 
+            # Обновляем профиль
             profile.patronymic = data.get("patronymic", profile.patronymic)
             profile.is_fired = data.get("is_fired", profile.is_fired)
             profile.api_key = data.get("api_key", profile.api_key)
@@ -426,10 +435,13 @@ class UserWithSectionsAdmin(UserAdmin):
 
             update_count += 1
 
-        skipped = total_selected - len(to_process)
         msg = f"Обновлено: {update_count}. Ошибок: {error_count}."
         if skipped > 0:
-            msg += f" Не обработано(Превышен лимит {BULK_SYNC_LIMIT} за раз): {skipped}"
+            msg += (
+                f" Не обработано (превышен лимит {BULK_SYNC_LIMIT} за раз): {skipped}"
+            )
         self.message_user(request, msg)
 
-    sync_with_external_api.short_description = f"Синхронизация с сервисом персонала (До {BULK_SYNC_LIMIT} за раз)"
+    sync_with_external_api.short_description = (
+        f"Синхронизация с сервисом персонала (До {BULK_SYNC_LIMIT} за раз)"
+    )

@@ -1,3 +1,9 @@
+"""
+Загрузка Excel-файлов в staging-таблицы.
+Поддерживает .xlsx (openpyxl) и .xls (xlrd).
+Каждый тип файла имеет свой словарь колонок.
+"""
+
 import os
 import re
 from contextlib import contextmanager
@@ -9,6 +15,7 @@ from django.db import connection, transaction
 
 from .linking import contract_hash
 
+# Словари соответствия заголовков в файле -> поля staging-таблиц
 CONTRACT_COLUMNS = {
     "ИГК": "igk",
     "Контрагент": "kontragent",
@@ -65,11 +72,14 @@ BAD_FORMAT = "Документ не соответствует формату"
 
 
 def _xlsx_rows(filepath):
+    """Генератор строк из .xlsx файла (openpyxl)."""
     wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
-    return wb.active.iter_rows(values_only=True), wb.close
+    rows = wb.active.iter_rows(values_only=True)
+    return rows, wb.close
 
 
 def _xls_rows(filepath):
+    """Генератор строк из .xls файла (xlrd)."""
     book = xlrd.open_workbook(filepath)
     sheet = book.sheet_by_index(0)
 
@@ -82,6 +92,10 @@ def _xls_rows(filepath):
 
 @contextmanager
 def _sheet(filepath):
+    """
+    Контекстный менеджер для чтения листа Excel.
+    Автоматически закрывает ресурсы после чтения.
+    """
     ext = os.path.splitext(filepath)[1].lower()
     loader = _xls_rows if ext == ".xls" else _xlsx_rows
     try:
@@ -93,49 +107,83 @@ def _sheet(filepath):
     try:
         yield rows
     finally:
-        rows.close()
+        # Закрываем итератор (если он имеет метод close)
+        if hasattr(rows, "close"):
+            rows.close()
         close()
 
 
 def clean_header(text):
     """
-    Очищает заголовок от лишних символов, оставляя только нужные.
+    Приводит заголовок к каноническому виду для сравнения:
+    - убирает непечатаемые символы
+    - заменяет неразрывные пробелы на обычные
+    - удаляет все пробелы
+    - приводит к нижнему регистру
     """
-    with open("file.txt", "a", encoding="utf-8") as f:
-        for char in text:
-            hex_utf8 = char.encode("utf-8").hex().upper()
-            f.write(f"{char}:{hex_utf8}\n")
     if not text:
         return ""
     text = str(text)
-    text = re.sub(r'[^a-zA-Zа-яА-ЯёЁ0-9\s/()"«»\'\-\_]', "", text)
-    text = re.sub(r"\s+", "", text).strip()
-    print(f"Clean_header:{text.casefold()}")
+    # Замена неразрывных пробелов и прочих управляющих символов
+    text = text.replace("\u00a0", " ")  # неразрывный пробел
+    # Удаляем все управляющие символы (коды < 32)
+    text = re.sub(r"[\x00-\x1f\x7f]", "", text)
+    # Оставляем только буквы, цифры, скобки, кавычки, дефис, подчёркивание, точку
+    text = re.sub(r'[^a-zA-Zа-яА-ЯёЁ0-9\s/()"«»\'\-_\.]', "", text)
+    # Удаляем все пробелы (пробелы, табуляции, переносы)
+    text = re.sub(r"\s+", "", text)
     return text.casefold()
 
 
 def _find_columns(rows, column_map):
-    print("start")
+    """
+    Находит строку-заголовок, определяет позиции колонок.
+    Возвращает словарь {позиция: имя_поля}.
+    Если нужные колонки не найдены, бросает CommandError(BAD_FORMAT).
+    """
+    # Сопоставляем очищенный заголовок -> поле
     lookup = {clean_header(name): field for name, field in column_map.items()}
-    print(f"lookup:{lookup}")
-    known = set(lookup)
-    print(f"known:{known}")
-    header = next((r for r in rows if known & {clean_header(c) for c in r if c}), None)
-    print(f"header:{enumerate(header)}")
-    if header is None:
+    known_headers = set(lookup.keys())
+    expected_fields = set(column_map.values())
+
+    # Пропускаем пустые строки, ищем заголовок
+    header_row = None
+    for row in rows:
+        # Пропускаем полностью пустые строки
+        if not any(cell for cell in row if cell):
+            continue
+        # Очищаем все ячейки строки, отбрасываем пустые
+        cleaned_cells = {clean_header(cell) for cell in row if cell}
+        # Проверяем, что найденная строка содержит БОЛЬШИНСТВО ожидаемых заголовков
+        # (например, не менее 80% от expected_fields)
+        match_count = len(cleaned_cells & known_headers)
+        if match_count >= len(expected_fields) * 0.8:
+            header_row = row
+            break
+
+    if header_row is None:
         raise CommandError(BAD_FORMAT)
-    positions = {
-        i: lookup[clean_header(cell)]
-        for i, cell in enumerate(header)
-        if cell and clean_header(cell) in lookup
-    }
-    print(positions)
-    if set(column_map.values()) - set(positions.values()):
+
+    # Определяем позиции колонок, которые есть в заголовке
+    positions = {}
+    for i, cell in enumerate(header_row):
+        if cell:
+            cleaned = clean_header(cell)
+            if cleaned in lookup:
+                positions[i] = lookup[cleaned]
+
+    # Проверяем, что все ожидаемые поля найдены
+    if set(positions.values()) != expected_fields:
         raise CommandError(BAD_FORMAT)
+
     return positions
 
 
 def _read_row(row, positions, fields, empty_as_null=False):
+    """
+    Извлекает значения из строки по позициям колонок.
+    Возвращает словарь {поле: значение}.
+    """
     record = dict.fromkeys(fields)
     for i, field in positions.items():
         if i < len(row) and row[i] is not None:
@@ -145,11 +193,16 @@ def _read_row(row, positions, fields, empty_as_null=False):
 
 
 def _is_blank(record, field):
+    """Проверяет, что поле в записи пустое."""
     value = record.get(field)
     return value is None or str(value).strip() == ""
 
 
 def _replace_table(table, fields, data):
+    """
+    Очищает staging-таблицу и вставляет новые данные.
+    Использует транзакцию.
+    """
     insert_sql = (
         f"INSERT INTO {table} ({', '.join(fields)}) "
         f"VALUES ({', '.join(['%s'] * len(fields))})"
@@ -161,19 +214,28 @@ def _replace_table(table, fields, data):
 
 
 def import_contracts(filepath):
+    """
+    Загружает файл договоров в staging_excel.
+    Возвращает количество импортированных строк.
+    """
     fields = list(CONTRACT_COLUMNS.values())
     with _sheet(filepath) as rows:
         positions = _find_columns(rows, CONTRACT_COLUMNS)
-        data = [
-            tuple(_read_row(row, positions, fields)[f] for f in fields)
-            for row in rows
-            if any(row)
-        ]
+        data = []
+        for row in rows:
+            if not any(row):
+                continue
+            record = _read_row(row, positions, fields)
+            data.append(tuple(record[f] for f in fields))
     _replace_table("staging_excel", fields, data)
     return len(data)
 
 
 def import_znp(filepath):
+    """
+    Загружает файл заявок ФЗД в staging_znp_excel.
+    Дополнительно вычисляет crc32_hash для привязки к договорам.
+    """
     fields = list(ZNP_COLUMNS.values()) + ["crc32_hash"]
     with _sheet(filepath) as rows:
         positions = _find_columns(rows, ZNP_COLUMNS)
@@ -184,6 +246,7 @@ def import_znp(filepath):
             record = _read_row(row, positions, fields)
             if _is_blank(record, "plan_doc"):
                 continue
+            # Вычисляем хеш для привязки к позиции договора
             record["crc32_hash"] = contract_hash(
                 record["igk"], record["c_agent"], record["contract"], record["stage"]
             )
@@ -193,6 +256,9 @@ def import_znp(filepath):
 
 
 def import_znp_sap(filepath):
+    """
+    Загружает файл заявок SAP в staging_znp_sap_excel.
+    """
     fields = list(ZNP_SAP_COLUMNS.values())
     with _sheet(filepath) as rows:
         positions = _find_columns(rows, ZNP_SAP_COLUMNS)

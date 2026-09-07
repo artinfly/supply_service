@@ -1,14 +1,34 @@
+"""
+Модуль для вычисления crc32-хеша и перепривязки заявок к договорам.
+Хеш используется для идентификации позиции договора по четырём полям:
+ИГК, контрагент, договор, этап графика.
+"""
+
 from zlib import crc32
 
-from django.db import connection
+from django.db import connection, transaction
 
 
 def contract_hash(igk, c_agent, contract, stage):
-    return crc32(f"{igk}{c_agent}{contract}{stage}".encode())
+    """
+    Вычисляет crc32-хеш от конкатенации полей.
+    Возвращает беззнаковое 32-битное число (0..2^32-1).
+    """
+    # Приводим к строке и объединяем
+    key = f"{igk or ''}{c_agent or ''}{contract or ''}{stage or ''}".encode("utf-8")
+    # crc32 возвращает знаковое число, поэтому маскируем
+    return crc32(key) & 0xFFFFFFFF
 
 
 def relink_znp_parents():
-    with connection.cursor() as cur:
+    """
+    Обновляет parent_id в znp_data, связывая заявки с позициями договоров.
+    Сначала устанавливает parent_id по совпадению crc32_hash.
+    Затем сбрасывает parent_id для тех заявок, у которых нет соответствующей позиции.
+    Выполняется в транзакции для атомарности.
+    """
+    with transaction.atomic(), connection.cursor() as cur:
+        # Обновляем parent_id для заявок, у которых есть совпадение
         cur.execute("""
             UPDATE znp_data z
             SET parent_id = matched.pp_id
@@ -19,6 +39,7 @@ def relink_znp_parents():
             ) matched
             WHERE z.crc32_hash = matched.crc32_hash
         """)
+        # Сбрасываем parent_id для заявок без совпадения
         cur.execute("""
             UPDATE znp_data z
             SET parent_id = NULL
