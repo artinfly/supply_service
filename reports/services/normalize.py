@@ -29,7 +29,6 @@ def to_float(val):
     if val is None or str(val).strip() in ("", "-", "None"):
         return None
     try:
-        # Убираем неразрывные пробелы, пробелы, заменяем запятую на точку
         return float(str(val).replace("\xa0", "").replace(" ", "").replace(",", "."))
     except ValueError:
         return None
@@ -76,10 +75,7 @@ def floats_equal(a, b):
     return round(float(a), 2) == round(float(b), 2)
 
 
-# Формируем строку для SQL IN с перечислением заключённых статусов
 CONCLUDED_SQL = ", ".join(f"'{s}'" for s in CONCLUDED)
-
-# Сопоставление суффиксов полей (y25, y26, ...) с годами
 YEAR_MAP = [(f"y{str(y)[2:]}", y) for y in YEARS]
 
 
@@ -167,11 +163,9 @@ def parse_date_any(val):
     """
     if val is None:
         return None
-    # Сначала пробуем русский
     d = parse_date_ru(val)
     if d is not None:
         return d
-    # Затем точечный
     return parse_date_dot(val)
 
 
@@ -180,9 +174,11 @@ def normalize_contracts():
     Переносит данные из staging_excel в igk_stat_data.
     Вычисляет историю изменений (contracts_history) и снимки количества договоров.
     Выполняется в одной транзакции.
+
+    ВНИМАНИЕ: Индексы в new_data зависят от длины YEARS!
+    Если добавляется новый год, нужно пересчитать все индексы.
     """
     with transaction.atomic(), connection.cursor() as cur:
-        # Обновляем справочник ИГК
         cur.execute("""
             INSERT INTO nsi_igk (igk)
             SELECT DISTINCT TRIM(igk) FROM staging_excel
@@ -190,7 +186,6 @@ def normalize_contracts():
             ON CONFLICT DO NOTHING
         """)
 
-        # Читаем строки из staging, отбираем только с типами платежа 'Аванс' или 'Постоплата'
         cur.execute(
             """
             SELECT igk, kontragent, cfo, dogovor, sostoyanie,
@@ -204,47 +199,43 @@ def normalize_contracts():
         )
         staging_rows = cur.fetchall()
 
-        # Подготавливаем новые данные для вставки
         new_data = []
         for r in staging_rows:
-            # Генерируем флаги для каждого года из YEARS
             year_flags_tuple = year_flags(r[14])
-            # Строим кортеж данных для вставки (без crc32_hash, вычислим позже)
+            # ВАЖНО: индексы зависят от len(year_flags_tuple)!
+            # Текущая структура (при YEARS = [2025, 2026, 2027]):
+            # 0-11: основные поля, 12-14: year flags, 15: plan_date, 16: c_date,
+            # 17: contract_sum, 18: crc32_hash, 19: remainder
             new_data.append(
-                list(
-                    (
-                        norm(r[0]),  # igk
-                        norm(r[1]),  # c_agent
-                        norm(r[2]),  # cfo
-                        norm(r[3]),  # contract
-                        norm(r[4]),  # status
-                        norm(r[5]) or None,  # payment_type
-                        norm(r[6]),  # item
-                        norm(r[7]),  # order
-                        to_float(r[8]),  # plan
-                        to_float(r[9]),  # fact
-                        to_float(r[10]),  # tolerance
-                        norm(r[11]),  # stage
-                        *year_flags_tuple,  # y25, y26, y27, ... (динамически)
-                        plan_month(r[12]),  # plan_date
-                        norm(r[14]),  # c_date (год ИГК)
-                        to_float(r[13]),  # contract_sum
-                        None,  # crc32_hash (заполним ниже)
-                        to_float(r[15]),  # remainder
-                    )
-                )
+                [
+                    norm(r[0]),  # 0: igk
+                    norm(r[1]),  # 1: c_agent
+                    norm(r[2]),  # 2: cfo
+                    norm(r[3]),  # 3: contract
+                    norm(r[4]),  # 4: status
+                    norm(r[5]) or None,  # 5: payment_type
+                    norm(r[6]),  # 6: item
+                    norm(r[7]),  # 7: order
+                    to_float(r[8]),  # 8: plan
+                    to_float(r[9]),  # 9: fact
+                    to_float(r[10]),  # 10: tolerance
+                    norm(r[11]),  # 11: stage
+                    *year_flags_tuple,  # 12-14: y25, y26, y27 (длина = len(YEARS))
+                    plan_month(r[12]),  # 15: plan_date
+                    norm(r[14]),  # 16: c_date
+                    to_float(r[13]),  # 17: contract_sum
+                    None,  # 18: crc32_hash (заполним ниже)
+                    to_float(r[15]),  # 19: remainder
+                ]
             )
 
-        # Вычисляем crc32_hash для каждой строки (на основе полей, участвующих в привязке)
+        # Вычисляем crc32_hash (используем отрицательный индекс для устойчивости)
         for row in new_data:
-            # Индексы: 0=igk, 1=c_agent, 3=contract, 11=stage
             row[-2] = contract_hash(row[0], row[1], row[3], row[11])
 
-        # Текущая дата для истории
         today = timezone.localdate()
 
-        # --- Формирование истории изменений ---
-        # Загружаем старые данные из igk_stat_data для сравнения
+        # Загружаем старые данные для сравнения
         cur.execute("""
             SELECT igk, c_agent, contract, item, "order", stage, plan_date,
                    status, plan, fact, contract_sum
@@ -266,7 +257,11 @@ def normalize_contracts():
             value_fn=lambda r: (r[7], r[8], r[9], r[10]),
         )
 
-        # Новые данные также индексируем
+        # Индексы для new_lookup (зависят от len(YEARS)!)
+        # plan_date находится по индексу 12 + len(YEARS)
+        plan_date_idx = 12 + len(YEARS)
+        contract_sum_idx = 13 + len(YEARS)
+
         new_lookup = _indexed_lookup(
             new_data,
             key_fn=lambda r: (
@@ -276,12 +271,11 @@ def normalize_contracts():
                 r[6] or "",
                 r[7] or "",
                 r[11] or "",
-                r[15] or "",
+                r[plan_date_idx] or "",
             ),
             value_fn=lambda r: r,
         )
 
-        # Собираем записи о появлении новых позиций (таблица contracts_appeared, оставлена для совместимости)
         appeared = []
         if old_lookup:
             for key, row in new_lookup.items():
@@ -300,17 +294,17 @@ def normalize_contracts():
                         today,
                         kind,
                         reason,
-                        row[0],
-                        row[2],
-                        row[1],
-                        row[3],
-                        row[6],
-                        row[7],
-                        row[11],
-                        row[15],
-                        row[4],
-                        row[8],
-                        row[17],
+                        row[0],  # igk
+                        row[2],  # cfo
+                        row[1],  # c_agent
+                        row[3],  # contract
+                        row[6],  # item
+                        row[7],  # order
+                        row[11],  # stage
+                        row[plan_date_idx],  # plan_date
+                        row[4],  # status
+                        row[8],  # plan
+                        row[contract_sum_idx],  # contract_sum
                     )
                 )
         if appeared:
@@ -323,7 +317,6 @@ def normalize_contracts():
                 appeared,
             )
 
-        # Собираем историю изменений
         history = []
         for key, new_row in new_lookup.items():
             if key not in old_lookup:
@@ -334,7 +327,7 @@ def normalize_contracts():
                 new_row[4],
                 new_row[8],
                 new_row[9],
-                new_row[17],
+                new_row[contract_sum_idx],
             )
 
             status_changed = old_status != new_status
@@ -345,7 +338,6 @@ def normalize_contracts():
             if not (status_changed or plan_changed or fact_changed or sum_changed):
                 continue
 
-            # Формируем строку-ключ для хеша (склеиваем все поля ключа)
             key_str = "".join(key[:-1])
             history.append(
                 (
@@ -381,9 +373,7 @@ def normalize_contracts():
                 history,
             )
 
-        # --- Очистка и вставка новых данных в igk_stat_data ---
         cur.execute("TRUNCATE igk_stat_data RESTART IDENTITY")
-        # Формируем список полей для вставки, включая динамические годовые флаги
         year_fields = [f"y{str(y)[2:]}" for y in YEARS]
         insert_fields = [
             "igk",
@@ -415,7 +405,6 @@ def normalize_contracts():
             new_data,
         )
 
-        # --- Обновление снимков количества договоров ---
         cur.execute(
             "DELETE FROM contract_counts_snapshot WHERE upload_date = %s", [today]
         )
@@ -440,7 +429,6 @@ def normalize_contracts():
                 [today, year_col],
             )
 
-        # Перепривязываем заявки ФЗД к договорам
         relink_znp_parents()
 
     return f"обработано строк: {len(new_data)}, изменений записано: {len(history)}"
@@ -476,7 +464,6 @@ def normalize_znp():
         for r in staging_rows:
             if r[0] is None:
                 unmatched_count += 1
-            # Парсим даты универсальным парсером
             plan_date = parse_date_any(r[3])
             fact_date = parse_date_any(r[4])
             znp_date = parse_date_any(r[12])
@@ -518,9 +505,10 @@ def normalize_znp_sap():
     """
     Переносит данные из staging_znp_sap_excel в znp_data_sap.
     Загружаются все строки (фильтр по c_type убран, чтобы не терять данные).
+
+    ИСПРАВЛЕНО: Добавлен парсинг дат через parse_date_any() для всех DateField полей.
     """
     with transaction.atomic(), connection.cursor() as cur:
-        # Убираем фильтр WHERE c_type = 'ГОЗ' — загружаем все строки
         cur.execute("""
             SELECT
                 igk,
@@ -544,20 +532,21 @@ def normalize_znp_sap():
         for r in staging_rows:
             if r[0] is None or str(r[0]).strip() == "":
                 no_igk_count += 1
+            # ИСПРАВЛЕНО: Парсим все даты через parse_date_any()
             new_data.append(
                 (
-                    r[0],
-                    r[1],
-                    r[2],
-                    r[3],
-                    r[4],
-                    r[5],
-                    r[6],
-                    r[7],
-                    r[8],
-                    r[9],
-                    r[10],
-                    r[11],
+                    r[0],  # igk
+                    r[1],  # cfo
+                    r[2],  # c_agent
+                    r[3],  # reg_num
+                    r[4],  # items
+                    r[5],  # vv_sum
+                    r[6],  # bank_name
+                    parse_date_any(r[7]),  # stage_e (ИСПРАВЛЕНО)
+                    parse_date_any(r[8]),  # stage_f (ИСПРАВЛЕНО)
+                    parse_date_any(r[9]),  # payment_possible (ИСПРАВЛЕНО)
+                    parse_date_any(r[10]),  # init_payment_date (ИСПРАВЛЕНО)
+                    r[11],  # normalize_doc_num
                 )
             )
 
@@ -567,8 +556,7 @@ def normalize_znp_sap():
             INSERT INTO znp_data_sap
                 (igk, cfo, c_agent, reg_num,
                 items, vv_sum, bank_name, stage_e, 
-                stage_f, payment_possible, init_payment_date, normalize_doc_num
-            )
+                stage_f, payment_possible, init_payment_date, normalize_doc_num)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """,
             new_data,

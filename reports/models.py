@@ -45,40 +45,37 @@ class NsiIgk(models.Model):
 class IgkStatData(models.Model):
     """
     Позиция договора — основная рабочая таблица.
-
-    Каждая строка представляет одну позицию (этап графика) договора.
     Полностью перезаписывается при каждой загрузке файла договоров.
-
-    ВАЖНО: pp_id и id меняются после каждой загрузки и не могут служить
-    внешними ссылками. Для привязки заявок используется crc32_hash.
     """
 
     pp_id = models.AutoField(primary_key=True)
 
-    igk = models.CharField(max_length=500, null=True)
-    c_agent = models.CharField(max_length=500, null=True)
-    cfo = models.CharField(max_length=500, null=True)
-    contract = models.CharField(max_length=500, null=True)
-    status = models.CharField(max_length=500, null=True)
-    payment_type = models.CharField(max_length=500, null=True)
-    item = models.CharField(max_length=500, null=True)
-    order = models.CharField(max_length=500, null=True, db_column='"order"')
+    igk = models.CharField(max_length=500, null=True, blank=True)
+    c_agent = models.CharField(max_length=500, null=True, blank=True)
+    cfo = models.CharField(max_length=500, null=True, blank=True)
+    contract = models.CharField(max_length=500, null=True, blank=True)
+    status = models.CharField(max_length=500, null=True, blank=True)
+    payment_type = models.CharField(max_length=500, null=True, blank=True)
+    item = models.CharField(max_length=500, null=True, blank=True)
 
-    plan = models.FloatField(null=True)
-    fact = models.FloatField(null=True)
-    remainder = models.FloatField(null=True)
-    tolerance = models.FloatField(null=True)
+    # ИСПРАВЛЕНО: Убраны лишние кавычки. Django сам экранирует зарезервированные слова.
+    order = models.CharField(max_length=500, null=True, blank=True, db_column="order")
 
-    stage = models.CharField(max_length=250, null=True)
+    plan = models.FloatField(null=True, blank=True)
+    fact = models.FloatField(null=True, blank=True)
+    remainder = models.FloatField(null=True, blank=True)
+    tolerance = models.FloatField(null=True, blank=True)
+
+    stage = models.CharField(max_length=250, null=True, blank=True)
 
     # Флаги годов ИГК
-    y25 = models.BooleanField(null=True)
-    y26 = models.BooleanField(null=True)
-    y27 = models.BooleanField(null=True)
+    y25 = models.BooleanField(null=True, blank=True)
+    y26 = models.BooleanField(null=True, blank=True)
+    y27 = models.BooleanField(null=True, blank=True)
 
-    plan_date = models.CharField(max_length=50, null=True)
-    c_date = models.CharField(max_length=256, null=True)
-    contract_sum = models.FloatField(null=True)
+    plan_date = models.CharField(max_length=50, null=True, blank=True)
+    c_date = models.CharField(max_length=256, null=True, blank=True)
+    contract_sum = models.FloatField(null=True, blank=True)
 
     # CRC32-хеш для привязки заявок
     crc32_hash = models.BigIntegerField()
@@ -113,22 +110,22 @@ class StagingExcel(models.Model):
 
     id = models.AutoField(primary_key=True)
 
-    igk = models.TextField(null=True)
-    kontragent = models.TextField(null=True)
-    cfo = models.TextField(null=True)
-    dogovor = models.TextField(null=True)
-    sostoyanie = models.TextField(null=True)
-    tip_platezha = models.TextField(null=True)
-    predmet = models.TextField(null=True)
-    zakaz = models.TextField(null=True)
-    plan = models.TextField(null=True)
-    fakt = models.TextField(null=True)
-    ostatok = models.TextField(null=True)
-    tol = models.TextField(null=True)
-    etap_grafika = models.TextField(null=True)
-    dataplan = models.TextField(null=True)
-    summa_dogovora = models.TextField(null=True)
-    god_igk = models.TextField(null=True)
+    igk = models.TextField(null=True, blank=True)
+    kontragent = models.TextField(null=True, blank=True)
+    cfo = models.TextField(null=True, blank=True)
+    dogovor = models.TextField(null=True, blank=True)
+    sostoyanie = models.TextField(null=True, blank=True)
+    tip_platezha = models.TextField(null=True, blank=True)
+    predmet = models.TextField(null=True, blank=True)
+    zakaz = models.TextField(null=True, blank=True)
+    plan = models.TextField(null=True, blank=True)
+    fakt = models.TextField(null=True, blank=True)
+    ostatok = models.TextField(null=True, blank=True)
+    tol = models.TextField(null=True, blank=True)
+    etap_grafika = models.TextField(null=True, blank=True)
+    dataplan = models.TextField(null=True, blank=True)
+    summa_dogovora = models.TextField(null=True, blank=True)
+    god_igk = models.TextField(null=True, blank=True)
 
     class Meta:
         managed = True
@@ -147,22 +144,22 @@ class StagingZnpExcel(models.Model):
 
     id = models.AutoField(primary_key=True)
 
-    igk = models.TextField(null=True)
-    znp_igk = models.TextField(null=True)
-    znp_payment_type = models.CharField(max_length=50, null=True)
-    c_agent = models.TextField(null=True)
-    contract = models.TextField(null=True)
-    stage = models.TextField(null=True)
-    plan_doc = models.TextField(null=True)
-    payment_purpose = models.TextField(null=True)
-    plan_payment_date = models.TextField(null=True)
-    fact_payment_date = models.TextField(null=True)
-    plan_sum = models.FloatField(null=True)
-    fact_sum = models.FloatField(null=True)
-    znp_status = models.TextField(null=True)
-    znp_date = models.TextField(null=True)
+    igk = models.TextField(null=True, blank=True)
+    znp_igk = models.TextField(null=True, blank=True)
+    znp_payment_type = models.CharField(max_length=50, null=True, blank=True)
+    c_agent = models.TextField(null=True, blank=True)
+    contract = models.TextField(null=True, blank=True)
+    stage = models.TextField(null=True, blank=True)
+    plan_doc = models.TextField(null=True, blank=True)
+    payment_purpose = models.TextField(null=True, blank=True)
+    plan_payment_date = models.TextField(null=True, blank=True)
+    fact_payment_date = models.TextField(null=True, blank=True)
+    plan_sum = models.FloatField(null=True, blank=True)
+    fact_sum = models.FloatField(null=True, blank=True)
+    znp_status = models.TextField(null=True, blank=True)
+    znp_date = models.TextField(null=True, blank=True)
 
-    crc32_hash = models.BigIntegerField(null=False)
+    crc32_hash = models.BigIntegerField()
 
     class Meta:
         managed = True
@@ -186,21 +183,21 @@ class ZnpData(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        db_constraint=False,
+        db_constraint=False,  # Важно: позволяет делать TRUNCATE родительской таблицы
     )
-    crc32_hash = models.BigIntegerField(null=True)
+    crc32_hash = models.BigIntegerField(null=True, blank=True)
 
-    stage = models.CharField(max_length=250, null=True)
-    plan_doc = models.CharField(max_length=255, null=True)
-    payment_purpose = models.CharField(max_length=255, null=True)
-    plan_payment_date = models.DateField(null=True)
-    fact_payment_date = models.DateField(null=True)
-    plan_sum = models.FloatField(null=True)
-    fact_sum = models.FloatField(null=True)
-    znp_igk = models.TextField(null=True)
-    znp_payment_type = models.CharField(max_length=50, null=True)
-    znp_status = models.CharField(max_length=100, null=True)
-    znp_date = models.DateField(null=True)
+    stage = models.CharField(max_length=250, null=True, blank=True)
+    plan_doc = models.CharField(max_length=255, null=True, blank=True)
+    payment_purpose = models.CharField(max_length=255, null=True, blank=True)
+    plan_payment_date = models.DateField(null=True, blank=True)
+    fact_payment_date = models.DateField(null=True, blank=True)
+    plan_sum = models.FloatField(null=True, blank=True)
+    fact_sum = models.FloatField(null=True, blank=True)
+    znp_igk = models.TextField(null=True, blank=True)
+    znp_payment_type = models.CharField(max_length=50, null=True, blank=True)
+    znp_status = models.CharField(max_length=100, null=True, blank=True)
+    znp_date = models.DateField(null=True, blank=True)
 
     class Meta:
         managed = True
@@ -220,25 +217,27 @@ class ZnpDataSAP(models.Model):
 
     id = models.AutoField(primary_key=True)
 
-    igk = models.CharField(max_length=50, null=True)
-    cfo = models.CharField(max_length=4, null=True)
-    c_agent = models.CharField(max_length=255)  # обязательное поле
-    reg_num = models.CharField(max_length=100, null=True)
-    items = models.CharField(max_length=500, null=True)
-    vv_sum = models.FloatField(null=True)
-    bank_name = models.CharField(max_length=255, null=True)
+    igk = models.CharField(max_length=50, null=True, blank=True)
+    # УВЕЛИЧЕНО: max_length=10 на случай неформатированных кодов из SAP
+    cfo = models.CharField(max_length=10, null=True, blank=True)
+    # ИСПРАВЛЕНО: добавлены null=True, blank=True для защиты от IntegrityError при пустых ячейках
+    c_agent = models.CharField(max_length=255, null=True, blank=True)
+    reg_num = models.CharField(max_length=100, null=True, blank=True)
+    items = models.CharField(max_length=500, null=True, blank=True)
+    vv_sum = models.FloatField(null=True, blank=True)
+    bank_name = models.CharField(max_length=255, null=True, blank=True)
 
-    stage_e = models.DateField(null=True)
-    stage_f = models.DateField(null=True)
-    payment_possible = models.DateField(null=True)
-    init_payment_date = models.DateField(null=True)
-    normalize_doc_num = models.CharField(max_length=100, null=True)
+    stage_e = models.DateField(null=True, blank=True)
+    stage_f = models.DateField(null=True, blank=True)
+    payment_possible = models.DateField(null=True, blank=True)
+    init_payment_date = models.DateField(null=True, blank=True)
+    normalize_doc_num = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         managed = True
         db_table = "znp_data_sap"
-        verbose_name = "Заявка на платёж(САП)"
-        verbose_name_plural = "Заявки на платёж(САП)"
+        verbose_name = "Заявка на платёж (SAP)"
+        verbose_name_plural = "Заявки на платёж (SAP)"
         indexes = [
             models.Index(fields=["cfo"]),
             models.Index(fields=["igk"]),
@@ -255,25 +254,27 @@ class StagingZnpSAPExcel(models.Model):
 
     id = models.AutoField(primary_key=True)
 
-    igk = models.CharField(max_length=50, null=True)
-    cfo = models.CharField(max_length=4)
-    c_agent = models.CharField(max_length=255)
-    reg_num = models.CharField(max_length=100, null=True)
-    items = models.CharField(max_length=500, null=True)
-    vv_sum = models.FloatField(null=True)
-    bank_name = models.CharField(max_length=255, null=True)
-    c_type = models.CharField(max_length=50)
-    stage_e = models.DateField(null=True)
-    stage_f = models.DateField(null=True)
-    payment_possible = models.DateField(null=True)
-    init_payment_date = models.DateField(null=True)
-    normalize_doc_num = models.CharField(max_length=100, null=True)
+    igk = models.CharField(max_length=50, null=True, blank=True)
+    # ИСПРАВЛЕНО: добавлены null=True, blank=True и увеличена длина для безопасности
+    cfo = models.CharField(max_length=10, null=True, blank=True)
+    c_agent = models.CharField(max_length=255, null=True, blank=True)
+    reg_num = models.CharField(max_length=100, null=True, blank=True)
+    items = models.CharField(max_length=500, null=True, blank=True)
+    vv_sum = models.FloatField(null=True, blank=True)
+    bank_name = models.CharField(max_length=255, null=True, blank=True)
+    c_type = models.CharField(max_length=50, null=True, blank=True)
+
+    stage_e = models.DateField(null=True, blank=True)
+    stage_f = models.DateField(null=True, blank=True)
+    payment_possible = models.DateField(null=True, blank=True)
+    init_payment_date = models.DateField(null=True, blank=True)
+    normalize_doc_num = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         managed = True
         db_table = "staging_znp_sap_excel"
-        verbose_name = "Строка импорта ЗнП(САП)"
-        verbose_name_plural = "Строки импорта ЗнП(САП)"
+        verbose_name = "Строка импорта ЗнП (SAP)"
+        verbose_name_plural = "Строки импорта ЗнП (SAP)"
 
     def __str__(self):
         return f"{self.reg_num}"
@@ -291,26 +292,25 @@ class ContractsHistory(models.Model):
     """
 
     id = models.AutoField(primary_key=True)
-
     hash = models.BinaryField()
 
-    old_status = models.CharField(max_length=500, null=True)
-    new_status = models.CharField(max_length=500, null=True)
+    old_status = models.CharField(max_length=500, null=True, blank=True)
+    new_status = models.CharField(max_length=500, null=True, blank=True)
 
-    update_date = models.DateField(null=True)
-    upload_date = models.DateField(null=True)
+    update_date = models.DateField(null=True, blank=True)
+    upload_date = models.DateField(null=True, blank=True)
 
-    old_plan = models.FloatField(null=True)
-    new_plan = models.FloatField(null=True)
+    old_plan = models.FloatField(null=True, blank=True)
+    new_plan = models.FloatField(null=True, blank=True)
 
-    old_fact = models.FloatField(null=True)
-    new_fact = models.FloatField(null=True)
+    old_fact = models.FloatField(null=True, blank=True)
+    new_fact = models.FloatField(null=True, blank=True)
 
-    plan_changed_date = models.DateField(null=True)
-    fact_changed_date = models.DateField(null=True)
+    plan_changed_date = models.DateField(null=True, blank=True)
+    fact_changed_date = models.DateField(null=True, blank=True)
 
-    old_contract_sum = models.FloatField(null=True)
-    new_contract_sum = models.FloatField(null=True)
+    old_contract_sum = models.FloatField(null=True, blank=True)
+    new_contract_sum = models.FloatField(null=True, blank=True)
 
     class Meta:
         managed = True
@@ -332,7 +332,8 @@ class ContractCountsSnapshot(models.Model):
     id = models.AutoField(primary_key=True)
 
     upload_date = models.DateField()
-    igk = models.CharField(max_length=10)
+    # УВЕЛИЧЕНО: max_length=50 для соответствия возможной длине ИГК
+    igk = models.CharField(max_length=50)
     cfo = models.CharField(max_length=500)
     year_col = models.CharField(max_length=5)
     concluded_count = models.IntegerField(default=0)
@@ -364,17 +365,17 @@ class ContractsAppeared(models.Model):
     kind = models.CharField(max_length=20)
     reason = models.CharField(max_length=20)
 
-    igk = models.CharField(max_length=500, null=True)
-    cfo = models.CharField(max_length=500, null=True)
-    c_agent = models.CharField(max_length=500, null=True)
-    contract = models.CharField(max_length=500, null=True)
-    item = models.CharField(max_length=500, null=True)
-    order_num = models.CharField(max_length=500, null=True)
-    stage = models.CharField(max_length=500, null=True)
-    plan_date = models.CharField(max_length=20, null=True)
-    status = models.CharField(max_length=500, null=True)
-    plan = models.FloatField(null=True)
-    contract_sum = models.FloatField(null=True)
+    igk = models.CharField(max_length=500, null=True, blank=True)
+    cfo = models.CharField(max_length=500, null=True, blank=True)
+    c_agent = models.CharField(max_length=500, null=True, blank=True)
+    contract = models.CharField(max_length=500, null=True, blank=True)
+    item = models.CharField(max_length=500, null=True, blank=True)
+    order_num = models.CharField(max_length=500, null=True, blank=True)
+    stage = models.CharField(max_length=500, null=True, blank=True)
+    plan_date = models.CharField(max_length=20, null=True, blank=True)
+    status = models.CharField(max_length=500, null=True, blank=True)
+    plan = models.FloatField(null=True, blank=True)
+    contract_sum = models.FloatField(null=True, blank=True)
 
     class Meta:
         managed = True
@@ -422,22 +423,20 @@ class Access(models.Model):
 class SystemEvent(models.Model):
     """
     Системные события — для отслеживания времени последней загрузки.
-    Ключ события уникален, например: «last_contracts_upload».
     """
 
     id = models.AutoField(primary_key=True)
-
     event_key = models.CharField(max_length=50, unique=True)
     event_time = models.DateTimeField()
 
     class Meta:
         managed = True
         db_table = "system_events"
-        verbose_name = "Системные события"
+        verbose_name = "Системное событие"
         verbose_name_plural = "Системные события"
 
     def __str__(self):
-        return f"{self.event_key}-{self.event_time}"
+        return f"{self.event_key} ({self.event_time})"
 
 
 class Profile(models.Model):
@@ -448,21 +447,12 @@ class Profile(models.Model):
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
 
-    # API-ключ для внешних интеграций
     api_key = models.CharField("API ключ", max_length=64, blank=True, null=True)
-
-    # Отчество пользователя
     patronymic = models.CharField("Отчество", max_length=255, blank=True)
-
-    # Признак увольнения (для отключения доступа)
     is_fired = models.BooleanField("Уволен?", default=False)
-
-    # Время последней синхронизации с внешней системой (если используется)
     last_synced_at = models.DateTimeField(
         "Последняя синхронизация", null=True, blank=True
     )
-
-    # Текст ошибки последней синхронизации
     sync_error = models.TextField("Ошибка последней синхронизации", blank=True)
 
     class Meta:

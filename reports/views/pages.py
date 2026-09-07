@@ -20,6 +20,7 @@ from django.db import connection
 from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.db.models.expressions import RawSQL
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from ..models import IgkStatData, NsiIgk, SystemEvent, ZnpData, ZnpDataSAP
@@ -76,10 +77,6 @@ logger = logging.getLogger(__name__)
 def _ctx(request):
     """
     Базовый контекст для всех шаблонов приложения.
-
-    Содержит список годов и пары (год, имя колонки-флага):
-    2025 -> "y25", 2026 -> "y26", 2027 -> "y27".
-    Используется в шаблонах для построения колонок по годам.
     """
     return {
         "years": YEARS,
@@ -88,9 +85,6 @@ def _ctx(request):
 
 
 # Условие «у строки договора есть заказ» (для ORM).
-# Заказ не пустой и не состоит из одних пробелов.
-# ВАЖНО: при изменении нужно синхронизировать с HAS_ORDER в queries.py
-# (там то же условие для сырого SQL).
 HAS_ORDER_Q = Q(order__isnull=False) & ~Q(order__regex=r"^\s*$")
 
 
@@ -102,7 +96,8 @@ HAS_ORDER_Q = Q(order__isnull=False) & ~Q(order__regex=r"^\s*$")
 def login_view(request):
     """Страница входа: форма авторизации."""
     if request.user.is_authenticated:
-        return redirect("/reports/")
+        # ИСПРАВЛЕНО: используем reverse вместо захардкоженного пути
+        return redirect(reverse("index"))
     error = False
     if request.method == "POST":
         user = authenticate(
@@ -112,7 +107,7 @@ def login_view(request):
         )
         if user:
             login(request, user)
-            return redirect("/reports/")
+            return redirect(reverse("index"))
         error = True
     return render(request, "login.html", {"error": error})
 
@@ -187,9 +182,6 @@ def igk_terminated_table(request, year):
 def _igk_and_cfo_lists():
     """
     Возвращает списки уникальных ИГК и ЦФО для выпадающих фильтров на страницах.
-
-    Данные берутся через сырой SQL (services/queries.py), потому что
-    нужны суффиксы ИГК и отсортированные списки без дубликатов.
     """
     try:
         with connection.cursor() as cur:
@@ -304,39 +296,44 @@ def znp_sap_list_table(request):
 # ============================================================================
 
 
-# Соответствие типа файла и management-команды для его загрузки
 FILE_TYPE_COMMANDS = {
     "contracts": "load_contracts",
     "znp": "load_znp",
     "znp_sap": "load_znp_sap",
 }
 
-# Ожидаемые колонки файла — показываются на странице загрузки как справка
 FILE_TYPE_COLUMNS = {
     "contracts": list(CONTRACT_COLUMNS),
     "znp": list(ZNP_COLUMNS),
     "znp_sap": list(ZNP_SAP_COLUMNS),
 }
 
-# Человекочитаемые подписи типов файлов для формы загрузки
 FILE_TYPE_LABELS = {
     "contracts": "Договоры",
     "znp": "ЗНП (ФЗД)",
     "znp_sap": "ЗНП (SAP)",
 }
 
-# Максимальный размер загружаемого файла (10 МБ)
 MAX_FILE_SIZE = 10 * 1024 * 1024
+
+# ИСПРАВЛЕНО: добавлены .csv и .txt для поддержки выгрузок из SAP
+ALLOWED_EXTENSIONS = (".xlsx", ".xls", ".csv", ".txt")
+
+
+def _render_upload_error(request, error_message, file_type):
+    """Вспомогательная функция для отображения ошибки загрузки."""
+    messages.error(request, error_message)
+    ctx = _ctx(request)
+    ctx["file_types"] = FILE_TYPE_LABELS
+    ctx["file_columns"] = FILE_TYPE_COLUMNS
+    ctx["selected_type"] = file_type
+    return render(request, "upload.html", ctx)
 
 
 @login_required
 def upload_excel(request):
     """
     Страница загрузки файлов и обработчик загрузки.
-
-    Принимает POST с файлом, сохраняет во временный файл, запускает
-    соответствующую management-команду (загрузка + нормализация в одной
-    транзакции) и показывает результат. При ошибке база остаётся прежней.
     """
     result = None
     file_type = request.POST.get("file_type", "contracts")
@@ -346,32 +343,23 @@ def upload_excel(request):
         ext = os.path.splitext(f.name)[1].lower()
 
         # Проверка расширения файла
-        if ext not in (".xlsx", ".xls"):
-            messages.error(
+        if ext not in ALLOWED_EXTENSIONS:
+            return _render_upload_error(
                 request,
                 f"Неподдерживаемый формат файла: {ext or 'без расширения'}. "
-                "Нужен .xlsx или .xls",
+                f"Нужен {', '.join(ALLOWED_EXTENSIONS)}",
+                file_type,
             )
-            ctx = _ctx(request)
-            ctx["file_types"] = FILE_TYPE_LABELS
-            ctx["file_columns"] = FILE_TYPE_COLUMNS
-            ctx["selected_type"] = file_type
-            return render(request, "upload.html", ctx)
 
         # Проверка размера файла
         if f.size > MAX_FILE_SIZE:
-            messages.error(
+            return _render_upload_error(
                 request,
                 f"Файл слишком большой: {f.size / (1024*1024):.1f} МБ. "
                 f"Максимальный размер: {MAX_FILE_SIZE / (1024*1024)} МБ.",
+                file_type,
             )
-            ctx = _ctx(request)
-            ctx["file_types"] = FILE_TYPE_LABELS
-            ctx["file_columns"] = FILE_TYPE_COLUMNS
-            ctx["selected_type"] = file_type
-            return render(request, "upload.html", ctx)
 
-        # Сохраняем загруженный файл во временный — команды читают по пути
         tmp_path = None
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
@@ -382,17 +370,16 @@ def upload_excel(request):
             if command is None:
                 raise ValueError(f"Неизвестный тип файла: {file_type}")
 
-            # Запускаем команду загрузки
             out = StringIO()
             call_command(command, tmp_path, stdout=out)
             result = out.getvalue()
             messages.success(request, "Файл успешно загружен и нормализован")
+            logger.info(f"Успешно загружен файл типа {file_type}: {f.name}")
 
-            # Обновляем время последней загрузки в SystemEvent
             event_key_map = {
                 "contracts": "last_contracts_upload",
                 "znp": "last_znp_upload",
-                "znp_sap": "sap_load",  # Для SAP используется ключ "sap_load"
+                "znp_sap": "sap_load",
             }
             event_key = event_key_map.get(file_type, "last_upload")
             SystemEvent.objects.update_or_create(
@@ -408,7 +395,6 @@ def upload_excel(request):
             result = str(e)
             logger.error(f"Ошибка при загрузке файла {file_type}: {e}")
         finally:
-            # Временный файл удаляем в любом случае
             if tmp_path and os.path.exists(tmp_path):
                 try:
                     os.unlink(tmp_path)
@@ -432,14 +418,6 @@ def upload_excel(request):
 def dashboard(request):
     """
     Сводка по договорам: плашки сверху и таблица по ЦФО для выбранного ИГК.
-
-    Плашки показывают:
-    - Всего договоров (все годы, у которых есть заказ)
-    - По выбранному году: количество, суммы, авансы
-    Таблица по ЦФО считает показатели для выбранного ИГК.
-
-    Селектор ИГК влияет только на таблицу по ЦФО, плашки сверху
-    считаются по всем ИГК.
     """
     available_years = YEARS
     try:
@@ -452,15 +430,12 @@ def dashboard(request):
 
     year = valid_year(request.GET.get("year"))
 
-    # Выбранный ИГК: из параметра или первый по списку
     selected_igk = request.GET.get("igk", "") or str(first_igk or "")
-    # Проверяем, существует ли выбранный ИГК в базе
     if selected_igk and not NsiIgk.objects.filter(igk=selected_igk).exists():
-        selected_igk = str(first_igk or "")  # сбрасываем на первый
+        selected_igk = str(first_igk or "")
 
     ctx = _ctx(request)
 
-    # Имя колонки-флага года в igk_stat_data: 2025 -> "y25"
     year_field = f"y{str(year)[-2:]}"
     concluded_q = Q(status__in=CONCLUDED)
     not_concl_q = Q(status__in=NOT_CONCL)
@@ -468,7 +443,7 @@ def dashboard(request):
     advance_q = Q(payment_type=ADVANCE)
 
     try:
-        # --- Плашка «Все договоры»: все годы, только строки с заказом ---
+        # --- Плашка «Все договоры» ---
         totals_all = IgkStatData.objects.filter(
             HAS_ORDER_Q, contract__isnull=False
         ).aggregate(
@@ -480,9 +455,10 @@ def dashboard(request):
             not_concluded_plan=Sum("plan", filter=not_concl_q),
         )
 
-        # --- Плашка «Выбранный год»: расторгнутые исключаются ---
+        # --- Плашка «Выбранный год» ---
+        # ИСПРАВЛЕНО: используем status__in=TERMINATED вместо status="Расторгнут"
         totals_year = (
-            IgkStatData.objects.exclude(status="Расторгнут")
+            IgkStatData.objects.exclude(status__in=TERMINATED)
             .filter(HAS_ORDER_Q, contract__isnull=False, **{year_field: True})
             .aggregate(
                 count=Count("contract", distinct=True),
@@ -494,7 +470,6 @@ def dashboard(request):
             )
         )
 
-        # Список ЦФО, которые есть у выбранного ИГК — строки таблицы
         available_cfo = list(
             IgkStatData.objects.filter(igk=selected_igk)
             .values_list("cfo", flat=True)
@@ -502,11 +477,11 @@ def dashboard(request):
             .order_by("cfo")
         )
 
-        # Агрегаты по каждому ЦФО для выбранного ИГК
+        # ИСПРАВЛЕНО: используем status__in=TERMINATED вместо status="Расторгнут"
         cfo_stats = {
             row["cfo"]: row
             for row in (
-                IgkStatData.objects.exclude(status="Расторгнут")
+                IgkStatData.objects.exclude(status__in=TERMINATED)
                 .filter(HAS_ORDER_Q, igk=selected_igk, contract__isnull=False)
                 .values("cfo")
                 .annotate(
@@ -532,7 +507,6 @@ def dashboard(request):
             )
         }
 
-        # Собираем таблицу по ЦФО и добавляем итоговую строку
         igk_table = [
             cfo_row(cfo, cfo_stats.get(cfo, EMPTY_CFO_STATS)) for cfo in available_cfo
         ]
@@ -587,12 +561,6 @@ def znp_table(request):
     """
     Сводка заявок ФЗД: плашки по всем годам и выбранному году,
     таблица по ЦФО для выбранного ИГК, период для графика.
-
-    Плашки считаются по трём группам:
-    - «Не выдано ЗНП» — заключённые позиции без заявок, где остаток
-      превышает допуск (условие needs_znp)
-    - «ЗНП» — заявки по заключённым позициям
-    - «Этапы оплаты» — все этапы заключённых позиций
     """
     available_years = YEARS
     try:
@@ -611,14 +579,9 @@ def znp_table(request):
 
     ctx = _ctx(request)
 
-    # Подзапрос: есть ли заявка у позиции договора
     has_znp = Exists(ZnpData.objects.filter(parent=OuterRef("pk")))
 
     def _not_issued_qs(igk=None):
-        """
-        Позиции, по которым ЗНП ещё не выдана: заключённые позиции без
-        заявок, где остаток превышает допуск (нужна заявка).
-        """
         qs = (
             IgkStatData.objects.filter(status__in=CONCLUDED)
             .annotate(has_znp=has_znp)
@@ -660,7 +623,6 @@ def znp_table(request):
         all_breakdown = _breakdown(all_not_issued_qs, all_znp_qs, all_stages_qs)
         year_breakdown = _breakdown(year_not_issued_qs, year_znp_qs, year_stages_qs)
 
-        # Список ЦФО, которые есть у выбранного ИГК — строки таблицы
         available_cfo = list(
             IgkStatData.objects.filter(igk=selected_igk)
             .values_list("cfo", flat=True)
@@ -668,7 +630,6 @@ def znp_table(request):
             .order_by("cfo")
         )
 
-        # --- Таблица по ЦФО для выбранного ИГК и года ---
         igk_not_issued_qs = filter_by_year(_not_issued_qs(igk=selected_igk), year)
         igk_znp_qs = filter_by_year(
             _znp_qs(igk=selected_igk), year, field_prefix="parent__"
@@ -745,10 +706,6 @@ def znp_sap_table(request):
     """
     Сводка заявок SAP: плашки по всем заявкам и по двум датам,
     таблица по ЦФО для выбранного ИГК.
-
-    Статус заявки определяется по датам этапов (см. services/sap_status.py).
-    Дополнительно показываются карточки по двум ближайшим датам платежей:
-    выбранной и следующей за ней (шаг 7 дней).
     """
     ctx = _ctx(request)
     try:
@@ -770,11 +727,16 @@ def znp_sap_table(request):
         all_breakdown = _breakdown(qs)
 
         date_param = request.GET.get("date", "")
-        first_date = (
-            datetime.strptime(date_param, "%Y-%m-%d").date()
-            if valid_date(date_param)
-            else timezone.localdate()
-        )
+        # ИСПРАВЛЕНО: обернули в try-except для защиты от невалидных дат
+        try:
+            first_date = (
+                datetime.strptime(date_param, "%Y-%m-%d").date()
+                if valid_date(date_param)
+                else timezone.localdate()
+            )
+        except (ValueError, TypeError):
+            first_date = timezone.localdate()
+
         second_date = sap_second_date(first_date)
         first_date_breakdown = _breakdown(qs.filter(init_payment_date=first_date))
         second_date_breakdown = _breakdown(qs.filter(init_payment_date=second_date))
@@ -789,7 +751,6 @@ def znp_sap_table(request):
         selected_igk = request.GET.get("igk", "") or (
             available_igk[0] if available_igk else ""
         )
-        # Если выбранный ИГК не существует в списке, сбрасываем
         if selected_igk and selected_igk not in available_igk:
             selected_igk = available_igk[0] if available_igk else ""
 
@@ -820,7 +781,6 @@ def znp_sap_table(request):
         ]
         cfo_total_row = cfo_breakdown_row("ИТОГО", _breakdown(cfo_qs), SAP_STAGE_PARAMS)
 
-        # Время последней загрузки SAP — из таблицы системных событий
         sap_load_time = None
         try:
             sap_load_event = SystemEvent.objects.filter(event_key="sap_load").first()

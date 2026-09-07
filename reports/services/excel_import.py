@@ -1,9 +1,10 @@
 """
 Загрузка Excel-файлов в staging-таблицы.
-Поддерживает .xlsx (openpyxl) и .xls (xlrd).
+Поддерживает .xlsx (openpyxl), .xls (xlrd) и .csv.
 Каждый тип файла имеет свой словарь колонок.
 """
 
+import csv
 import os
 import re
 from contextlib import contextmanager
@@ -72,10 +73,36 @@ BAD_FORMAT = "Документ не соответствует формату"
 
 
 def _xlsx_rows(filepath):
-    """Генератор строк из .xlsx файла (openpyxl)."""
-    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
-    rows = wb.active.iter_rows(values_only=True)
-    return rows, wb.close
+    """
+    Генератор строк из .xlsx файла (openpyxl).
+    ИСПРАВЛЕНО: Расплетает merged cells в первых 15 строках, чтобы заголовок не слипался.
+    """
+    # Загружаем БЕЗ read_only=True, чтобы получить доступ к merged_cells
+    wb = openpyxl.load_workbook(filepath, data_only=True)
+    sheet = wb.active
+
+    # Расплетаем merged cells в первых 15 строках
+    # Это решает проблему "слипаются шапки" при выгрузке из SAP
+    for merged_range in list(sheet.merged_cells.ranges):
+        if merged_range.min_row <= 15:
+            # Получаем значение из верхней левой ячейки
+            top_left_value = sheet.cell(
+                row=merged_range.min_row, column=merged_range.min_col
+            ).value
+            # Заполняем все ячейки в объединенном диапазоне этим значением
+            for row in range(merged_range.min_row, min(merged_range.max_row + 1, 16)):
+                for col in range(merged_range.min_col, merged_range.max_col + 1):
+                    sheet.cell(row=row, column=col).value = top_left_value
+            # Разъединяем ячейки
+            sheet.unmerge_cells(str(merged_range))
+
+    # Итерируем по строкам
+    rows = sheet.iter_rows(values_only=True)
+
+    def close():
+        wb.close()
+
+    return rows, close
 
 
 def _xls_rows(filepath):
@@ -90,20 +117,62 @@ def _xls_rows(filepath):
     return _iter(), book.release_resources
 
 
+def _csv_rows(filepath):
+    """
+    Генератор строк из CSV файла.
+    Автоопределяет разделитель и кодировку.
+    """
+    # Пробуем разные кодировки
+    for encoding in ["utf-8-sig", "cp1251", "utf-8", "latin-1"]:
+        try:
+            with open(filepath, "r", encoding=encoding) as f:
+                # Определяем разделитель
+                sample = f.read(8192)
+                f.seek(0)
+
+                # Пробуем разные разделители
+                try:
+                    # Создаем sniffer для определения формата
+                    dialect = csv.Sniffer().sniff(sample, delimiters=";,\t")
+                    reader = csv.reader(f, dialect)
+
+                    def _iter():
+                        for row in reader:
+                            # Пропускаем полностью пустые строки
+                            if any(cell.strip() for cell in row):
+                                yield tuple(row)
+
+                    return _iter(), lambda: None  # CSV не требует явного закрытия
+                except csv.Error:
+                    continue
+        except UnicodeDecodeError:
+            continue
+
+    raise CommandError(f"Не удалось определить кодировку CSV файла: {filepath}")
+
+
 @contextmanager
 def _sheet(filepath):
     """
-    Контекстный менеджер для чтения листа Excel.
+    Контекстный менеджер для чтения листа Excel или CSV.
     Автоматически закрывает ресурсы после чтения.
     """
     ext = os.path.splitext(filepath)[1].lower()
-    loader = _xls_rows if ext == ".xls" else _xlsx_rows
+
+    if ext in (".csv", ".txt"):
+        loader = _csv_rows
+    elif ext == ".xls":
+        loader = _xls_rows
+    else:  # .xlsx
+        loader = _xlsx_rows
+
     try:
         rows, close = loader(filepath)
     except FileNotFoundError:
         raise CommandError(f"файл не найден: {filepath}")
     except Exception as exc:
         raise CommandError(str(exc))
+
     try:
         yield rows
     finally:
@@ -146,6 +215,10 @@ def _find_columns(rows, column_map):
     known_headers = set(lookup.keys())
     expected_fields = set(column_map.values())
 
+    # Минимальное количество совпадений для признания строки заголовком
+    # (не менее 70% от ожидаемых полей, но не менее 3)
+    min_matches = max(3, int(len(expected_fields) * 0.7))
+
     # Пропускаем пустые строки, ищем заголовок
     header_row = None
     for row in rows:
@@ -154,10 +227,9 @@ def _find_columns(rows, column_map):
             continue
         # Очищаем все ячейки строки, отбрасываем пустые
         cleaned_cells = {clean_header(cell) for cell in row if cell}
-        # Проверяем, что найденная строка содержит БОЛЬШИНСТВО ожидаемых заголовков
-        # (например, не менее 80% от expected_fields)
+        # Проверяем, что найденная строка содержит достаточно ожидаемых заголовков
         match_count = len(cleaned_cells & known_headers)
-        if match_count >= len(expected_fields) * 0.8:
+        if match_count >= min_matches:
             header_row = row
             break
 
@@ -173,8 +245,14 @@ def _find_columns(rows, column_map):
                 positions[i] = lookup[cleaned]
 
     # Проверяем, что все ожидаемые поля найдены
-    if set(positions.values()) != expected_fields:
-        raise CommandError(BAD_FORMAT)
+    missing_fields = expected_fields - set(positions.values())
+    if missing_fields:
+        missing_names = [
+            name for name, field in column_map.items() if field in missing_fields
+        ]
+        raise CommandError(
+            f"{BAD_FORMAT}. Отсутствуют колонки: {', '.join(missing_names)}"
+        )
 
     return positions
 
