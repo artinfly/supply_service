@@ -1,7 +1,9 @@
+import os
 import re
 from contextlib import contextmanager
 
 import openpyxl
+import xlrd
 from django.core.management.base import CommandError
 from django.db import connection, transaction
 
@@ -62,41 +64,64 @@ ZNP_SAP_COLUMNS = {
 BAD_FORMAT = "Документ не соответствует формату"
 
 
+def _xlsx_rows(filepath):
+    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+    return wb.active.iter_rows(values_only=True), wb.close
+
+
+def _xls_rows(filepath):
+    book = xlrd.open_workbook(filepath)
+    sheet = book.sheet_by_index(0)
+
+    def _iter():
+        for i in range(sheet.nrows):
+            yield tuple(v if v != "" else None for v in sheet.row_values(i))
+
+    return _iter(), book.release_resources
+
+
 @contextmanager
 def _sheet(filepath):
+    ext = os.path.splitext(filepath)[1].lower()
+    loader = _xls_rows if ext == ".xls" else _xlsx_rows
     try:
-        wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+        rows, close = loader(filepath)
     except FileNotFoundError:
         raise CommandError(f"файл не найден: {filepath}")
     except Exception as exc:
         raise CommandError(str(exc))
-    rows = wb.active.iter_rows(values_only=True)
     try:
         yield rows
     finally:
         rows.close()
-        wb.close()
+        close()
 
 
 def clean_header(text):
     """
     Очищает заголовок от лишних символов, оставляя только нужные.
     """
-    for char in text:
-        hex_utf8 = char.encode("utf-8").hex().upper()
-        print(hex_utf8)
+    with open("file.txt", "a", encoding="utf-8") as f:
+        for char in text:
+            hex_utf8 = char.encode("utf-8").hex().upper()
+            f.write(f"{char}:{hex_utf8}\n")
     if not text:
         return ""
     text = str(text)
     text = re.sub(r'[^a-zA-Zа-яА-ЯёЁ0-9\s/()"«»\'\-\_]', "", text)
     text = re.sub(r"\s+", "", text).strip()
+    print(f"Clean_header:{text.casefold()}")
     return text.casefold()
 
 
 def _find_columns(rows, column_map):
+    print("start")
     lookup = {clean_header(name): field for name, field in column_map.items()}
+    print(f"lookup:{lookup}")
     known = set(lookup)
+    print(f"known:{known}")
     header = next((r for r in rows if known & {clean_header(c) for c in r if c}), None)
+    print(f"header:{enumerate(header)}")
     if header is None:
         raise CommandError(BAD_FORMAT)
     positions = {
@@ -104,6 +129,7 @@ def _find_columns(rows, column_map):
         for i, cell in enumerate(header)
         if cell and clean_header(cell) in lookup
     }
+    print(positions)
     if set(column_map.values()) - set(positions.values()):
         raise CommandError(BAD_FORMAT)
     return positions
