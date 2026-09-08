@@ -9,19 +9,12 @@ Middleware для проверки прав доступа к разделам �
 - Страницы (рендер шаблона)
 - JSON API (ответ с ошибкой)
 - Выгрузки (отдают файл)
-
-Порядок SECTIONS важен: более специфичные разделы проверяются раньше,
-чтобы избежать ложных срабатываний.
 """
-
-import logging
 
 from django.http import JsonResponse
 from django.shortcuts import render
 
 from .services.queries import YEARS
-
-logger = logging.getLogger(__name__)
 
 # Соответствие прав доступа и ключевых слов в имени маршрута.
 # Порядок важен: более специфичные разделы проверяются раньше,
@@ -61,10 +54,6 @@ def perm_for(url_name):
 
     Возвращает None, если маршрут не требует проверки прав
     (например: главная страница, вход, выход).
-
-    Внимание: проверка происходит через in (подстрока), поэтому
-    важно, чтобы ключевые слова не пересекались нежелательным образом.
-    При добавлении новых маршрутов следите за уникальностью префиксов.
     """
     for section, words in SECTIONS:
         if any(word in url_name for word in words):
@@ -84,9 +73,11 @@ class SectionAccessMiddleware:
     """
 
     def __init__(self, get_response):
+        # Стандартная инициализация middleware
         self.get_response = get_response
 
     def __call__(self, request):
+        # Пропускаем запрос дальше по цепочке middleware
         return self.get_response(request)
 
     def process_view(self, request, view_func, view_args, view_kwargs):
@@ -112,7 +103,7 @@ class SectionAccessMiddleware:
         perm = perm_for(match.url_name)
 
         # Если право не требуется или пользователь не аутентифицирован — пропускаем.
-        # Неаутентифицированных пользователей перехватит @login_required
+        # НЕ аутентифицированных пользователей перехватит @login_required
         # или другие механизмы аутентификации.
         if perm is None or not request.user.is_authenticated:
             return None
@@ -122,12 +113,6 @@ class SectionAccessMiddleware:
             return None  # Право есть — разрешаем доступ
 
         # Права нет — возвращаем 403
-        # Логируем попытку несанкционированного доступа (для аудита)
-        logger.warning(
-            f"Доступ запрещён для {request.user.username} "
-            f"к маршруту {match.url_name} (требуется {perm})"
-        )
-
         # Для API-запросов возвращаем JSON с ошибкой
         if match.url_name.startswith("api_"):
             return JsonResponse({"error": "нет доступа к разделу"}, status=403)

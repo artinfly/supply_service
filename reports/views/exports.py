@@ -8,7 +8,6 @@ application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.
 книга Excel собирается в services/excel.py.
 """
 
-import logging
 from collections import defaultdict
 from datetime import datetime
 
@@ -36,8 +35,6 @@ from ..services.queries import (
     valid_date,
 )
 
-logger = logging.getLogger(__name__)
-
 # ============================================================================
 # Универсальная выгрузка
 # ============================================================================
@@ -51,32 +48,16 @@ def _export_simple(sql, params, name, headers, col_widths):
     одна таблица. Для более сложных выгрузок (КДР, авансы) книги
     собираются отдельными функциями.
 
-    Возвращает HttpResponse с готовым .xlsx или JSON с ошибкой.
+    Возвращает HttpResponse с готовым .xlsx.
     """
-    try:
-        with connection.cursor() as cur:
-            cur.execute(sql, params)
-            cols = [c[0] for c in cur.description]
-            rows = [dict(zip(cols, r)) for r in cur.fetchall()]
-        if not rows:
-            logger.warning(f"Выгрузка '{name}' не содержит данных")
-            # Создаём пустую книгу с пояснением
-            empty_rows = [[{"message": "Нет данных для выгрузки"}]]
-            return xlsx_response(
-                make_wb(name, ["Сообщение"], [30], empty_rows),
-                name,
-            )
-        return xlsx_response(
-            make_wb(
-                name, headers, col_widths, [[row[c] for c in cols] for row in rows]
-            ),
-            name,
-        )
-    except Exception as e:
-        logger.error(f"Ошибка в выгрузке '{name}': {e}")
-        return JsonResponse(
-            {"error": f"Ошибка при формировании выгрузки: {e}"}, status=500
-        )
+    with connection.cursor() as cur:
+        cur.execute(sql, params)
+        cols = [c[0] for c in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    return xlsx_response(
+        make_wb(name, headers, col_widths, [[row[c] for c in cols] for row in rows]),
+        name,
+    )
 
 
 # ============================================================================
@@ -300,199 +281,171 @@ def export_kdr(request, year):
     if has_period and not (valid_date(start_date) and valid_date(end_date)):
         return JsonResponse({"error": "недопустимая дата периода"}, status=400)
 
-    try:
-        # Основной запрос: данные по каждому ЦФО внутри ИГК
+    # Основной запрос: данные по каждому ЦФО внутри ИГК
+    with connection.cursor() as cur:
+        cur.execute(kdr_export(year))
+        db_cols = [c[0] for c in cur.description]
+        detail_rows = [dict(zip(db_cols, r)) for r in cur.fetchall()]
+
+    # Если задан период — запрашиваем количество договоров, заключённых за период
+    # Ключ: (последние 4 символа ИГК, ЦФО) -> количество
+    delta_map = {}
+    if has_period:
+        delta_sql, delta_params = kdr_delta(yc, start_date, end_date)
         with connection.cursor() as cur:
-            cur.execute(kdr_export(year))
-            db_cols = [c[0] for c in cur.description]
-            detail_rows = [dict(zip(db_cols, r)) for r in cur.fetchall()]
+            cur.execute(delta_sql, delta_params)
+            for row in cur.fetchall():
+                delta_map[(row[0], row[1])] = row[2]
 
-        # Если задан период — запрашиваем количество договоров, заключённых за период
-        # Ключ: (последние 4 символа ИГК, ЦФО) -> количество
-        delta_map = {}
+    # --- Вспомогательные функции форматирования ---
+
+    def fv(v):
+        """Приводит значение к float, None -> 0."""
+        return float(v or 0)
+
+    def pct(a, b):
+        """Процент a от b с одним знаком после запятой."""
+        return round(fv(a) / fv(b) * 100, 1) if fv(b) else 0.0
+
+    def igk4(s):
+        """Последние 4 символа ИГК — ключ в delta_map."""
+        return (s or "")[-4:]
+
+    def row_vals(r, igk_label, cfo_label, d_igk, d_cfo, delta_value=None):
+        """
+        Собирает одну строку отчёта из агрегатов.
+
+        Параметры:
+        - r: словарь с агрегатами (total_count, concl_count, year_count и т.д.)
+        - igk_label, cfo_label: подписи для первых двух колонок
+        - d_igk, d_cfo: ключи для поиска delta в delta_map
+        - delta_value: если задано, используется вместо поиска в delta_map
+        """
+        yn, ys = fv(r["year_count"]), fv(r["year_sum"])
+        # Количество заключённых за период: из параметра или из delta_map
+        if delta_value is not None:
+            delta = delta_value
+        else:
+            delta = delta_map.get((igk4(d_igk), d_cfo), 0) if has_period else 0
+
+        return [
+            igk_label,  # ИГК
+            cfo_label,  # ЦФО
+            fv(r["total_count"]),  # Всего договоров, шт.
+            fv(r["total_sum"]),  # Сумма всех договоров
+            fv(r["concl_count"]),  # Заключено, шт.
+            fv(r["concl_sum"]),  # Сумма заключённых
+            fv(r["year_count"]),  # Всего на год, шт.
+            fv(r["year_sum"]),  # Сумма на год
+            fv(r["year_concl_count"]),  # Заключено на год, шт.
+            pct(r["year_concl_count"], yn),  # % контрактации (по количеству)
+            fv(r["year_concl_sum"]),  # Сумма заключённых на год
+            pct(r["year_concl_sum"], ys),  # % контрактации (по сумме)
+            delta,  # Заключено за период
+            fv(r["year_not_concl_count"]),  # Не заключено, шт.
+            fv(r["year_not_concl_sum"]),  # Сумма не заключённых
+            fv(r["pp_plan"]),  # План аванса
+            fv(r["pp_fact"]),  # Факт аванса
+            pct(r["pp_fact"], r["pp_plan"]),  # % авансирования
+        ]
+
+    def sum_group(rows):
+        """Суммирует агрегаты по списку строк (для итоговых строк)."""
+        keys = [
+            "total_count",
+            "total_sum",
+            "concl_count",
+            "concl_sum",
+            "year_count",
+            "year_sum",
+            "year_concl_count",
+            "year_concl_sum",
+            "delta_concl_count",
+            "year_not_concl_count",
+            "year_not_concl_sum",
+            "pp_plan",
+            "pp_fact",
+        ]
+        return {k: sum(fv(r[k]) for r in rows) for k in keys}
+
+    # --- Группируем строки по ИГК ---
+    igk_groups = defaultdict(list)
+    for r in detail_rows:
+        igk_groups[r["igk"]].append(r)
+
+    # --- Собираем строки отчёта ---
+    rows, kinds = [], []
+    total_delta_sum = 0
+    for igk, grp in igk_groups.items():
+        # Считаем сумму заключённых за период по ИГК
+        delta_sum = 0
         if has_period:
-            delta_sql, delta_params = kdr_delta(yc, start_date, end_date)
-            with connection.cursor() as cur:
-                cur.execute(delta_sql, delta_params)
-                for row in cur.fetchall():
-                    delta_map[(row[0], row[1])] = row[2]
-
-        # --- Вспомогательные функции форматирования ---
-
-        def fv(v):
-            """Приводит значение к float, None -> 0."""
-            return float(v or 0)
-
-        def pct(a, b):
-            """Процент a от b с одним знаком после запятой."""
-            return round(fv(a) / fv(b) * 100, 1) if fv(b) else 0.0
-
-        def igk4(s):
-            """Последние 4 символа ИГК — ключ в delta_map."""
-            return (s or "")[-4:]
-
-        def row_vals(r, igk_label, cfo_label, d_igk, d_cfo, delta_value=None):
-            """
-            Собирает одну строку отчёта из агрегатов.
-
-            Параметры:
-            - r: словарь с агрегатами (total_count, concl_count, year_count и т.д.)
-            - igk_label, cfo_label: подписи для первых двух колонок
-            - d_igk, d_cfo: ключи для поиска delta в delta_map
-            - delta_value: если задано, используется вместо поиска в delta_map
-            """
-            yn, ys = fv(r["year_count"]), fv(r["year_sum"])
-            # Количество заключённых за период: из параметра или из delta_map
-            if delta_value is not None:
-                delta = delta_value
-            else:
-                delta = delta_map.get((igk4(d_igk), d_cfo), 0) if has_period else 0
-
-            return [
-                igk_label,  # ИГК
-                cfo_label,  # ЦФО
-                fv(r["total_count"]),  # Всего договоров, шт.
-                fv(r["total_sum"]),  # Сумма всех договоров
-                fv(r["concl_count"]),  # Заключено, шт.
-                fv(r["concl_sum"]),  # Сумма заключённых
-                fv(r["year_count"]),  # Всего на год, шт.
-                fv(r["year_sum"]),  # Сумма на год
-                fv(r["year_concl_count"]),  # Заключено на год, шт.
-                pct(r["year_concl_count"], yn),  # % контрактации (по количеству)
-                fv(r["year_concl_sum"]),  # Сумма заключённых на год
-                pct(r["year_concl_sum"], ys),  # % контрактации (по сумме)
-                delta,  # Заключено за период
-                fv(r["year_not_concl_count"]),  # Не заключено, шт.
-                fv(r["year_not_concl_sum"]),  # Сумма не заключённых
-                fv(r["pp_plan"]),  # План аванса
-                fv(r["pp_fact"]),  # Факт аванса
-                pct(r["pp_fact"], r["pp_plan"]),  # % авансирования
-            ]
-
-        def sum_group(rows):
-            """Суммирует агрегаты по списку строк (для итоговых строк)."""
-            keys = [
-                "total_count",
-                "total_sum",
-                "concl_count",
-                "concl_sum",
-                "year_count",
-                "year_sum",
-                "year_concl_count",
-                "year_concl_sum",
-                "delta_concl_count",
-                "year_not_concl_count",
-                "year_not_concl_sum",
-                "pp_plan",
-                "pp_fact",
-            ]
-            return {k: sum(fv(r[k]) for r in rows) for k in keys}
-
-        # --- Группируем строки по ИГК ---
-        igk_groups = defaultdict(list)
-        for r in detail_rows:
-            igk_groups[r["igk"]].append(r)
-
-        # --- Собираем строки отчёта ---
-        rows, kinds = [], []
-        total_delta_sum = 0
-        for igk, grp in igk_groups.items():
-            # Считаем сумму заключённых за период по ИГК
-            delta_sum = 0
-            if has_period:
-                for r in grp:
-                    delta_val = delta_map.get((igk4(r["igk"]), r["cfo"]), 0)
-                    if delta_val > 0:
-                        delta_sum += delta_val
-            total_delta_sum += delta_sum
-            # Строка «Итого» по ИГК (агрегаты по всем ЦФО)
-            rows.append(
-                row_vals(sum_group(grp), igk, "Итого", igk, grp[0]["cfo"], delta_sum)
-            )
-            kinds.append("subtotal")
-            # Строки по каждому ЦФО внутри ИГК
             for r in grp:
-                rows.append(row_vals(r, "", r["cfo"], r["igk"], r["cfo"]))
-                kinds.append("normal")
-
-        # Строка «ИТОГО» по всем ИГК
+                delta_val = delta_map.get((igk4(r["igk"]), r["cfo"]), 0)
+                if delta_val > 0:
+                    delta_sum += delta_val
+        total_delta_sum += delta_sum
+        # Строка «Итого» по ИГК (агрегаты по всем ЦФО)
         rows.append(
-            row_vals(sum_group(detail_rows), "ИТОГО", "", "", "", total_delta_sum)
+            row_vals(sum_group(grp), igk, "Итого", igk, grp[0]["cfo"], delta_sum)
         )
-        kinds.append("total")
+        kinds.append("subtotal")
+        # Строки по каждому ЦФО внутри ИГК
+        for r in grp:
+            rows.append(row_vals(r, "", r["cfo"], r["igk"], r["cfo"]))
+            kinds.append("normal")
 
-        # Форматируем даты периода для заголовка колонки
-        if has_period:
-            start_date = datetime.strptime(start_date, "%Y-%m-%d").strftime("%d.%m.%Y")
-            end_date = datetime.strptime(end_date, "%Y-%m-%d").strftime("%d.%m.%Y")
+    # Строка «ИТОГО» по всем ИГК
+    rows.append(row_vals(sum_group(detail_rows), "ИТОГО", "", "", "", total_delta_sum))
+    kinds.append("total")
 
-        yy = str(year)
-        period_text = f" с {start_date} по {end_date}" if has_period else ""
+    # Форматируем даты периода для заголовка колонки
+    if has_period:
+        start_date = datetime.strptime(start_date, "%Y-%m-%d").strftime("%d.%m.%Y")
+        end_date = datetime.strptime(end_date, "%Y-%m-%d").strftime("%d.%m.%Y")
 
-        # Заголовки колонок (включают год и период)
-        headers = [
-            "ИГК",
-            "ЦФО",
-            "Всего договоров, шт.",
-            "Сумма всех договоров, млн.руб.",
-            "Заключено, шт.",
-            "Сумма заключенных договоров(Всех), млн.руб.",
-            f"Всего договоров на {yy}г., шт.",
-            f"Сумма договоров на {yy}г., млн.руб.",
-            f"Заключено договоров на {yy}г., шт.",
-            f"% контрактации {yy}г.",
-            f"Сумма заключенных договоров на {yy}г., млн.руб.",
-            f"% контрактации {yy}г.",
-            f"Заключено{period_text}, шт.",
-            "Не заключено, шт.",
-            "Сумма не заключенных договоров, млн.руб.",
-            f"Плановая сумма аванса в {yy}г., млн.руб.",
-            f"Фактическая сумма аванса на {yy}г., млн.руб.",
-            f"% авансирования на {yy}г.",
-            "Примечание",
-        ]
-        # Числовые форматы колонок: денежные — с разделителями, проценты — с "%"
-        formats = {
-            4: "#,##0.00",
-            6: "#,##0.00",
-            8: "#,##0.00",
-            11: "#,##0.00",
-            15: "#,##0.00",
-            16: "#,##0.00",
-            17: "#,##0.00",
-            10: "#,##0.0%",  # Улучшенный формат процентов
-            12: "#,##0.0%",
-            18: "#,##0.0%",
-        }
-        col_w = [
-            10,
-            6,
-            12,
-            14,
-            12,
-            16,
-            12,
-            14,
-            12,
-            12,
-            16,
-            14,
-            12,
-            16,
-            14,
-            14,
-            12,
-            16,
-            17,
-        ]
-        return xlsx_response(
-            make_wb(f"КДР {year}", headers, col_w, rows, kinds, formats), f"кдр_{year}"
-        )
-    except Exception as e:
-        logger.error(f"Ошибка в export_kdr для года {year}: {e}")
-        return JsonResponse(
-            {"error": f"Ошибка при формировании выгрузки КДР: {e}"}, status=500
-        )
+    yy = str(year)
+    period_text = f" с {start_date} по {end_date}" if has_period else ""
+
+    # Заголовки колонок (включают год и период)
+    headers = [
+        "ИГК",
+        "ЦФО",
+        "Всего договоров, шт.",
+        "Сумма всех договоров, млн.руб.",
+        "Заключено, шт.",
+        "Сумма заключенных договоров(Всех), млн.руб.",
+        f"Всего договоров на {yy}г., шт.",
+        f"Сумма договоров на {yy}г., млн.руб.",
+        f"Заключено договоров на {yy}г., шт.",
+        f"% контрактации {yy}г.",
+        f"Сумма заключенных договоров на {yy}г., млн.руб.",
+        f"% контрактации {yy}г.",
+        f"Заключено{period_text}, шт.",
+        "Не заключено, шт.",
+        "Сумма не заключенных договоров, млн.руб.",
+        f"Плановая сумма аванса в {yy}г., млн.руб.",
+        f"Фактическая сумма аванса на {yy}г., млн.руб.",
+        f"% авансирования на {yy}г.",
+        "Примечание",
+    ]
+    # Числовые форматы колонок: денежные — с разделителями, проценты — с "%"
+    formats = {
+        4: "#,##0.00",
+        6: "#,##0.00",
+        8: "#,##0.00",
+        11: "#,##0.00",
+        15: "#,##0.00",
+        16: "#,##0.00",
+        17: "#,##0.00",
+        10: '0.0"%"',
+        12: '0.0"%"',
+        18: '0.0"%"',
+    }
+    col_w = [10, 6, 12, 14, 12, 16, 12, 14, 12, 12, 16, 14, 12, 16, 14, 14, 12, 16, 17]
+    return xlsx_response(
+        make_wb(f"КДР {year}", headers, col_w, rows, kinds, formats), f"кдр_{year}"
+    )
 
 
 # ============================================================================
@@ -511,20 +464,11 @@ def export_advances(request, year):
     yc = YEAR_COL.get(str(year))
     if not yc:
         return JsonResponse({"error": "недопустимый год"}, status=400)
-    try:
-        with connection.cursor() as cur:
-            cur.execute(advances(year))
-            cols = [c[0] for c in cur.description]
-            rows = [dict(zip(cols, r)) for r in cur.fetchall()]
-        if not rows:
-            logger.warning(f"Нет данных для выгрузки авансов за {year}")
-            return JsonResponse({"error": "Нет данных для выгрузки"}, status=404)
-        return build_advances_xlsx(rows, str(year))
-    except Exception as e:
-        logger.error(f"Ошибка в export_advances для года {year}: {e}")
-        return JsonResponse(
-            {"error": f"Ошибка при формировании выгрузки авансов: {e}"}, status=500
-        )
+    with connection.cursor() as cur:
+        cur.execute(advances(year))
+        cols = [c[0] for c in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    return build_advances_xlsx(rows, str(year))
 
 
 @login_required
@@ -544,66 +488,48 @@ def export_contracts_by_agent(request, year):
     conditions, params = contracts_by_agent_filter(yc, agent)
     sql = query_contracts_by_agent(conditions)
 
-    try:
-        with connection.cursor() as cur:
-            cur.execute(sql, params)
-            cols = [c[0] for c in cur.description]
-            rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    with connection.cursor() as cur:
+        cur.execute(sql, params)
+        cols = [c[0] for c in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
 
-        if not rows:
-            logger.warning(
-                f"Нет данных для выгрузки договоров по контрагенту {agent} за {year}"
-            )
-            return JsonResponse({"error": "Нет данных для выгрузки"}, status=404)
+    headers = [
+        "ИГК",
+        "Контрагент",
+        "ЦФО",
+        "Договор",
+        "Состояние",
+        "Тип платежа",
+        "Предмет",
+        "Заказ",
+        "Этап",
+        f"План {year}, руб.",
+        f"Факт {year}, руб.",
+        "Остаток, руб.",
+    ]
+    col_w = [15, 40, 8, 50, 20, 15, 50, 20, 15, 18, 18, 18]
+    # Текстовые поля — идут первыми колонками без форматирования
+    txt_fld = [
+        "igk",
+        "c_agent",
+        "cfo",
+        "contract",
+        "status",
+        "payment_type",
+        "item",
+        "order",
+        "stage",
+    ]
 
-        headers = [
-            "ИГК",
-            "Контрагент",
-            "ЦФО",
-            "Договор",
-            "Состояние",
-            "Тип платежа",
-            "Предмет",
-            "Заказ",
-            "Этап",
-            f"План {year}, руб.",
-            f"Факт {year}, руб.",
-            "Остаток, руб.",
-        ]
-        col_w = [15, 40, 8, 50, 20, 15, 50, 20, 15, 18, 18, 18]
-        # Текстовые поля — идут первыми колонками без форматирования
-        txt_fld = [
-            "igk",
-            "c_agent",
-            "cfo",
-            "contract",
-            "status",
-            "payment_type",
-            "item",
-            "order",
-            "stage",
-        ]
-
-        # Собираем строки: текстовые поля + числа (план, факт, остаток)
-        data_rows = [
-            [row[f] for f in txt_fld]
-            + [
-                float(row["plan"] or 0),
-                float(row["fact"] or 0),
-                float(row["remain"] or 0),
-            ]
-            for row in rows
-        ]
-        # Безопасное имя контрагента для имени файла (без пробелов, до 30 символов)
-        agent_safe = agent[:30].replace(" ", "_") if agent else ""
-        return xlsx_response(
-            make_wb(f"Договоры {year}", headers, col_w, data_rows),
-            f'контрагент{"_" + agent_safe if agent_safe else ""}_{year}',
-        )
-    except Exception as e:
-        logger.error(
-            f"Ошибка в export_contracts_by_agent для года {year}, агент {agent}: {e}"
-        )
-        return JsonResponse(
-            {"error": f"Ошибка при формировании выгрузки: {e}"}, status=500
-        )
+    # Собираем строки: текстовые поля + числа (план, факт, остаток)
+    data_rows = [
+        [row[f] for f in txt_fld]
+        + [float(row["plan"] or 0), float(row["fact"] or 0), float(row["remain"] or 0)]
+        for row in rows
+    ]
+    # Безопасное имя контрагента для имени файла (без пробелов, до 30 символов)
+    agent_safe = agent[:30].replace(" ", "_") if agent else ""
+    return xlsx_response(
+        make_wb(f"Договоры {year}", headers, col_w, data_rows),
+        f'контрагент{"_" + agent_safe if agent_safe else ""}_{year}',
+    )

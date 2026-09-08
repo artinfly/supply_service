@@ -7,7 +7,6 @@ JSON API для таблиц и графиков.
 Формат ответа: список объектов (для таблиц) или структура для Chart.js (для графиков).
 """
 
-import logging
 from collections import defaultdict
 from decimal import Decimal
 
@@ -56,8 +55,6 @@ from ..services.sap_status import (
     sap_status_expr,
 )
 
-logger = logging.getLogger(__name__)
-
 # ============================================================================
 # Вспомогательные функции для JSON-ответов
 # ============================================================================
@@ -88,17 +85,12 @@ def _json_response(sql, params=None):
     Универсальный JSON-ответ: выполняет SQL и возвращает список строк.
 
     Используется для реестров с простой структурой.
-    В случае ошибки возвращает JSON с ошибкой и статусом 500.
     """
-    try:
-        with connection.cursor() as cur:
-            cur.execute(sql, params or [])
-            return JsonResponse(
-                _json_rows(cur), safe=False, json_dumps_params={"ensure_ascii": False}
-            )
-    except Exception as e:
-        logger.error(f"Ошибка выполнения SQL: {sql}, params={params}, error={e}")
-        return JsonResponse({"error": "Внутренняя ошибка сервера"}, status=500)
+    with connection.cursor() as cur:
+        cur.execute(sql, params or [])
+        return JsonResponse(
+            _json_rows(cur), safe=False, json_dumps_params={"ensure_ascii": False}
+        )
 
 
 def _igk_response(year, statuses):
@@ -111,18 +103,14 @@ def _igk_response(year, statuses):
     yc = YEAR_COL.get(year)
     if not yc:
         return JsonResponse({"error": "недопустимый год"}, status=400)
-    try:
-        with connection.cursor() as cur:
-            # Детальные строки по каждому ИГК
-            cur.execute(igk_stat(yc, statuses))
-            rows = _json_rows(cur)
-            # Итоговая строка (агрегаты по всем ИГК)
-            cur.execute(igk_stat_total(yc, statuses))
-            rows.append(dict(zip([c[0] for c in cur.description], cur.fetchone())))
-        return JsonResponse(rows, safe=False, json_dumps_params={"ensure_ascii": False})
-    except Exception as e:
-        logger.error(f"Ошибка в igk_response для года {year}, статусы {statuses}: {e}")
-        return JsonResponse({"error": "Внутренняя ошибка сервера"}, status=500)
+    with connection.cursor() as cur:
+        # Детальные строки по каждому ИГК
+        cur.execute(igk_stat(yc, statuses))
+        rows = _json_rows(cur)
+        # Итоговая строка (агрегаты по всем ИГК)
+        cur.execute(igk_stat_total(yc, statuses))
+        rows.append(dict(zip([c[0] for c in cur.description], cur.fetchone())))
+    return JsonResponse(rows, safe=False, json_dumps_params={"ensure_ascii": False})
 
 
 # ============================================================================
@@ -293,35 +281,29 @@ def api_all_contracts(request):
     where = "WHERE " + " AND ".join(conditions)
     detail_sql, total_sql = all_contracts(where)
 
-    try:
-        with connection.cursor() as cur:
-            # Детальные строки
-            cur.execute(detail_sql, params)
-            cols = [c[0] for c in cur.description]
-            detail = [dict(zip(cols, r)) for r in cur.fetchall()]
-            # Итоговые строки по группам (ИГК, договор, заказ)
-            cur.execute(total_sql, params)
-            totals = {(r[0], r[2], r[6]): dict(zip(cols, r)) for r in cur.fetchall()}
+    with connection.cursor() as cur:
+        # Детальные строки
+        cur.execute(detail_sql, params)
+        cols = [c[0] for c in cur.description]
+        detail = [dict(zip(cols, r)) for r in cur.fetchall()]
+        # Итоговые строки по группам (ИГК, договор, заказ)
+        cur.execute(total_sql, params)
+        totals = {(r[0], r[2], r[6]): dict(zip(cols, r)) for r in cur.fetchall()}
 
-        # Группируем строки по (ИГК, договор, заказ) и добавляем итог после каждой группы
-        groups = defaultdict(list)
-        for row in detail:
-            groups[(row["igk"], row["contract"], row["order"])].append(row)
+    # Группируем строки по (ИГК, договор, заказ) и добавляем итог после каждой группы
+    groups = defaultdict(list)
+    for row in detail:
+        groups[(row["igk"], row["contract"], row["order"])].append(row)
 
-        result = []
-        for key, rows in groups.items():
-            result.extend(rows)
-            if key in totals:
-                result.append(totals[key])
+    result = []
+    for key, rows in groups.items():
+        result.extend(rows)
+        if key in totals:
+            result.append(totals[key])
 
-        return JsonResponse(
-            _to_json_types(result),
-            safe=False,
-            json_dumps_params={"ensure_ascii": False},
-        )
-    except Exception as e:
-        logger.error(f"Ошибка в api_all_contracts: {e}")
-        return JsonResponse({"error": "Внутренняя ошибка сервера"}, status=500)
+    return JsonResponse(
+        _to_json_types(result), safe=False, json_dumps_params={"ensure_ascii": False}
+    )
 
 
 # ============================================================================
@@ -454,71 +436,67 @@ def api_znp_sap_list(request):
 
     Базовое условие: только заявки по ЦФО из списка SAP_CFO.
     """
-    try:
-        # Читаем параметры фильтров
-        agent = request.GET.get("agent", "").strip()
-        igk_filter = request.GET.get("igk", "").strip()
-        cfo_filter = request.GET.get("cfo", "").strip()
-        raw_statuses = request.GET.getlist("status")
-        statuses = [s for s in raw_statuses if s]
+    # Читаем параметры фильтров
+    agent = request.GET.get("agent", "").strip()
+    igk_filter = request.GET.get("igk", "").strip()
+    cfo_filter = request.GET.get("cfo", "").strip()
+    raw_statuses = request.GET.getlist("status")
+    statuses = [s for s in raw_statuses if s]
 
-        # Базовое условие: только заявки по ЦФО из списка
-        qs = ZnpDataSAP.objects.filter(cfo__in=SAP_CFO)
+    # Базовое условие: только заявки по ЦФО из списка
+    qs = ZnpDataSAP.objects.filter(cfo__in=SAP_CFO)
 
-        # Фильтр по контрагенту или номеру заявки
-        if agent:
-            qs = qs.filter(Q(c_agent__icontains=agent) | Q(reg_num__icontains=agent))
+    # Фильтр по контрагенту или номеру заявки
+    if agent:
+        qs = qs.filter(Q(c_agent__icontains=agent) | Q(reg_num__icontains=agent))
 
-        # Фильтр по ИГК
-        if igk_filter:
-            qs = qs.filter(igk__icontains=igk_filter)
+    # Фильтр по ИГК
+    if igk_filter:
+        qs = qs.filter(igk__icontains=igk_filter)
 
-        # Фильтр по ЦФО
-        if cfo_filter:
-            qs = qs.filter(cfo__icontains=cfo_filter)
+    # Фильтр по ЦФО
+    if cfo_filter:
+        qs = qs.filter(cfo__icontains=cfo_filter)
 
-        # Фильтр по статусам: объединяем через OR
-        conditions = sap_status_conditions()
-        status_q = Q()
-        for s in statuses:
-            if s in conditions:
-                status_q |= conditions[s]
-        if status_q:
-            qs = qs.filter(status_q)
-        elif raw_statuses:
-            # Статусы заданы, но ни один не валиден — ничего не показываем
-            qs = qs.none()
+    # Фильтр по статусам: объединяем через OR
+    conditions = sap_status_conditions()
+    status_q = Q()
+    for s in statuses:
+        if s in conditions:
+            status_q |= conditions[s]
+    if status_q:
+        qs = qs.filter(status_q)
+    elif raw_statuses:
+        # Статусы заданы, но ни один не валиден — ничего не показываем
+        qs = qs.none()
 
-        # Аннотируем статус и выбираем поля для ответа
-        data = list(
-            qs.annotate(status_key=sap_status_expr())
-            .order_by("cfo", "reg_num")
-            .values(
-                "id",
-                "igk",
-                "cfo",
-                "c_agent",
-                "reg_num",
-                "items",
-                "vv_sum",
-                "bank_name",
-                "stage_e",
-                "stage_f",
-                "payment_possible",
-                "normalize_doc_num",
-                "status_key",
-            )
+    # Аннотируем статус и выбираем поля для ответа
+    data = list(
+        qs.annotate(status_key=sap_status_expr())
+        .order_by("cfo", "reg_num")
+        .values(
+            "id",
+            "igk",
+            "cfo",
+            "c_agent",
+            "reg_num",
+            "items",
+            "vv_sum",
+            "bank_name",
+            "stage_e",
+            "stage_f",
+            "payment_possible",
+            "normalize_doc_num",
+            "status_key",
         )
-        # Заменяем ключ статуса на человекочитаемую подпись,
-        # и обрезаем ИГК до последних 4 символов
-        for row in data:
-            row["sap_status"] = SAP_STAGE_LABELS[row.pop("status_key")]
-            if row.get("igk"):
-                row["igk"] = str(row["igk"])[-4:]
-        return JsonResponse(data, safe=False, json_dumps_params={"ensure_ascii": False})
-    except Exception as e:
-        logger.error(f"Ошибка в api_znp_sap_list: {e}")
-        return JsonResponse({"error": "Внутренняя ошибка сервера"}, status=500)
+    )
+    # Заменяем ключ статуса на человекочитаемую подпись,
+    # и обрезаем ИГК до последних 4 символов
+    for row in data:
+        row["sap_status"] = SAP_STAGE_LABELS[row.pop("status_key")]
+        if row.get("igk"):
+            row["igk"] = str(row["igk"])[-4:]
+    return JsonResponse(data, safe=False, json_dumps_params={"ensure_ascii": False})
 
 
 # ============================================================================
@@ -555,50 +533,46 @@ def _stacked_by_cfo(sql, params, stages, title):
 
     Возвращает данные в формате для Chart.js.
     """
-    try:
-        with connection.cursor() as cur:
-            cur.execute(sql, params)
-            rows = cur.fetchall()
+    with connection.cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
 
-        # Разделяем данные по стадиям
-        totals = {}
-        values = {key: {} for key, _ in stages}  # суммы по стадиям и ЦФО
-        counts = {key: {} for key, _ in stages}  # количество по стадиям и ЦФО
-        for cfo, stage, cnt, amount in rows:
-            if stage not in values:
-                continue
-            # Суммы переводим в миллионы рублей
-            mln = float(amount or 0) / 1000000
-            values[stage][cfo] = mln
-            counts[stage][cfo] = int(cnt or 0)
-            totals[cfo] = totals.get(cfo, 0) + mln
+    # Разделяем данные по стадиям
+    totals = {}
+    values = {key: {} for key, _ in stages}  # суммы по стадиям и ЦФО
+    counts = {key: {} for key, _ in stages}  # количество по стадиям и ЦФО
+    for cfo, stage, cnt, amount in rows:
+        if stage not in values:
+            continue
+        # Суммы переводим в миллионы рублей
+        mln = float(amount or 0) / 1000000
+        values[stage][cfo] = mln
+        counts[stage][cfo] = int(cnt or 0)
+        totals[cfo] = totals.get(cfo, 0) + mln
 
-        # Сортируем ЦФО по убыванию общей суммы
-        labels = sorted(totals, key=lambda cfo: totals[cfo], reverse=True)
+    # Сортируем ЦФО по убыванию общей суммы
+    labels = sorted(totals, key=lambda cfo: totals[cfo], reverse=True)
 
-        # Собираем данные для каждой стадии
-        datasets = [
-            {
-                "label": label,
-                "data": [values[key].get(cfo, 0.0) for cfo in labels],
-                "counts": [counts[key].get(cfo, 0) for cfo in labels],
-            }
-            for key, label in stages
-        ]
-        return _chart_response(
-            labels,
-            datasets,
-            {
-                "unit": "млн ₽",
-                "ordinal": True,  # Категориальная ось
-                "horizontal": True,  # Горизонтальные столбцы
-                "stacked": True,  # Стековый график
-                "title": title,
-            },
-        )
-    except Exception as e:
-        logger.error(f"Ошибка в _stacked_by_cfo: {e}")
-        return JsonResponse({"error": "Внутренняя ошибка сервера"}, status=500)
+    # Собираем данные для каждой стадии
+    datasets = [
+        {
+            "label": label,
+            "data": [values[key].get(cfo, 0.0) for cfo in labels],
+            "counts": [counts[key].get(cfo, 0) for cfo in labels],
+        }
+        for key, label in stages
+    ]
+    return _chart_response(
+        labels,
+        datasets,
+        {
+            "unit": "млн ₽",
+            "ordinal": True,  # Категориальная ось
+            "horizontal": True,  # Горизонтальные столбцы
+            "stacked": True,  # Стековый график
+            "title": title,
+        },
+    )
 
 
 @login_required
