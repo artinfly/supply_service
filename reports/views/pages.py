@@ -323,11 +323,23 @@ def upload_excel(request):
     if request.method == "POST" and request.FILES.get("excel_file"):
         command = FILE_TYPE_COMMANDS.get(file_type)
         f = request.FILES["excel_file"]
+        ext = os.path.splitext(f.name)[1].lower()
 
+        if ext not in (".xlsx", ".xls"):
+            messages.error(
+                request,
+                f"Неподдерживаемый формат файла: {ext or 'без расширения'}. "
+                "Нужен .xlsx или .xls",
+            )
+            ctx = _ctx(request)
+            ctx["file_types"] = FILE_TYPE_LABELS
+            ctx["file_columns"] = FILE_TYPE_COLUMNS
+            ctx["selected_type"] = file_type
+            return render(request, "upload.html", ctx)
         # Сохраняем загруженный файл во временный — команды читают по пути,
         # а не из файлового объекта. delete=False: файл нужен после закрытия
         # контекстного менеджера.
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
             for chunk in f.chunks():
                 tmp.write(chunk)
             tmp_path = tmp.name

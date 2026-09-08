@@ -17,17 +17,15 @@
     <div class="format-note">
         <div class="format-note-ext">XLSX</div>
         <div class="format-note-text">
-            Принимается <b>только .xlsx</b>. Старый формат <b>.xls</b> не читается.<br>
-            Если файл в .xls — откройте его в Excel и сохраните заново:
-            «Файл → Сохранить как → Книга Excel (*.xlsx)».
+            Принимается <b>.xlsx</b> и старый формат <b>.xls</b>
         </div>
     </div>
 
     <form method="post" enctype="multipart/form-data" onsubmit="return checkFile()">
         {% csrf_token %}
         <div class="mb-3">
-            <label class="filter-label">Excel файл (.xlsx)</label>
-            <input type="file" name="excel_file" accept=".xlsx" class="form-control mt-1" style="font-size:0.82rem">
+            <label class="filter-label">Excel файл (.xlsx или .xls)</label>
+            <input type="file" name="excel_file" accept=".xlsx,.xls" class="form-control mt-1" style="font-size:0.82rem">
         </div>
         <div class="mb-3">
             <label class="filter-label">Тип файла</label>
@@ -81,12 +79,13 @@ function checkFile() {
         return false;
     }
     if (!input.files || !input.files.length) {
-        return fail('Файл не прикреплён — выберите .xlsx файл перед загрузкой');
+        return fail('Файл не прикреплён — выберите .xlsx или .xls файл перед загрузкой');
     }
     const name = input.files[0].name;
-    if (!name.toLowerCase().endsWith('.xlsx')) {
+    const lower = name.toLowerCase();
+    if (!lower.endsWith('.xlsx') && !lower.endsWith('.xls')) {
         const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : 'без расширения';
-        return fail('Это ' + ext + ', а нужен .xlsx. Откройте файл в Excel и сохраните как «Книга Excel (*.xlsx)».');
+        return fail('Это ' + ext + ', а нужен .xlsx или .xls.');
     }
     err.style.display = 'none';
     document.getElementById('upload-btn').disabled = true;
