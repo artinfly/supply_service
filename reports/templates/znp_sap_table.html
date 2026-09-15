@@ -100,6 +100,7 @@
         <div class="block-title">Заявки за {{ first_date|date:"d.m.Y" }}</div>
         <div class="card-block">
             <div class="dash-row">
+                <a href="{% url 'znp_sap_list_table' %}?date={{ first_date|date:'Y-m-d' }}&statuses=waiting_agreement,sent_18,confirmed_18,paid,ready_18" class="text-decoration-none">
                     <div class="dash-card stage-total">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
@@ -109,6 +110,8 @@
                             <div class="dash-card-lbl">на сумму {{ first_date_breakdown.total_sum|floatformat:2|intspace }} млн. &#8381</div>
                         </div>
                     </div>
+                </a>
+                <a href="{% url 'znp_sap_list_table' %}?date={{ first_date|date:'Y-m-d' }}&statuses=waiting_agreement" class="text-decoration-none">
                     <div class="dash-card stage-wait">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/><path d="M13 3l5 5h-5V3z"/><circle cx="17" cy="17" r="4"/><path d="M17 15.3v1.9l1.3 1"/></svg>
@@ -118,6 +121,8 @@
                             <div class="dash-card-lbl">{{ first_date_breakdown.waiting_agreement.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ first_date_breakdown.waiting_agreement.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
+                </a>
+                <a href="{% url 'znp_sap_list_table' %}?date={{ first_date|date:'Y-m-d' }}&statuses=sent_18" class="text-decoration-none">
                     <div class="dash-card stage-late">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h6"/><path d="M13 3l5 5h-5V3z"/><path d="M14 15h7"/><path d="M18 12l3 3-3 3"/></svg>
@@ -127,6 +132,8 @@
                             <div class="dash-card-lbl">{{ first_date_breakdown.sent_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ first_date_breakdown.sent_18.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
+                </a>
+                <a href="{% url 'znp_sap_list_table' %}?date={{ first_date|date:'Y-m-d' }}&statuses=confirmed_18" class="text-decoration-none">
                     <div class="dash-card stage-ready">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/><path d="M13 3l5 5h-5V3z"/><path d="M9 14l2 2 4-4"/></svg>
@@ -136,8 +143,10 @@
                             <div class="dash-card-lbl">{{ first_date_breakdown.confirmed_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ first_date_breakdown.confirmed_18.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
+                </a>
             </div>
             <div class="dash-row">
+                <a href="{% url 'znp_sap_list_table' %}?date={{ first_date|date:'Y-m-d' }}&statuses=paid" class="text-decoration-none">
                     <div class="dash-card stage-done">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
@@ -147,6 +156,8 @@
                             <div class="dash-card-lbl">{{ first_date_breakdown.paid.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ first_date_breakdown.paid.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
+                </a>
+                <a href="{% url 'znp_sap_list_table' %}?date={{ first_date|date:'Y-m-d' }}&statuses=ready_18" class="text-decoration-none">
                     <div class="dash-card stage-upnext">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
@@ -156,6 +167,7 @@
                             <div class="dash-card-lbl">{{ first_date_breakdown.ready_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ first_date_breakdown.ready_18.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
+                </a>
             </div>
         </div>
     </div>
@@ -164,6 +176,7 @@
         <div class="block-title">Заявки за {{ second_date|date:"d.m.Y" }}</div>
         <div class="card-block">
             <div class="dash-row">
+                <a href="{% url 'znp_sap_list_table' %}?date={{ second_date|date:'Y-m-d' }}&statuses=waiting_agreement,sent_18,confirmed_18,paid,ready_18" class="text-decoration-none">
                     <div class="dash-card stage-total">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
@@ -173,6 +186,8 @@
                             <div class="dash-card-lbl">на сумму {{ second_date_breakdown.total_sum|floatformat:2|intspace }} млн. &#8381</div>
                         </div>
                     </div>
+                </a>
+                <a href="{% url 'znp_sap_list_table' %}?date={{ second_date|date:'Y-m-d' }}&statuses=waiting_agreement" class="text-decoration-none">
                     <div class="dash-card stage-wait">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/><path d="M13 3l5 5h-5V3z"/><circle cx="17" cy="17" r="4"/><path d="M17 15.3v1.9l1.3 1"/></svg>
@@ -182,6 +197,8 @@
                             <div class="dash-card-lbl">{{ second_date_breakdown.waiting_agreement.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ second_date_breakdown.waiting_agreement.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
+                </a>
+                <a href="{% url 'znp_sap_list_table' %}?date={{ second_date|date:'Y-m-d' }}&statuses=sent_18" class="text-decoration-none">
                     <div class="dash-card stage-late">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h6"/><path d="M13 3l5 5h-5V3z"/><path d="M14 15h7"/><path d="M18 12l3 3-3 3"/></svg>
@@ -191,6 +208,8 @@
                             <div class="dash-card-lbl">{{ second_date_breakdown.sent_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ second_date_breakdown.sent_18.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
+                </a>
+                <a href="{% url 'znp_sap_list_table' %}?date={{ second_date|date:'Y-m-d' }}&statuses=confirmed_18" class="text-decoration-none">
                     <div class="dash-card stage-ready">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/><path d="M13 3l5 5h-5V3z"/><path d="M9 14l2 2 4-4"/></svg>
@@ -200,8 +219,10 @@
                             <div class="dash-card-lbl">{{ second_date_breakdown.confirmed_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ second_date_breakdown.confirmed_18.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
+                </a>
             </div>
             <div class="dash-row">
+                <a href="{% url 'znp_sap_list_table' %}?date={{ second_date|date:'Y-m-d' }}&statuses=paid" class="text-decoration-none">
                     <div class="dash-card stage-done">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
@@ -211,6 +232,8 @@
                             <div class="dash-card-lbl">{{ second_date_breakdown.paid.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ second_date_breakdown.paid.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
+                </a>
+                <a href="{% url 'znp_sap_list_table' %}?date={{ second_date|date:'Y-m-d' }}&statuses=ready_18" class="text-decoration-none">
                     <div class="dash-card stage-upnext">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
@@ -220,6 +243,7 @@
                             <div class="dash-card-lbl">{{ second_date_breakdown.ready_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ second_date_breakdown.ready_18.percent|floatformat:1 }}%</div>
                         </div>
                     </div>
+                </a>
             </div>
         </div>
     </div>

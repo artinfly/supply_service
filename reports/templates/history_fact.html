@@ -20,7 +20,7 @@ const COLS = [
     { field: 'item',              title: 'Предмет' },
     { field: 'old_fact',          title: 'Факт (старый), руб.', format: 'number' },
     { field: 'new_fact',          title: 'Факт (новый), руб.',  format: 'number' },
-    { field: 'fact_changed_date', title: 'Дата изменения' },
+    { field: 'fact_changed_date', title: 'Дата изменения', format: 'date' },
     { field: 'c_date',            title: 'Год создания' },
 ];
 loadTable(document.getElementById('page-data').dataset.apiUrl, 'table-wrapper', COLS);

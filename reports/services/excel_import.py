@@ -76,19 +76,19 @@ ZNP_COLUMNS = {
 # из-за невидимых символов в заголовках. При изменении структуры файла SAP
 # индексы нужно обновлять вручную.
 ZNP_SAP_COLUMNS = {
-    "igk": 20,
-    "cfo": 23,
-    "c_agent": 15,
-    "reg_num": 19,
-    "items": 12,
-    "vv_sum": 13,
-    "bank_name": 25,
-    "stage_e": 30,
-    "stage_f": 31,
-    "payment_possible": 32,
-    "init_payment_date": 27,
-    "c_type": 9,
-    "normalize_doc_num": 11,
+    "igk": 19,
+    "cfo": 22,
+    "c_agent": 14,
+    "reg_num": 18,
+    "items": 11,
+    "vv_sum": 12,
+    "bank_name": 24,
+    "stage_e": 29,
+    "stage_f": 30,
+    "payment_possible": 31,
+    "init_payment_date": 26,
+    "c_type": 8,
+    "normalize_doc_num": 10,
 }
 
 # Сообщение об ошибке при несоответствии структуры файла ожидаемому формату
@@ -174,7 +174,7 @@ def clean_header(text):
     if not text:
         return ""
     text = str(text)
-    text = re.sub(r"[^a-zA-Zа-яА-ЯёЁ0-9\s/()«»\'\-\_]", "", text)
+    text = re.sub(r"[^a-zA-Zа-яА-ЯёЁ0-9\s/*()«»\'\-\_]", "", text)
     text = re.sub(r"\s+", "", text).strip()
     return text.casefold()
 

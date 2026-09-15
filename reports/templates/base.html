@@ -112,11 +112,17 @@ function esc(val) {
     return String(val).replace(/[&<>"']/g, c => _ESC_MAP[c]);
 }
 
+function fmtDate(val) {
+    const m = String(val).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}.${m[2]}.${m[1]}` : val;
+}
+
 function fmt(val, format) {
     if (val === null || val === undefined || val === '') return '';
     if (format === 'number')  return parseFloat(val).toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2});
     if (format === 'int')     return parseInt(val).toLocaleString('ru-RU');
     if (format === 'percent') return val + '%';
+    if (format === 'date') return fmtDate(val);
     return val;
 }
 
@@ -180,7 +186,7 @@ async function loadTable(apiUrl, containerId, cols) {
                 if (col.field === 'igk' && val && !isTotal) val = String(val).slice(-4);
                 else if (col.field === 'stage' && val)      val = String(val).trim();
                 else                                         val = fmt(val, col.format);
-                const align = col.format ? 'text-end' : '';
+                const align = (col.format && col.format !== 'date') ? 'text-end' : '';
                 const wrap  = !col.format ? 'wrap' : '';
                 html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${esc(val)}</td>`;
             });

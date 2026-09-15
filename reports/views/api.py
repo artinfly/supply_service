@@ -433,6 +433,7 @@ def api_znp_sap_list(request):
     - igk: фильтр по ИГК
     - cfo: фильтр по ЦФО
     - status: статусы заявок (ключи из sap_status_conditions)
+    - date: дата платежа (init_payment_date) в формате YYYY-MM-DD
 
     Базовое условие: только заявки по ЦФО из списка SAP_CFO.
     """
@@ -440,6 +441,7 @@ def api_znp_sap_list(request):
     agent = request.GET.get("agent", "").strip()
     igk_filter = request.GET.get("igk", "").strip()
     cfo_filter = request.GET.get("cfo", "").strip()
+    date_filter = request.GET.get("date", "").strip()
     raw_statuses = request.GET.getlist("status")
     statuses = [s for s in raw_statuses if s]
 
@@ -457,6 +459,10 @@ def api_znp_sap_list(request):
     # Фильтр по ЦФО
     if cfo_filter:
         qs = qs.filter(cfo__icontains=cfo_filter)
+
+    # Фильтр по дате платежа
+    if valid_date(date_filter):
+        qs = qs.filter(payment_possible=date_filter)
 
     # Фильтр по статусам: объединяем через OR
     conditions = sap_status_conditions()
@@ -496,6 +502,10 @@ def api_znp_sap_list(request):
         row["sap_status"] = SAP_STAGE_LABELS[row.pop("status_key")]
         if row.get("igk"):
             row["igk"] = str(row["igk"])[-4:]
+        # В БД поле payment_possible - это "дата изменения" из Excel-файла
+        # Это значение мы подставляем в таблицу толлько для оплаченных заявок
+        if not row.get("normalize_doc_num"):
+            row["payment_possible"] = None
     return JsonResponse(data, safe=False, json_dumps_params={"ensure_ascii": False})
 
 

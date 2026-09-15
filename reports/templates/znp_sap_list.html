@@ -75,14 +75,16 @@ const COLS = [
     { field: 'items',              title: 'Текст' },
     { field: 'sap_status',         title: 'Этап',                     style: 'style="width: 140px;"' },
     { field: 'bank_name',          title: 'Банк' },
-    { field: 'stage_e',            title: 'Передано в 18 отдел',      style: 'style="width: 100px;"' },
-    { field: 'stage_f',            title: 'Подтверждено 18 отделом',  style: 'style="width: 100px;"' },
+    { field: 'stage_e',            title: 'Передано в 18 отдел',      style: 'style="width: 100px;"', format: 'date' },
+    { field: 'stage_f',            title: 'Подтверждено 18 отделом',  style: 'style="width: 100px;"', format: 'date' },
+    { field: 'payment_possible',   title: 'Дата оплаты',           style: 'style="width: 100px;"', format: 'date' },
     { field: 'vv_sum',             title: 'Сумма во ВВ, руб.',        format: 'number' },
 ];
 
 const apiUrl = document.getElementById('page-data').dataset.apiUrl;
 let loadedData  = [];
 let currentPage = 1;
+let selectedDate = '';
 
 const STATUS_BOXES = [
     ['cb-waiting-agreement', 'waiting_agreement'],
@@ -100,6 +102,7 @@ function buildUrl() {
     if (agent) params.append('agent', agent);
     if (igk)   params.append('igk', igk);
     if (cfo)   params.append('cfo', cfo);
+    if (selectedDate)  params.append('date', selectedDate);
     for (const [id, status] of STATUS_BOXES)
         if (document.getElementById(id).checked) params.append('status', status);
     if (!params.has('status')) params.append('status', '');
@@ -131,7 +134,9 @@ function renderPage() {
             let val = row[col.field] ?? '';
             if (col.format === 'number' && val !== '')
                 val = parseFloat(val).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            const align = col.format ? 'text-end' : '';
+            else if (col.format === 'date' && val !== '')
+                val = fmtDate(val);
+            const align = (col.format && col.format !== 'date') ? 'text-end' : '';
             const wrap  = (!col.format && !col.style) ? 'wrap' : '';
             html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${esc(val)}</td>`;
         });
@@ -150,6 +155,8 @@ function loadFiltersFromURL() {
         document.getElementById('filter-igk').value = params.get('igk');
     if (params.has('cfo'))
         document.getElementById('filter-cfo').value = params.get('cfo');
+    if (params.has('date'))
+        selectedDate = params.get('date');
     if (params.has('statuses')) {
         const asked = params.get('statuses').split(',');
         for (const [id, status] of STATUS_BOXES)
@@ -178,6 +185,7 @@ document.getElementById('btn-reset').addEventListener('click', () => {
     document.getElementById('filter-agent').value = '';
     document.getElementById('filter-igk').value   = '';
     document.getElementById('filter-cfo').value   = '';
+    selectedDate = '';
     for (const [id] of STATUS_BOXES) document.getElementById(id).checked = true;
     loadData();
 });

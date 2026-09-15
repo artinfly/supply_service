@@ -90,8 +90,8 @@ const COLS = [
     { field: 'znp_status',        title: 'Статус',           style: 'style="width: 80px;"' },
     { field: 'plan_doc',          title: 'Док. план.',       style: 'style="width: 80px;"' },
     { field: 'payment_purpose',   title: 'Назначение' },
-    { field: 'plan_payment_date', title: 'Дата план',        style: ' style="width: 80px;"' },
-    { field: 'fact_payment_date', title: 'Дата факт',        style: ' style="width: 80px;"' },
+    { field: 'plan_payment_date', title: 'Дата план',        style: ' style="width: 80px;"', format: 'date' },
+    { field: 'fact_payment_date', title: 'Дата факт',        style: ' style="width: 80px;"', format: 'date' },
     { field: 'position_sum',      title: 'Сумма поз., руб.', format: 'number' },
     { field: 'znp_plan_sum',      title: 'План, руб.',       format: 'number' },
     { field: 'znp_fact_sum',      title: 'Факт, руб.',       format: 'number' },
@@ -156,7 +156,9 @@ function renderPage() {
                 val = String(val).slice(-4);
             else if (col.format === 'number' && val !== '')
                 val = parseFloat(val).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            const align = col.format ? 'text-end' : '';
+            else if (col.format === 'date' && val !== '')
+                val = fmtDate(val);
+            const align = (col.format && col.format !== 'date') ? 'text-end' : '';
             const wrap  = (!col.format && !col.style) ? 'wrap' : '';
             html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${esc(val)}</td>`;
         });
