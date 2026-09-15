@@ -50,6 +50,12 @@
             </div>
         </div>
         <div class="filter-group">
+            <label class="filter-label">Отображение</label>
+            <div class="d-flex gap-2 flex-wrap">
+                <label class="status-check"><input type="checkbox" id="cb-only-totals"> Только итоги</label>
+            </div>
+        </div>
+        <div class="filter-group">
             <label class="filter-label">Строк</label>
             <select id="page-size" class="filter-select">
                 <option value="50">50</option>
@@ -124,12 +130,15 @@ function buildUrl() {
 }
 
 function renderPage() {
+    // Добавлен чекбокс только итоги, отображаем данные из уже загруженных без нового запроса
+    const onlyTotals = document.getElementById('cb-only-totals').checked;
+    const rows = onlyTotals ? loadedData.filter(r => r.is_subtotal === 1) : loadedData;
     const ps    = pageSize();
     const start = isFinite(ps) ? (currentPage - 1) * ps : 0;
-    const slice = isFinite(ps) ? loadedData.slice(start, start + ps) : loadedData;
-    document.getElementById('row-count').textContent = loadedData.length;
-    renderPagination(loadedData.length, ps, currentPage, 'pagination-top');
-    renderPagination(loadedData.length, ps, currentPage, 'pagination-bot');
+    const slice = isFinite(ps) ? rows.slice(start, start + ps) : rows;
+    document.getElementById('row-count').textContent = rows.length;
+    renderPagination(rows.length, ps, currentPage, 'pagination-top');
+    renderPagination(rows.length, ps, currentPage, 'pagination-bot');
 
     const container = document.getElementById('table-wrapper');
     if (!slice.length) {
@@ -211,6 +220,7 @@ async function loadData() {
 }
 
 document.getElementById('page-size').addEventListener('change', () => { currentPage = 1; renderPage(); });
+document.getElementById('cb-only-totals').addEventListener('change', () => { currentPage = 1; renderPage(); });
 document.getElementById('filter-agent').addEventListener('keydown', e => {
     if (e.key === 'Enter') loadData();
 });
@@ -222,7 +232,8 @@ document.getElementById('btn-reset').addEventListener('click', () => {
     document.getElementById('cb-concluded').checked     = true;
     document.getElementById('cb-not-concluded').checked = false;
     document.getElementById('cb-terminated').checked    = false;
-    document.getElementById('filter-year').value = 'all';
+    document.getElementById('cb-only-totals').checked   = false;
+    document.getElementById('filter-year').value        = 'all';
     loadData();
 });
 

@@ -716,8 +716,8 @@ def znp_sap_table(request):
         else timezone.localdate()
     )
     second_date = sap_second_date(first_date)
-    first_date_breakdown = _breakdown(qs.filter(init_payment_date=first_date))
-    second_date_breakdown = _breakdown(qs.filter(init_payment_date=second_date))
+    first_date_breakdown = _breakdown(qs.filter(payment_possible=first_date))
+    second_date_breakdown = _breakdown(qs.filter(payment_possible=second_date))
 
     # Список ИГК из заявок (для селектора)
     available_igk = list(
