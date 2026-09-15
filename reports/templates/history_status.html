@@ -22,8 +22,8 @@ const COLS = [
     { field: 'item',         title: 'Предмет' },
     { field: 'plan_sum',     title: 'План, руб.',    format: 'number' },
     { field: 'fact_sum',     title: 'Факт, руб.',    format: 'number' },
-    { field: 'update_date',  title: 'Дата изменения' },
-    { field: 'upload_date',  title: 'Дата загрузки' },
+    { field: 'update_date',  title: 'Дата изменения', format: 'date' },
+    { field: 'upload_date',  title: 'Дата загрузки', format: 'date' },
     { field: 'c_date',       title: 'Год создания' },
 ];
 loadTable(document.getElementById('page-data').dataset.apiUrl, 'table-wrapper', COLS);

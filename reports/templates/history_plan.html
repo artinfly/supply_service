@@ -22,7 +22,7 @@ const COLS = [
     { field: 'new_plan',          title: 'План (новый), руб.',  format: 'number' },
     { field: 'old_percent',       title: '% от суммы (старый)',  format: 'number' },
     { field: 'new_percent',       title: '% от суммы (новый)',   format: 'number' },
-    { field: 'plan_changed_date', title: 'Дата изменения' },
+    { field: 'plan_changed_date', title: 'Дата изменения', format: 'date' },
     { field: 'c_date',            title: 'Год создания' },
 ];
 loadTable(document.getElementById('page-data').dataset.apiUrl, 'table-wrapper', COLS);
