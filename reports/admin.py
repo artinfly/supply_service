@@ -1,3 +1,12 @@
+"""
+Административная панель приложения reports.
+
+Содержит:
+- Регистрацию моделей данных (справочники, договоры, заявки, история).
+- Кастомную админку пользователей с правами доступа к разделам.
+- Интеграцию с внешним HR-сервисом (синхронизация данных сотрудников).
+"""
+
 import requests
 from django import forms
 from django.conf import settings
@@ -26,63 +35,47 @@ API_PATH = settings.HR_SERVICE_API_URL
 BULK_SYNC_LIMIT = 100
 
 
+# --- Справочники и основные таблицы ---
+
+
 @admin.register(NsiIgk)
 class NsiIgkAdmin(admin.ModelAdmin):
-    """Админка для справочника ИГК."""
+    """Справочник ИГК."""
 
-    # Колонки в списке
     list_display = ("igk",)
-    # Поля для поиска
     search_fields = ("igk",)
 
 
 @admin.register(IgkStatData)
 class IgkStatDataAdmin(admin.ModelAdmin):
-    """
-    Админка для позиций договоров.
+    """Позиции договоров."""
 
-    Показывает основные поля и позволяет фильтровать по статусу,
-    типу платежа и годам. Используется для отладки и просмотра данных.
-    """
-
-    # Колонки в списке: основные поля позиции
     list_display = ("igk", "c_agent", "cfo", "contract", "status", "y25", "y26", "y27")
-    # Фильтры в правой панели
     list_filter = ("status", "payment_type", "y25", "y26", "y27")
-    # Поля для поиска
     search_fields = ("igk", "c_agent", "contract")
 
 
 @admin.register(ContractsHistory)
 class ContractsHistoryAdmin(admin.ModelAdmin):
-    """
-    Админка для истории изменений договоров.
+    """История изменений договоров."""
 
-    Показывает изменения статуса с датами. Используется для просмотра
-    и отладки истории изменений.
-    """
-
-    # Колонки в списке: изменение статуса и даты
     list_display = ("id", "old_status", "new_status", "update_date", "upload_date")
-    # Фильтры по датам
     list_filter = ("update_date", "upload_date")
 
 
-# ============================================================================
-# Staging таблицы (импорт)
-# ============================================================================
+# --- Staging таблицы (импорт) ---
 
 
 @admin.register(StagingExcel)
 class StagingExcelAdmin(admin.ModelAdmin):
-    """Админка для временных данных импорта договоров."""
+    """Временные данные импорта договоров."""
 
     list_display = ("id", "igk", "dogovor", "sostoyanie")
 
 
 @admin.register(StagingZnpExcel)
 class StagingZnpExcelAdmin(admin.ModelAdmin):
-    """Админка для временных данных импорта заявок ФЗД."""
+    """Временные данные импорта заявок ФЗД."""
 
     list_display = ("id", "igk", "c_agent", "contract", "plan_doc")
     search_fields = ("igk", "c_agent", "contract", "plan_doc")
@@ -90,30 +83,23 @@ class StagingZnpExcelAdmin(admin.ModelAdmin):
 
 @admin.register(StagingZnpSAPExcel)
 class StagingZnpSAPExcelAdmin(admin.ModelAdmin):
-    """Админка для временных данных импорта заявок SAP."""
+    """Временные данные импорта заявок SAP."""
 
     list_display = ("id", "reg_num", "igk", "cfo", "c_agent")
     search_fields = ("reg_num", "igk", "c_agent")
 
 
-# ============================================================================
-# Рабочие таблицы заявок
-# ============================================================================
+# --- Рабочие таблицы заявок ---
 
 
 @admin.register(ZnpData)
 class ZnpDataAdmin(admin.ModelAdmin):
-    """
-    Админка для заявок ФЗД.
-
-    Показывает плановый документ и связь с позицией договора (parent).
-    Позволяет проверять корректность привязки заявок.
-    """
+    """Заявки на платёж ФЗД."""
 
     list_display = (
         "id",
         "plan_doc",
-        "parent",  # Связь с позицией договора
+        "parent",
         "plan_payment_date",
         "fact_payment_date",
     )
@@ -123,7 +109,7 @@ class ZnpDataAdmin(admin.ModelAdmin):
 
 @admin.register(ZnpDataSAP)
 class ZnpDataSAPAdmin(admin.ModelAdmin):
-    """Админка для заявок SAP."""
+    """Заявки на платёж SAP."""
 
     list_display = ("id", "reg_num", "igk", "cfo", "c_agent", "vv_sum")
     list_filter = ("cfo", "stage_e", "stage_f")
@@ -132,32 +118,25 @@ class ZnpDataSAPAdmin(admin.ModelAdmin):
 
 @admin.register(ContractCountsSnapshot)
 class ContractCountsSnapshotAdmin(admin.ModelAdmin):
-    """Админка для снимков количества договоров по датам."""
+    """Снимки количества договоров по датам."""
 
     list_display = ("upload_date", "igk", "cfo", "year_col", "concluded_count")
     list_filter = ("upload_date", "year_col")
 
 
-# ============================================================================
-# Кастомная админка пользователей с правами доступа к разделам
-# ============================================================================
+# --- Кастомная админка пользователей с правами доступа ---
 
 
 class SectionChoiceField(forms.ModelMultipleChoiceField):
-    """
-    Кастомное поле для выбора прав доступа к разделам.
-
-    Наследуется от ModelMultipleChoiceField, чтобы переопределить
-    отображение меток. Вместо полного названия права ("Раздел: Договорная работа")
-    показываем только название раздела ("Договорная работа").
-    """
+    """Поле выбора прав доступа к разделам без префикса 'Раздел: '."""
 
     def label_from_instance(self, obj):
-        """Убирает префикс "Раздел: " из названия права."""
         return obj.name.replace("Раздел: ", "")
 
 
 class CustomUserCreationForm(UserCreationForm):
+    """Форма создания пользователя с полями профиля."""
+
     patronymic = forms.CharField(label="Отчество", max_length=255, required=False)
     api_key = forms.CharField(label="API-ключ", max_length=64, required=False)
     is_fired = forms.BooleanField(
@@ -170,6 +149,8 @@ class CustomUserCreationForm(UserCreationForm):
 
 
 class AccessUserForm(UserChangeForm):
+    """Форма редактирования пользователя с правами доступа к разделам."""
+
     patronymic = forms.CharField(label="Отчество", max_length=255, required=False)
     api_key = forms.CharField(label="API-ключ", max_length=64, required=False)
     is_fired = forms.BooleanField(
@@ -177,11 +158,8 @@ class AccessUserForm(UserChangeForm):
     )
 
     sections = SectionChoiceField(
-        # Все права, начинающиеся с "access_"
         queryset=Permission.objects.filter(codename__startswith="access_"),
-        # Отображение в виде чекбоксов (не выпадающего списка)
         widget=forms.CheckboxSelectMultiple,
-        # Необязательное поле — пользователь может не иметь доступа
         required=False,
         label="Доступ к разделам",
         help_text="Отметьте разделы, которые будут видны этому пользователю.",
@@ -192,26 +170,24 @@ class AccessUserForm(UserChangeForm):
         fields = "__all__"
 
     def __init__(self, *args, **kwargs):
-        """Инициализация формы с предустановленными значениями."""
         super().__init__(*args, **kwargs)
-        # Если редактируем существующего пользователя, загружаем его текущие права
         if self.instance.pk:
             self.fields["sections"].initial = self.instance.user_permissions.filter(
                 codename__startswith="access_"
             )
-
             profile, _ = Profile.objects.get_or_create(user=self.instance)
             self.fields["patronymic"].initial = profile.patronymic
             self.fields["api_key"].initial = profile.api_key
             self.fields["is_fired"].initial = profile.is_fired
 
 
-# Отменяем стандартную регистрацию модели User, чтобы заменить на кастомную
 admin.site.unregister(User)
 
 
 @admin.register(User)
 class UserWithSectionsAdmin(UserAdmin):
+    """Админка пользователей с правами доступа к разделам и синхронизацией с HR."""
+
     add_form = CustomUserCreationForm
     form = AccessUserForm
     add_form_template = "admin/auth/user/add_form.html"
@@ -226,7 +202,6 @@ class UserWithSectionsAdmin(UserAdmin):
         "get_last_synced_at",
     )
     list_filter = ("is_active", "is_staff", "is_superuser", "profile__is_fired")
-
     actions = ["sync_with_external_api"]
 
     fieldsets = (
@@ -280,12 +255,6 @@ class UserWithSectionsAdmin(UserAdmin):
     get_full_name.short_description = "ФИО"
     get_full_name.admin_order_field = "last_name"
 
-    def get_api_key(self, obj):
-        return getattr(obj.profile, "api_key", "")
-
-    get_api_key.short_description = "API ключ"
-    get_api_key.admin_order_field = "profile__api_key"
-
     def get_is_fired(self, obj):
         return bool(getattr(obj.profile, "is_fired", False))
 
@@ -300,21 +269,10 @@ class UserWithSectionsAdmin(UserAdmin):
     get_last_synced_at.admin_order_field = "profile__last_synced_at"
 
     def save_related(self, request, form, formsets, change):
-        """
-        Переопределяет сохранение связанных объектов (включая права).
-
-        Сохраняет все права пользователя, НЕ начинающиеся с "access_",
-        и добавляет выбранные права доступа к разделам.
-
-        Это позволяет не потерять другие права пользователя (например,
-        из групп) при изменении доступа к разделам.
-        """
+        """Сохраняет права пользователя, не затрагивая права из групп."""
         super().save_related(request, form, formsets, change)
         user = form.instance
-
-        # Сохраняем права, не связанные с разделами
         keep = list(user.user_permissions.exclude(codename__startswith="access_"))
-        # Устанавливаем полный список прав: старые + новые разделы
         user.user_permissions.set(keep + list(form.cleaned_data.get("sections") or []))
 
     def save_model(self, request, obj, form, change):
@@ -339,6 +297,7 @@ class UserWithSectionsAdmin(UserAdmin):
         return custom_urls + super().get_urls()
 
     def fetch_external_data(self, request, tab_number):
+        """Запрашивает данные сотрудника из внешнего HR-сервиса."""
         api_key = getattr(getattr(request.user, "profile", None), "api_key", None)
         if not api_key:
             return JsonResponse(
@@ -346,13 +305,8 @@ class UserWithSectionsAdmin(UserAdmin):
             )
 
         url = f"{API_PATH}{tab_number}/"
-
         try:
-            response = requests.get(
-                url,
-                headers={"X-API-Key": api_key},
-                timeout=5,
-            )
+            response = requests.get(url, headers={"X-API-Key": api_key}, timeout=5)
             response.raise_for_status()
         except requests.RequestException as e:
             return JsonResponse({"error": f"Ошибка обращения к API: {e}"}, status=502)
@@ -362,23 +316,24 @@ class UserWithSectionsAdmin(UserAdmin):
         except ValueError:
             return JsonResponse({"error": "Некорректный ответ от API"}, status=502)
 
-        result = {
-            "surname": data.get("surname", ""),
-            "name": data.get("name", ""),
-            "patronymic": data.get("patronymic", ""),
-            "birth_date": data.get("birth_date", ""),
-            "hire_date": data.get("hire_date", ""),
-            "dismissal_date": data.get("dismissal_date", ""),
-            "production": data.get("production", ""),
-            "department": data.get("department", ""),
-            "position": data.get("position", ""),
-            "is_fired": data.get("is_fired", ""),
-            "api_key": data.get("api_key", ""),
-        }
-
-        return JsonResponse(result)
+        return JsonResponse(
+            {
+                "surname": data.get("surname", ""),
+                "name": data.get("name", ""),
+                "patronymic": data.get("patronymic", ""),
+                "birth_date": data.get("birth_date", ""),
+                "hire_date": data.get("hire_date", ""),
+                "dismissal_date": data.get("dismissal_date", ""),
+                "production": data.get("production", ""),
+                "department": data.get("department", ""),
+                "position": data.get("position", ""),
+                "is_fired": data.get("is_fired", ""),
+                "api_key": data.get("api_key", ""),
+            }
+        )
 
     def sync_with_external_api(self, request, queryset):
+        """Массовая синхронизация пользователей с внешним HR-сервисом."""
         queryset = queryset.select_related("profile").order_by(
             "profile__last_synced_at"
         )
@@ -430,9 +385,9 @@ class UserWithSectionsAdmin(UserAdmin):
         skipped = total_selected - len(to_process)
         msg = f"Обновлено: {update_count}. Ошибок: {error_count}."
         if skipped > 0:
-            msg += f" Не обработано(Превышен лимит {BULK_SYNC_LIMIT} за раз): {skipped}"
+            msg += f" Не обработано (превышен лимит {BULK_SYNC_LIMIT}): {skipped}"
         self.message_user(request, msg)
 
     sync_with_external_api.short_description = (
-        f"Синхронизация с сервисом персонала (До {BULK_SYNC_LIMIT} за раз)"
+        f"Синхронизация с сервисом персонала (до {BULK_SYNC_LIMIT} за раз)"
     )

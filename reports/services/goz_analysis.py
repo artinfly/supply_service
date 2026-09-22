@@ -1,10 +1,9 @@
 """
-Анализ отчётов ЕИС ГОЗ (форма исполнения госконтракта) из ZIP-архива .xls
-файлов. Один .xls = один контракт, имя файла = последние 4 цифры ИГК.
+Анализ отчётов ЕИС ГОЗ (форма исполнения госконтракта) из ZIP-архива .xls файлов.
 
-Расположение нужных показателей на листе "Лист_1" фиксировано (это форма
-госсистемы, не меняется): колонка D — целевые (план), колонка G — сальдо
-операций (факт). Ниже — 0-индексированные координаты для xlrd.
+Один .xls = один контракт (имя файла = последние 4 цифры ИГК).
+Расположение показателей на листе «Лист_1» фиксировано (форма госсистемы):
+колонка D — целевые (план), колонка G — сальдо операций (факт).
 """
 
 import zipfile
@@ -15,51 +14,69 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-SHEET_NAME = "Лист_1"
+# --- Константы для парсинга .xls ---
 
+SHEET_NAME = "Лист_1"
 _PLAN_COL = 3  # столбец D
 _FACT_COL = 6  # столбец G
 
-# Строки, которые есть и в целевых, и в фактических показателях.
+# Строки формы, присутствующие в плане и факте
 _LINE_ROWS = {
-    "shipment": 31,  # 3.   Отгрузка товара, выполнение работ, оказание услуг
-    "cost": 32,  # 3.1  Себестоимость реализованной продукции
-    "amr": 33,  # 3.2  Административно-управленческие расходы
-    "commercial": 34,  # 3.3  Коммерческие расходы
-    "credit_pct": 35,  # 3.4  Проценты по кредитам банка
-    "profit": 37,  # 3.6  Прибыль контракта
+    "shipment": 31,  # 3. Отгрузка товара, выполнение работ, оказание услуг
+    "cost": 32,  # 3.1 Себестоимость реализованной продукции
+    "amr": 33,  # 3.2 Административно-управленческие расходы
+    "commercial": 34,  # 3.3 Коммерческие расходы
+    "credit_pct": 35,  # 3.4 Проценты по кредитам банка
+    "profit": 37,  # 3.6 Прибыль контракта
 }
 
-# Строки, которые есть только в столбце "факт" (сальдо операций).
+# Строки формы, присутствующие только в факте (сальдо операций)
 _FACT_ONLY_ROWS = {
-    "financing": 4,  # 1.     Финансирование контракта
-    "distribution": 9,  # 2.     Распределение ресурсов контракта
-    "materials": 15,  # 2.2.1  Материалы на складах (ТМЦ)
-    "vat_in": 16,  # 2.2.2  НДС входящий
-    "wip": 21,  # 2.3    Производство (НЗП)
-    "resource_delta": 38,  # 4.  (+/-) Привлечение/перенаправление ресурсов
+    "financing": 4,  # 1. Финансирование контракта
+    "distribution": 9,  # 2. Распределение ресурсов контракта
+    "materials": 15,  # 2.2.1 Материалы на складах (ТМЦ)
+    "vat_in": 16,  # 2.2.2 НДС входящий
+    "wip": 21,  # 2.3 Производство (НЗП)
+    "resource_delta": 38,  # 4. (+/-) Привлечение/перенаправление ресурсов
 }
+
+# --- Константы для генерации .xlsx ---
 
 HEADERS = [
-    "№ п/п", "ГК", "Наименование", "",
-    "Отгрузка (п.3)", "Себестоимость (п.3.1)", "АУР (п.3.2)",
-    "КР (п.3.3)", "НДС", "% кредит (п.3.4)", "Прибыль в отчёте (п.3.6)",
-    "Прибыль (проверка)", "Рент. к с/с, % (проверка)",
+    "№ п/п",
+    "ГК",
+    "Наименование",
+    "",
+    "Отгрузка (п.3)",
+    "Себестоимость (п.3.1)",
+    "АУР (п.3.2)",
+    "КР (п.3.3)",
+    "НДС",
+    "% кредит (п.3.4)",
+    "Прибыль в отчёте (п.3.6)",
+    "Прибыль (проверка)",
+    "Рент. к с/с, % (проверка)",
     "Рент. к с/с, % по прибыли в отчёте",
-    "Финансирование контракта (п.1)", "Распределение ресурсов (п.2)",
-    "+/- ресурсов ГК (проверка)", "+/- ресурсов ГК (п.4)",
-    "НЗП (п.2.3)", "ТМЦ (п.2.2.1)", "НДС вх. (п.2.2.2)",
-    "Примечание", "Комментарий",
+    "Финансирование контракта (п.1)",
+    "Распределение ресурсов (п.2)",
+    "+/- ресурсов ГК (проверка)",
+    "+/- ресурсов ГК (п.4)",
+    "НЗП (п.2.3)",
+    "ТМЦ (п.2.2.1)",
+    "НДС вх. (п.2.2.2)",
+    "Примечание",
+    "Комментарий",
 ]
 _COL_WIDTHS = [6, 10, 16, 14] + [14] * 17 + [28, 28]
 
-# Позиции ключевых колонок (1-индексные, как в Excel).
 _K_COL, _L_COL, _M_COL, _N_COL = 11, 12, 13, 14
 _Q_COL, _R_COL = 17, 18
 _PERCENT_COLS = {_M_COL, _N_COL}
 
-_RENT_THRESHOLD = 0.075  # порог рентабельности для подсветки — 7.5%
-_MISMATCH_EPS = 1.0  # допуск в рублях при сравнении "проверка" со значением формы
+_RENT_THRESHOLD = 0.075  # порог рентабельности 7.5%
+_MISMATCH_EPS = 1.0  # допуск в рублях при сравнении
+
+# --- Стили ячеек ---
 
 _THIN = Side(style="thin")
 _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
@@ -71,8 +88,11 @@ _WARN_FILL = PatternFill("solid", fgColor="FFEB9C")
 _SUBTOTAL_FILL = PatternFill("solid", fgColor="F2F2F2")
 
 
+# --- Парсинг .xls ---
+
+
 def _cell_number(sheet, row, col):
-    """Число из ячейки; всё нечисловое (пусто, 'Х'-заглушка) — 0.0."""
+    """Возвращает число из ячейки или 0.0 для нечисловых значений."""
     try:
         value = sheet.cell_value(row, col)
     except IndexError:
@@ -81,6 +101,7 @@ def _cell_number(sheet, row, col):
 
 
 def _read_contract_file(igk, content):
+    """Парсит один .xls файл и возвращает (igk, plan, fact)."""
     try:
         book = xlrd.open_workbook(file_contents=content)
         sheet = book.sheet_by_name(SHEET_NAME)
@@ -96,11 +117,7 @@ def _read_contract_file(igk, content):
 
 
 def read_archive(archive_file):
-    """
-    Читает ZIP-архив с .xls отчётами по контрактам.
-    Возвращает список (igk, plan, fact), отсортированный по номеру ИГК.
-    Не-.xls файлы в архиве пропускаются.
-    """
+    """Читает ZIP-архив с .xls отчётами. Возвращает отсортированный список (igk, plan, fact)."""
     contracts = []
     with zipfile.ZipFile(archive_file) as zf:
         for name in zf.namelist():
@@ -111,30 +128,52 @@ def read_archive(archive_file):
                 contracts.append(_read_contract_file(igk, fh.read()))
 
     if not contracts:
-        raise ValueError("в архиве не найдено ни одного .xls файла")
+        raise ValueError("В архиве не найдено ни одного .xls файла")
 
     contracts.sort(key=lambda c: (len(c[0]), c[0]))
     return contracts
 
 
+# --- Расчёт метрик ---
+
+
 def _line_metrics(values, vat_rate):
-    """Считает 10 показателей (E..N) из шести исходных строк формы."""
-    e = values["shipment"]
-    f = values["cost"]
-    g = values["amr"]
-    h = values["commercial"]
-    i = e - e / (1 + vat_rate / 100)
-    j = values["credit_pct"]
-    k = values["profit"]
-    l = e - f - g - h - i - j
-    m = (l / f) if f else None
-    n = (k / f) if f else None
-    return [e, f, g, h, i, j, k, l, m, n]
+    """
+    Вычисляет 10 показателей (колонки E..N) из 6 исходных строк формы.
+    Возвращает список [shipment, cost, amr, commercial, vat, credit_pct, profit, calc_profit, rent_calc, rent_report].
+    """
+    shipment = values["shipment"]
+    cost = values["cost"]
+    amr = values["amr"]
+    commercial = values["commercial"]
+    vat = shipment - shipment / (1 + vat_rate / 100)
+    credit_pct = values["credit_pct"]
+    profit = values["profit"]
+    calc_profit = shipment - cost - amr - commercial - vat - credit_pct
+    rent_calc = (calc_profit / cost) if cost else None
+    rent_report = (profit / cost) if cost else None
+    return [
+        shipment,
+        cost,
+        amr,
+        commercial,
+        vat,
+        credit_pct,
+        profit,
+        calc_profit,
+        rent_calc,
+        rent_report,
+    ]
 
 
 def _deviation(fact_m, plan_m):
+    """Вычисляет абсолютные и относительные отклонения факта от плана."""
     abs_dev = [
-        (fv - pv) if isinstance(fv, (int, float)) and isinstance(pv, (int, float)) else None
+        (
+            (fv - pv)
+            if isinstance(fv, (int, float)) and isinstance(pv, (int, float))
+            else None
+        )
         for fv, pv in zip(fact_m, plan_m)
     ]
     rel_dev = [
@@ -143,14 +182,18 @@ def _deviation(fact_m, plan_m):
     return abs_dev, rel_dev
 
 
+# --- Запись строк в .xlsx ---
+
+
 def _write_row(ws, row_idx, values, bold=False, force_percent=False):
-    """Пишет строку начиная с колонки A, с рамкой и форматом чисел."""
+    """Записывает строку с рамкой и форматом чисел."""
     for ci, val in enumerate(values, 1):
         cell = ws.cell(row=row_idx, column=ci, value=val)
         cell.border = _BORDER
         cell.font = _BOLD_FONT if bold else _FONT
         if bold:
             cell.fill = _SUBTOTAL_FILL
+
         is_num = isinstance(val, (int, float)) and not isinstance(val, bool)
         if ci in (1, 2):
             cell.alignment = Alignment(horizontal="center")
@@ -162,16 +205,15 @@ def _write_row(ws, row_idx, values, bold=False, force_percent=False):
 
 def _apply_report_checks(ws, row_idx, metrics):
     """
-    Подсветка для строк "Целевые" и "Факт":
-    - K (прибыль в отчёте) не совпадает с L (прибыль расчётная) — жёлтый;
-    - M/N (рентабельность) выше порога — красный.
-    Совпадает с реально работавшими правилами условного форматирования
-    из исходного файла (остальные диапазоны там были скопированы с ошибкой
-    и покрывали не все контракты — здесь применяется ко всем одинаково).
+    Подсветка для строк «Целевые» и «Факт»:
+    - жёлтый: K (прибыль в отчёте) ≠ L (прибыль расчётная)
+    - красный: M/N (рентабельность) > 7.5%
     """
-    k, l = metrics[6], metrics[7]
-    if isinstance(k, (int, float)) and isinstance(l, (int, float)):
-        if abs(k - l) > _MISMATCH_EPS:
+    profit_report, profit_calc = metrics[6], metrics[7]
+    if isinstance(profit_report, (int, float)) and isinstance(
+        profit_calc, (int, float)
+    ):
+        if abs(profit_report - profit_calc) > _MISMATCH_EPS:
             ws.cell(row=row_idx, column=_K_COL).fill = _WARN_FILL
             ws.cell(row=row_idx, column=_L_COL).fill = _WARN_FILL
 
@@ -184,24 +226,34 @@ def _apply_report_checks(ws, row_idx, metrics):
 
 def _apply_fact_checks(ws, row_idx, fact_extra):
     """
-    Подсветка только для строки "Факт":
-    - Q ("+/- ресурсов", расчёт) не совпадает с R (значение из формы) — жёлтый;
-    - Q отрицательный — красный (перекрывает жёлтый, если сработали оба).
+    Подсветка только для строки «Факт»:
+    - жёлтый: Q (+/- ресурсов расчёт) ≠ R (значение из формы)
+    - красный: Q < 0 (перекрывает жёлтый)
     """
-    q, r = fact_extra[2], fact_extra[3]
-    if isinstance(q, (int, float)) and isinstance(r, (int, float)) and abs(q - r) > _MISMATCH_EPS:
-        ws.cell(row=row_idx, column=_Q_COL).fill = _WARN_FILL
-        ws.cell(row=row_idx, column=_R_COL).fill = _WARN_FILL
-    if isinstance(q, (int, float)) and q < 0:
+    q_calc, r_report = fact_extra[2], fact_extra[3]
+    if isinstance(q_calc, (int, float)) and isinstance(r_report, (int, float)):
+        if abs(q_calc - r_report) > _MISMATCH_EPS:
+            ws.cell(row=row_idx, column=_Q_COL).fill = _WARN_FILL
+            ws.cell(row=row_idx, column=_R_COL).fill = _WARN_FILL
+    if isinstance(q_calc, (int, float)) and q_calc < 0:
         cell = ws.cell(row=row_idx, column=_Q_COL)
         cell.fill = _RED_FILL
         cell.font = _RED_FONT
 
 
+# --- Генерация отчёта ---
+
+
 def build_report(contracts, vat_rate):
     """
-    contracts — результат read_archive(). vat_rate — ставка НДС в процентах
-    (например 22 для 22%). Возвращает байты готового .xlsx.
+    Генерирует Excel-отчёт анализа ГОЗ.
+
+    Args:
+        contracts: результат read_archive()
+        vat_rate: ставка НДС в процентах (например, 22 для 22%)
+
+    Returns:
+        bytes готового .xlsx файла
     """
     wb = Workbook()
     ws = wb.active

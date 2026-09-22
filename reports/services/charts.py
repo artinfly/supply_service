@@ -1,3 +1,7 @@
+"""SQL-запросы для графиков (Chart.js)."""
+
+from decimal import Decimal
+
 from .queries import (
     ADVANCE,
     CONCLUDED,
@@ -8,6 +12,8 @@ from .queries import (
     needs_znp,
 )
 from .sap_status import SAP_STAGE_LABELS, sap_status_sql
+
+# --- Константы для графиков ---
 
 CONTRACT_AGE = (
     ("overdue_12", "Просрочено более года"),
@@ -26,7 +32,23 @@ ZNP_STAGES = (
 SAP_STAGES = tuple(SAP_STAGE_LABELS.items())
 
 
+def to_decimal(value):
+    """
+    Безопасно приводит значение к Decimal.
+    Используется для агрегации финансовых данных из SQL-запросов.
+    """
+    if value is None:
+        return Decimal("0")
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
+
+
+# --- SQL-запросы ---
+
+
 def contracts_by_cfo(year_col, igk):
+    """SQL для графика договоров по ЦФО (просрочка по срокам)."""
     not_concl = ", ".join(["%s"] * len(NOT_CONCL))
     sql = f"""
         SELECT cfo,
@@ -37,7 +59,7 @@ def contracts_by_cfo(year_col, igk):
                    ELSE 'overdue_12'
                END AS bucket,
                COUNT(*) AS cnt,
-               COALESCE(SUM(plan), 0) AS plan_sum
+               ROUND(CAST(COALESCE(SUM(plan), 0) AS numeric), 2) AS plan_sum
         FROM (
             SELECT cfo, plan, to_date(plan_date, 'YYYY.MM') AS due
             FROM igk_stat_data
@@ -53,6 +75,7 @@ def contracts_by_cfo(year_col, igk):
 
 
 def znp_by_cfo(year_col, igk, start=None, end=None):
+    """SQL для графика заявок ФЗД по ЦФО и статусам."""
     concluded = ", ".join(["%s"] * len(CONCLUDED))
     params = [igk, *CONCLUDED]
     period = ""
@@ -60,7 +83,8 @@ def znp_by_cfo(year_col, igk, start=None, end=None):
         period = "AND (z.id IS NULL OR z.znp_date BETWEEN %s AND %s)"
         params += [start, end]
     sql = f"""
-        SELECT cfo, stage, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS plan_sum
+        SELECT cfo, stage, COUNT(*) AS cnt,
+               ROUND(CAST(COALESCE(SUM(amount), 0) AS numeric), 2) AS plan_sum
         FROM (
             SELECT i.cfo,
                    CASE
@@ -86,15 +110,16 @@ def znp_by_cfo(year_col, igk, start=None, end=None):
 
 
 def znp_sap_by_cfo(igk):
+    """SQL для графика заявок SAP по ЦФО и статусам."""
     cfo_ph = ", ".join(["%s"] * len(SAP_CFO))
     igk_filter = "AND igk = %s" if igk else ""
     params = list(SAP_CFO)
     if igk:
         params.append(igk)
     sql = f"""
-        SELECT cfo,{sap_status_sql()} AS stage,
+        SELECT cfo, {sap_status_sql()} AS stage,
                COUNT(*) AS cnt,
-               COALESCE(SUM(vv_sum), 0) AS plan_sum
+               ROUND(CAST(COALESCE(SUM(vv_sum), 0) AS numeric), 2) AS plan_sum
         FROM znp_data_sap
         WHERE cfo IN ({cfo_ph})
           {igk_filter}
