@@ -466,6 +466,7 @@ class Access(models.Model):
             ("access_dupes", "Раздел: Дубликаты"),
             ("access_export", "Раздел: Отчёты в Excel"),
             ("access_upload", "Раздел: Загрузка данных"),
+            ("access_goz_report", "Раздел: Анализ ГОЗ"),
         ]
 
 

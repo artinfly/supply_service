@@ -1,19 +1,23 @@
+import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = "django-insecure-local-dev-key-change-in-production"
 DEBUG = True
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 
 INSTALLED_APPS = [
+    "reports",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "reports",
 ]
 
 MIDDLEWARE = [
@@ -97,4 +101,4 @@ LOGIN_URL = "/reports/login/"
 LOGIN_REDIRECT_URL = "/reports/"
 LOGOUT_REDIRECT_URL = "/reports/login/"
 
-HR_SERVICE_API_URL = "http://localhost:8001/api/"
+HR_SERVICE_API_URL = "http://localhost:8002/api/employee/"

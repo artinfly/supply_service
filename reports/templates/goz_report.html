@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}Анализ ГОЗ{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h5>Анализ отчётов ЕИС ГОЗ</h5>
+</div>
+
+<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);padding:1.5rem;max-width:420px;">
+    {% if messages %}
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} mb-3" style="font-size:0.82rem">{{ msg }}</div>
+    {% endfor %}
+    {% endif %}
+
+    <div class="format-note">
+        <div class="format-note-ext">ZIP</div>
+        <div class="format-note-text">
+            Архив с файлами <b>.xls</b> (форма ЕИС ГОЗ). Имя каждого файла — 4 последние цифры ИГК
+        </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" onsubmit="return checkArchive()">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label class="filter-label">ZIP-архив с отчётами по контрактам</label>
+            <input type="file" name="archive" accept=".zip" class="form-control mt-1" style="font-size:0.82rem">
+        </div>
+        <div class="mb-3">
+            <label class="filter-label">Ставка НДС, %</label>
+            <input type="number" name="vat_rate" value="{{ default_vat_rate }}" step="0.1" min="0" max="100"
+                   class="form-control mt-1" style="font-size:0.82rem;max-width:120px">
+        </div>
+        <div class="d-flex align-items-center">
+            <button type="submit" class="btn-orange" id="goz-btn">Сформировать отчёт</button>
+        </div>
+        <div id="goz-progress" style="display:none;margin-top:0.75rem;font-size:0.82rem;color:#555">
+            Обрабатываем архив, подождите...
+        </div>
+        <div id="goz-error" style="display:none;color:#c0392b;font-size:0.8rem;margin-top:0.5rem"></div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function checkArchive() {
+    const input = document.querySelector('input[name="archive"]');
+    const err = document.getElementById('goz-error');
+    function fail(text) {
+        err.textContent = text;
+        err.style.display = 'block';
+        return false;
+    }
+    if (!input.files || !input.files.length) {
+        return fail('Файл не прикреплён — выберите ZIP-архив');
+    }
+    if (!input.files[0].name.toLowerCase().endsWith('.zip')) {
+        return fail('Это не .zip архив');
+    }
+    err.style.display = 'none';
+    document.getElementById('goz-btn').disabled = true;
+    document.getElementById('goz-btn').textContent = 'Обработка...';
+    document.getElementById('goz-progress').style.display = 'block';
+    return true;
+}
+</script>
+{% endblock %}

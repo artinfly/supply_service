@@ -1,14 +1,12 @@
 import requests
 from django import forms
 from django.conf import settings
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm
 from django.contrib.auth.models import Permission, User
 from django.http import JsonResponse
 from django.urls import path
-from django.conf import settings
-from django.contrib import messages
 from django.utils import timezone
 
 from .models import (
@@ -26,6 +24,7 @@ from .models import (
 
 API_PATH = settings.HR_SERVICE_API_URL
 BULK_SYNC_LIMIT = 100
+
 
 @admin.register(NsiIgk)
 class NsiIgkAdmin(admin.ModelAdmin):
@@ -218,10 +217,17 @@ class UserWithSectionsAdmin(UserAdmin):
     add_form_template = "admin/auth/user/add_form.html"
     change_form_template = "admin/auth/user/change_form.html"
 
-    list_display = ('username', 'get_full_name', 'is_active', 'is_superuser', 'get_is_fired', 'get_last_synced_at')
-    list_filter = ('is_active', 'is_staff', 'is_superuser', 'profile__is_fired')
+    list_display = (
+        "username",
+        "get_full_name",
+        "is_active",
+        "is_superuser",
+        "get_is_fired",
+        "get_last_synced_at",
+    )
+    list_filter = ("is_active", "is_staff", "is_superuser", "profile__is_fired")
 
-    actions = ['sync_with_external_api']
+    actions = ["sync_with_external_api"]
 
     fieldsets = (
         (None, {"fields": ("username", "password")}),
@@ -289,6 +295,7 @@ class UserWithSectionsAdmin(UserAdmin):
 
     def get_last_synced_at(self, obj):
         return getattr(obj.profile, "last_synced_at", "")
+
     get_last_synced_at.short_description = "Дата синхронизации"
     get_last_synced_at.admin_order_field = "profile__last_synced_at"
 
@@ -343,9 +350,7 @@ class UserWithSectionsAdmin(UserAdmin):
         try:
             response = requests.get(
                 url,
-                headers={
-                    "X-API-Key": api_key
-                },
+                headers={"X-API-Key": api_key},
                 timeout=5,
             )
             response.raise_for_status()
@@ -372,9 +377,11 @@ class UserWithSectionsAdmin(UserAdmin):
         }
 
         return JsonResponse(result)
-    
+
     def sync_with_external_api(self, request, queryset):
-        queryset = queryset.select_related("profile").order_by("profile__last_synced_at")
+        queryset = queryset.select_related("profile").order_by(
+            "profile__last_synced_at"
+        )
         total_selected = queryset.count()
         to_process = list(queryset[:BULK_SYNC_LIMIT])
 
@@ -385,7 +392,7 @@ class UserWithSectionsAdmin(UserAdmin):
         if not api_key:
             self.message_user(request, "У вас не задан API-ключ!", level=messages.ERROR)
             return
-        
+
         for user in to_process:
             profile, _ = Profile.objects.get_or_create(user=user)
             tab_number = profile.user.username
@@ -398,13 +405,7 @@ class UserWithSectionsAdmin(UserAdmin):
 
             url = f"{API_PATH}{tab_number}/"
             try:
-                response = requests.get(
-                    url,
-                    headers={
-                        "X-API-Key": api_key
-                    },
-                    timeout=5
-                )
+                response = requests.get(url, headers={"X-API-Key": api_key}, timeout=5)
                 response.raise_for_status()
                 data = response.json()
             except (requests.RequestException, ValueError) as e:
@@ -432,4 +433,6 @@ class UserWithSectionsAdmin(UserAdmin):
             msg += f" Не обработано(Превышен лимит {BULK_SYNC_LIMIT} за раз): {skipped}"
         self.message_user(request, msg)
 
-    sync_with_external_api.short_description = f"Синхронизация с сервисом персонала (До {BULK_SYNC_LIMIT} за раз)"
+    sync_with_external_api.short_description = (
+        f"Синхронизация с сервисом персонала (До {BULK_SYNC_LIMIT} за раз)"
+    )
