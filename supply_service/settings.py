@@ -8,7 +8,7 @@ load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = "django-insecure-local-dev-key-change-in-production"
 DEBUG = True
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "10.109.42.67", "10.10.10.37"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "10.109.42.67", "10.10.10.37", "testserver"]
 
 INSTALLED_APPS = [
     "reports",
@@ -56,10 +56,10 @@ WSGI_APPLICATION = "supply_service.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME", "supply_service_test"),
+        "NAME": "supply_service_test",
         "USER": "root",
         "PASSWORD": "root",
-        "HOST": os.getenv("DB_HOST", "10.10.10.37"),
+        "HOST": "localhost",
         "PORT": "5432",
         "OPTIONS": {"client_encoding": "UTF8"},
     }
