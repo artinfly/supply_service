@@ -8,6 +8,7 @@
 
 import os
 import tempfile
+import zipfile
 from datetime import datetime
 from io import StringIO
 
@@ -22,6 +23,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from ..models import IgkStatData, NsiIgk, SystemEvent, ZnpData, ZnpDataSAP
+from ..services import goz_analysis
 from ..services.dashboards import (
     EMPTY_CFO_STATS,
     EMPTY_NOT_ISSUED,
@@ -41,6 +43,7 @@ from ..services.dashboards import (
     to_mln,
     znp_aggregates,
 )
+from ..services.excel import xlsx_response
 from ..services.excel_import import CONTRACT_COLUMNS, ZNP_COLUMNS, ZNP_SAP_COLUMNS
 from ..services.queries import (
     ADVANCE,
@@ -368,6 +371,32 @@ def upload_excel(request):
     ctx["file_columns"] = FILE_TYPE_COLUMNS
     ctx["selected_type"] = file_type
     return render(request, "upload.html", ctx)
+
+
+@login_required
+def goz_report(request):
+    """
+    Анализ отчётов ЕИС ГОЗ. GET — форма. POST — принимает ZIP с .xls
+    отчётами по контрактам, отдаёт сводный анализ одним xlsx.
+    При ошибке форма показывается заново с сообщением, ничего не сохраняется.
+    """
+    if request.method == "POST" and request.FILES.get("archive"):
+        try:
+            vat_rate = float(request.POST.get("vat_rate", "22").replace(",", "."))
+        except ValueError:
+            vat_rate = 22.0
+        try:
+            contracts = goz_analysis.read_archive(request.FILES["archive"])
+            data = goz_analysis.build_report(contracts, vat_rate)
+            return xlsx_response(data, "Анализ_ГОЗ")
+        except zipfile.BadZipFile:
+            messages.error(request, "Файл не является ZIP-архивом")
+        except Exception as e:
+            messages.error(request, f"Ошибка обработки архива: {e}")
+
+    ctx = _ctx(request)
+    ctx["default_vat_rate"] = 22
+    return render(request, "goz_report.html", ctx)
 
 
 # ============================================================================

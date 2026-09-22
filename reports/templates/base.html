@@ -74,7 +74,7 @@
     <a href="{% url 'history_fact_table' %}" class="nav-sub-link">Факт</a>
     {% endif %}
 
-    {% if perms.reports.access_dupes or perms.reports.access_export or perms.reports.access_upload or user.is_superuser %}
+    {% if perms.reports.access_dupes or perms.reports.access_export or perms.reports.access_upload or perms.reports.access_goz_report or user.is_superuser %}
     <div class="nav-section">Служебное</div>
     {% if perms.reports.access_dupes %}
     <a href="{% url 'contract_dupes_table' %}" class="nav-sub-link">Дубликаты</a>
@@ -84,6 +84,9 @@
     {% endif %}
     {% if perms.reports.access_upload %}
     <a href="{% url 'upload_excel' %}" class="nav-sub-link">Загрузка данных</a>
+    {% endif %}
+    {% if perms.reports.access_goz_report %}
+    <a href="{% url 'goz_report' %}" class="nav-sub-link">Анализ ГОЗ</a>
     {% endif %}
     {% if user.is_superuser %}
     <a href="/admin/" class="nav-sub-link">Админка</a>

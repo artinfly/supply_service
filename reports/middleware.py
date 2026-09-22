@@ -25,6 +25,8 @@ from .services.queries import YEARS
 SECTIONS = (
     # Загрузка файлов (права: access_upload)
     ("access_upload", ("upload",)),
+    # Анализ ГОЗ (права: access_goz_report)
+    ("access_goz_report", ("goz",)),
     # Выгрузки Excel (права: access_export)
     ("access_export", ("export",)),
     # Заявки SAP (права: access_znp_sap)
