@@ -3,34 +3,27 @@
 
 Основные таблицы:
 - igk_stat_data: позиции договоров (рабочая)
-- znp_data: заявки на платёж ФЗД (рабочая)
-- znp_data_sap: заявки на платёж SAP (рабочая)
+- znp_data / znp_data_sap: заявки на платёж (рабочие)
 - staging_*: временные таблицы для импорта Excel
 - contracts_history: история изменений договоров
-- contract_counts_snapshot: снимки количества договоров по датам
+- contract_counts_snapshot: снимки количества договоров
 - contracts_appeared: журнал появившихся договоров
-- nsi_igk: справочник ИГК для фильтров на страницах
+- nsi_igk: справочник ИГК
 """
 
 from django.contrib.auth.models import User
 from django.db import models
 
-# ============================================================================
-# Справочники
-# ============================================================================
+# --- Справочники ---
 
 
 class NsiIgk(models.Model):
-    """
-    Справочник ИГК — используется для выпадающих списков на сводках.
-    Заполняется при загрузке договоров, значения берутся из колонки «ИГК».
-    """
+    """Справочник ИГК — используется для выпадающих списков на сводках."""
 
     igk_id = models.AutoField(primary_key=True, verbose_name="ID записи")
     igk = models.CharField(max_length=50, unique=True, verbose_name="Код ИГК")
 
     class Meta:
-        managed = True
         db_table = "nsi_igk"
         verbose_name = "Справочник ИГК"
         verbose_name_plural = "Справочник ИГК"
@@ -39,17 +32,13 @@ class NsiIgk(models.Model):
         return self.igk
 
 
-# ============================================================================
-# Основные рабочие таблицы
-# ============================================================================
+# --- Основные рабочие таблицы ---
 
 
 class IgkStatData(models.Model):
     """
     Позиция договора — основная рабочая таблица.
     Полностью перезаписывается при каждой загрузке файла договоров.
-    ВАЖНО: pp_id меняется после каждой загрузки и не может служить внешней ссылкой.
-    Для привязки заявок используется crc32_hash.
     """
 
     pp_id = models.AutoField(primary_key=True, verbose_name="Внутренний ID")
@@ -64,18 +53,31 @@ class IgkStatData(models.Model):
         max_length=500, null=True, verbose_name="Тип платежа"
     )
     item = models.CharField(max_length=500, null=True, verbose_name="Предмет договора")
-    # order — зарезервированное слово SQL, Django сам его экранирует через db_column="order"
+    # Зарезервированное слово в SQL, экранируем через db_column
     order = models.CharField(
         max_length=500, null=True, db_column="order", verbose_name="Номер заказа"
     )
 
-    plan = models.FloatField(null=True, verbose_name="Плановая сумма")
-    fact = models.FloatField(null=True, verbose_name="Фактическая сумма")
-    remainder = models.FloatField(null=True, verbose_name="Остаток")
-    tolerance = models.FloatField(null=True, verbose_name="Допуск (%)")
+    # Финансовые данные: используем Decimal для точности
+    plan = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="Плановая сумма"
+    )
+    fact = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="Фактическая сумма"
+    )
+    remainder = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="Остаток"
+    )
+    tolerance = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, verbose_name="Допуск (%)"
+    )
+    contract_sum = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="Сумма всего договора"
+    )
+
     stage = models.CharField(max_length=250, null=True, verbose_name="Этап графика")
 
-    # Флаги годов ИГК (заполняются из колонки «ГодИГК» файла договоров)
+    # Флаги годов ИГК
     y25 = models.BooleanField(null=True, verbose_name="Флаг 2025 года")
     y26 = models.BooleanField(null=True, verbose_name="Флаг 2026 года")
     y27 = models.BooleanField(null=True, verbose_name="Флаг 2027 года")
@@ -86,13 +88,10 @@ class IgkStatData(models.Model):
     c_date = models.CharField(
         max_length=256, null=True, verbose_name="Дата заключения (строка)"
     )
-    contract_sum = models.FloatField(null=True, verbose_name="Сумма всего договора")
 
-    # CRC32-хеш от (ИГК + контрагент + договор + этап). При изменении любого поля привязка теряется.
     crc32_hash = models.BigIntegerField(verbose_name="CRC32 хеш для привязки")
 
     class Meta:
-        managed = True
         db_table = "igk_stat_data"
         verbose_name = "Позиция договора"
         verbose_name_plural = "Позиции договоров"
@@ -108,17 +107,11 @@ class IgkStatData(models.Model):
         return f"{self.igk} / {self.contract}"
 
 
-# ============================================================================
-# Staging таблицы (временные, для импорта Excel)
-# ============================================================================
+# --- Staging таблицы (импорт) ---
 
 
 class StagingExcel(models.Model):
-    """
-    Временная таблица для импорта договоров.
-    Записывает строки Excel «как есть» (всё в TextField) для избежания ошибок парсинга.
-    Конвертация типов происходит в services/normalize.py. Очищается при каждой загрузке.
-    """
+    """Временная таблица для импорта договоров (строки как есть)."""
 
     id = models.AutoField(primary_key=True)
     igk = models.TextField(null=True, verbose_name="ИГК")
@@ -139,7 +132,6 @@ class StagingExcel(models.Model):
     god_igk = models.TextField(null=True, verbose_name="Год ИГК")
 
     class Meta:
-        managed = True
         db_table = "staging_excel"
         verbose_name = "Строка импорта договоров"
         verbose_name_plural = "Строки импорта договоров"
@@ -149,10 +141,7 @@ class StagingExcel(models.Model):
 
 
 class StagingZnpExcel(models.Model):
-    """
-    Временная таблица для импорта заявок ФЗД.
-    Записывает строки Excel «как есть». Очищается при каждой загрузке.
-    """
+    """Временная таблица для импорта заявок ФЗД."""
 
     id = models.AutoField(primary_key=True)
     igk = models.TextField(null=True, verbose_name="ИГК")
@@ -171,12 +160,9 @@ class StagingZnpExcel(models.Model):
     fact_sum = models.FloatField(null=True, verbose_name="Фактическая сумма")
     znp_status = models.TextField(null=True, verbose_name="Статус заявки")
     znp_date = models.TextField(null=True, verbose_name="Дата заявки")
-    crc32_hash = models.BigIntegerField(
-        null=False, verbose_name="CRC32 хеш для привязки"
-    )
+    crc32_hash = models.BigIntegerField(verbose_name="CRC32 хеш для привязки")
 
     class Meta:
-        managed = True
         db_table = "staging_znp_excel"
         verbose_name = "Строка импорта ЗнП (ФЗД)"
         verbose_name_plural = "Строки импорта ЗнП (ФЗД)"
@@ -186,15 +172,10 @@ class StagingZnpExcel(models.Model):
 
 
 class ZnpData(models.Model):
-    """
-    Рабочая таблица заявок на платёж ФЗД.
-    Привязывается к позиции договора через parent (ForeignKey) и crc32_hash.
-    Если crc32_hash не совпадает ни с одной позицией, parent = NULL, и заявка скрыта из выборок.
-    """
+    """Рабочая таблица заявок на платёж ФЗД."""
 
     id = models.AutoField(primary_key=True)
 
-    # db_constraint=False, так как таблица полностью перезаписывается при загрузке
     parent = models.ForeignKey(
         IgkStatData,
         on_delete=models.SET_NULL,
@@ -218,8 +199,12 @@ class ZnpData(models.Model):
     fact_payment_date = models.DateField(
         null=True, verbose_name="Фактическая дата платежа"
     )
-    plan_sum = models.FloatField(null=True, verbose_name="Плановая сумма")
-    fact_sum = models.FloatField(null=True, verbose_name="Фактическая сумма")
+    plan_sum = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="Плановая сумма"
+    )
+    fact_sum = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="Фактическая сумма"
+    )
     znp_igk = models.TextField(null=True, verbose_name="ИГК заявки")
     znp_payment_type = models.CharField(
         max_length=100, null=True, verbose_name="Тип платежа"
@@ -230,12 +215,12 @@ class ZnpData(models.Model):
     znp_date = models.DateField(null=True, verbose_name="Дата заявки")
 
     class Meta:
-        managed = True
         db_table = "znp_data"
         verbose_name = "Заявка на платёж (ФЗД)"
         verbose_name_plural = "Заявки на платёж (ФЗД)"
         indexes = [
             models.Index(fields=["crc32_hash"], name="idx_znp_crc32"),
+            models.Index(fields=["parent_id"], name="idx_znp_parent"),
         ]
 
     def __str__(self):
@@ -243,10 +228,7 @@ class ZnpData(models.Model):
 
 
 class ZnpDataSAP(models.Model):
-    """
-    Рабочая таблица заявок на платёж SAP.
-    Отдельная таблица из-за отличий в структуре. Статус вычисляется по датам этапов.
-    """
+    """Рабочая таблица заявок на платёж SAP."""
 
     id = models.AutoField(primary_key=True)
     igk = models.CharField(max_length=500, null=True, verbose_name="ИГК")
@@ -254,7 +236,9 @@ class ZnpDataSAP(models.Model):
     c_agent = models.CharField(max_length=500, verbose_name="Контрагент")
     reg_num = models.CharField(max_length=255, null=True, verbose_name="Рег. номер")
     items = models.CharField(max_length=500, null=True, verbose_name="Предметы")
-    vv_sum = models.FloatField(null=True, verbose_name="Сумма ВВ")
+    vv_sum = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="Сумма ВВ"
+    )
     bank_name = models.CharField(max_length=500, null=True, verbose_name="Банк")
 
     stage_e = models.DateField(null=True, verbose_name="Этап E")
@@ -270,7 +254,6 @@ class ZnpDataSAP(models.Model):
     )
 
     class Meta:
-        managed = True
         db_table = "znp_data_sap"
         verbose_name = "Заявка на платёж (SAP)"
         verbose_name_plural = "Заявки на платёж (SAP)"
@@ -284,9 +267,7 @@ class ZnpDataSAP(models.Model):
 
 
 class StagingZnpSAPExcel(models.Model):
-    """
-    Временная таблица для импорта заявок SAP. Очищается при каждой загрузке.
-    """
+    """Временная таблица для импорта заявок SAP."""
 
     id = models.AutoField(primary_key=True)
     igk = models.CharField(max_length=500, null=True, verbose_name="ИГК")
@@ -311,7 +292,6 @@ class StagingZnpSAPExcel(models.Model):
     )
 
     class Meta:
-        managed = True
         db_table = "staging_znp_sap_excel"
         verbose_name = "Строка импорта ЗнП (SAP)"
         verbose_name_plural = "Строки импорта ЗнП (SAP)"
@@ -320,17 +300,11 @@ class StagingZnpSAPExcel(models.Model):
         return f"Staging ЗнП SAP: {self.reg_num}"
 
 
-# ============================================================================
-# История изменений и снимки
-# ============================================================================
+# --- История изменений и снимки ---
 
 
 class ContractsHistory(models.Model):
-    """
-    История изменений договоров.
-    Записывается при загрузке, если изменился статус, план, факт или сумма договора.
-    Поле hash — бинарный MD5-хеш позиции для поиска «той же» записи в разных загрузках.
-    """
+    """История изменений договоров (статус, план, факт)."""
 
     id = models.AutoField(primary_key=True)
     hash = models.BinaryField(verbose_name="MD5 хеш позиции")
@@ -345,22 +319,31 @@ class ContractsHistory(models.Model):
     update_date = models.DateField(null=True, verbose_name="Дата изменения в файле")
     upload_date = models.DateField(null=True, verbose_name="Дата загрузки в систему")
 
-    old_plan = models.FloatField(null=True, verbose_name="Старый план")
-    new_plan = models.FloatField(null=True, verbose_name="Новый план")
+    old_plan = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="Старый план"
+    )
+    new_plan = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="Новый план"
+    )
 
-    old_fact = models.FloatField(null=True, verbose_name="Старый факт")
-    new_fact = models.FloatField(null=True, verbose_name="Новый факт")
+    old_fact = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="Старый факт"
+    )
+    new_fact = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="Новый факт"
+    )
 
     plan_changed_date = models.DateField(null=True, verbose_name="Дата изменения плана")
     fact_changed_date = models.DateField(null=True, verbose_name="Дата изменения факта")
 
-    old_contract_sum = models.FloatField(
-        null=True, verbose_name="Старая сумма договора"
+    old_contract_sum = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="Старая сумма договора"
     )
-    new_contract_sum = models.FloatField(null=True, verbose_name="Новая сумма договора")
+    new_contract_sum = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="Новая сумма договора"
+    )
 
     class Meta:
-        managed = True
         db_table = "contracts_history"
         verbose_name = "Изменение договора"
         verbose_name_plural = "Изменения договоров"
@@ -373,10 +356,7 @@ class ContractsHistory(models.Model):
 
 
 class ContractCountsSnapshot(models.Model):
-    """
-    Снимок количества заключённых договоров на дату загрузки.
-    Используется для графиков «динамика заключения договоров» на dashboard.
-    """
+    """Снимок количества заключённых договоров на дату загрузки."""
 
     id = models.AutoField(primary_key=True)
     upload_date = models.DateField(verbose_name="Дата загрузки (снимка)")
@@ -388,7 +368,6 @@ class ContractCountsSnapshot(models.Model):
     )
 
     class Meta:
-        managed = True
         db_table = "contract_counts_snapshot"
         verbose_name = "Снимок количества договоров"
         verbose_name_plural = "Снимки количества договоров"
@@ -404,16 +383,11 @@ class ContractCountsSnapshot(models.Model):
 
 
 class ContractsAppeared(models.Model):
-    """
-    Журнал появившихся договоров.
-    Фиксирует договоры, появившиеся впервые или изменившие статус с «не заключён» на «заключён».
-    """
+    """Журнал появившихся договоров."""
 
     id = models.AutoField(primary_key=True)
     upload_date = models.DateField(verbose_name="Дата загрузки")
-    kind = models.CharField(
-        max_length=20, verbose_name="Тип появления (новый/изменил статус)"
-    )
+    kind = models.CharField(max_length=20, verbose_name="Тип появления")
     reason = models.CharField(max_length=20, verbose_name="Причина")
 
     igk = models.CharField(max_length=500, null=True, verbose_name="ИГК")
@@ -425,11 +399,14 @@ class ContractsAppeared(models.Model):
     stage = models.CharField(max_length=500, null=True, verbose_name="Этап")
     plan_date = models.CharField(max_length=20, null=True, verbose_name="Плановая дата")
     status = models.CharField(max_length=500, null=True, verbose_name="Статус")
-    plan = models.FloatField(null=True, verbose_name="План")
-    contract_sum = models.FloatField(null=True, verbose_name="Сумма договора")
+    plan = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="План"
+    )
+    contract_sum = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, verbose_name="Сумма договора"
+    )
 
     class Meta:
-        managed = True
         db_table = "contracts_appeared"
         verbose_name = "Появившийся договор"
         verbose_name_plural = "Появившиеся договоры"
@@ -441,17 +418,11 @@ class ContractsAppeared(models.Model):
         return f"{self.contract} - {self.kind} на {self.upload_date}"
 
 
-# ============================================================================
-# Права доступа и системные события
-# ============================================================================
+# --- Права доступа и системные данные ---
 
 
 class Access(models.Model):
-    """
-    Модель-заглушка для определения кастомных прав доступа к разделам.
-    Таблица в БД НЕ создаётся (managed = False). Django использует её только
-    для регистрации прав в django_content_type и django_permission.
-    """
+    """Модель-заглушка для кастомных прав доступа (таблица в БД не создаётся)."""
 
     class Meta:
         managed = False
@@ -471,9 +442,7 @@ class Access(models.Model):
 
 
 class SystemEvent(models.Model):
-    """
-    Системные события для отслеживания времени последней загрузки данных.
-    """
+    """Системные события для отслеживания времени последней загрузки."""
 
     id = models.AutoField(primary_key=True)
     event_key = models.CharField(
@@ -482,7 +451,6 @@ class SystemEvent(models.Model):
     event_time = models.DateTimeField(verbose_name="Время события")
 
     class Meta:
-        managed = True
         db_table = "system_events"
         verbose_name = "Системное событие"
         verbose_name_plural = "Системные события"
@@ -492,10 +460,7 @@ class SystemEvent(models.Model):
 
 
 class Profile(models.Model):
-    """
-    Расширенный профиль пользователя.
-    Содержит дополнительные метаданные и флаги синхронизации с внешними HR-системами.
-    """
+    """Расширенный профиль пользователя с данными из HR-системы."""
 
     user = models.OneToOneField(
         User,
@@ -503,14 +468,18 @@ class Profile(models.Model):
         related_name="profile",
         verbose_name="Пользователь",
     )
-    api_key = models.CharField("API ключ", max_length=64, blank=True, null=True)
-    patronymic = models.CharField("Отчество", max_length=255, blank=True)
-    is_fired = models.BooleanField("Уволен?", default=False)
+    api_key = models.CharField(
+        max_length=64, blank=True, null=True, verbose_name="API ключ"
+    )
+    patronymic = models.CharField(max_length=255, blank=True, verbose_name="Отчество")
+    is_fired = models.BooleanField(default=False, verbose_name="Уволен?")
 
     last_synced_at = models.DateTimeField(
-        "Последняя синхронизация", null=True, blank=True
+        null=True, blank=True, verbose_name="Последняя синхронизация"
     )
-    sync_error = models.TextField("Ошибка последней синхронизации", blank=True)
+    sync_error = models.TextField(
+        blank=True, verbose_name="Ошибка последней синхронизации"
+    )
 
     class Meta:
         verbose_name = "Профиль пользователя"

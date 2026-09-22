@@ -1,15 +1,37 @@
+"""Сервисы для расчёта сводок и dashboard."""
+
+from decimal import Decimal
+
 from django.db.models import Count, Q, Sum
 
 from .queries import ADVANCE, POSTPAYMENT, ZNP_APPROVED
 from .sap_status import SAP_STAGE_PARAMS
 
+# --- Вспомогательные функции ---
+
+
+def to_decimal(value):
+    """Безопасно приводит значение к Decimal (None -> 0)."""
+    if value is None:
+        return Decimal("0")
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
+
 
 def to_mln(value):
-    return (value or 0) / 1000000
+    """Переводит сумму в миллионы рублей."""
+    return to_decimal(value) / Decimal("1000000")
 
 
 def percent(part, whole):
-    return (part / whole * 100) if whole else 0
+    """Вычисляет процент part от whole."""
+    part = to_decimal(part)
+    whole = to_decimal(whole)
+    return (part / whole * 100) if whole else Decimal("0")
+
+
+# --- Dashboard: сводка по ЦФО ---
 
 
 def filter_by_year(queryset, year, field_prefix=""):
@@ -79,10 +101,14 @@ def with_cfo_percents(row):
 
 
 def cfo_totals_row(rows):
+    """Итоговая строка по всем ЦФО."""
     totals = {"cfo": "ИТОГО"}
     for key in CFO_SUMMED:
-        totals[key] = sum(r[key] for r in rows)
+        totals[key] = sum((to_decimal(r[key]) for r in rows), Decimal("0"))
     return with_cfo_percents(totals)
+
+
+# --- Сводка заявок ФЗД ---
 
 
 ZNP_STAGE_LABELS = {
@@ -187,6 +213,7 @@ EMPTY_ZNP = {
 
 
 def breakdown_from_stats(ni, zs, st):
+    """Формирует структуру карточек для сводки заявок ФЗД."""
     not_issued_count = ni["count"] or 0
     not_issued_sum = to_mln(ni["plan_sum"])
     not_issued_advance_count = ni["advance_count"] or 0
@@ -202,14 +229,11 @@ def breakdown_from_stats(ni, zs, st):
 
     total = st["stage_count"] or 0
 
-    def _pct(part, whole):
-        return (part / whole * 100) if whole else 0
-
-    def _card(count, plan_sum, status_param, percent=None):
+    def _card(count, plan_sum, status_param, pct=None):
         return {
             "count": count,
             "sum": plan_sum,
-            "percent": _pct(count, total) if percent is None else percent,
+            "percent": percent(count, total) if pct is None else pct,
             "status_param": status_param,
         }
 
@@ -218,9 +242,7 @@ def breakdown_from_stats(ni, zs, st):
         "total_sum": to_mln(st["stage_sum"]),
         "not_issued": _card(not_issued_count, not_issued_sum, "not_issued"),
         "not_issued_advance": _card(
-            not_issued_advance_count,
-            to_mln(ni["advance_sum"]),
-            "not_issued_advance",
+            not_issued_advance_count, to_mln(ni["advance_sum"]), "not_issued_advance"
         ),
         "not_issued_postpayment": _card(
             not_issued_postpayment_count,
@@ -229,49 +251,51 @@ def breakdown_from_stats(ni, zs, st):
         ),
         "issued": _card(issued_count, issued_sum, "advance,postpayment"),
         "in_progress": _card(
-            in_progress_count,
-            to_mln(zs["in_progress_sum"]),
-            "in_progress",
+            in_progress_count, to_mln(zs["in_progress_sum"]), "in_progress"
         ),
         "advance": _card(
             advance_count,
             to_mln(zs["advance_sum"]),
             "advance",
-            percent=_pct(advance_count, issued_count),
+            pct=percent(advance_count, issued_count),
         ),
         "advance_paid": _card(
             advance_paid_count,
             to_mln(zs["advance_paid_sum"]),
             "advance_paid",
-            percent=_pct(advance_paid_count, advance_count),
+            pct=percent(advance_paid_count, advance_count),
         ),
         "postpayment": _card(
             postpayment_count,
             to_mln(zs["postpayment_sum"]),
             "postpayment",
-            percent=_pct(postpayment_count, issued_count),
+            pct=percent(postpayment_count, issued_count),
         ),
         "postpayment_paid": _card(
             postpayment_paid_count,
             to_mln(zs["postpayment_paid_sum"]),
             "postpayment_paid",
-            percent=_pct(postpayment_paid_count, postpayment_count),
+            pct=percent(postpayment_paid_count, postpayment_count),
         ),
     }
 
 
+# --- Сводка заявок SAP ---
+
+
 def sap_cards(total_row, status_rows):
+    """Формирует структуру карточек для сводки заявок SAP."""
     total = (total_row or {}).get("total") or 0
-    total_sum = ((total_row or {}).get("total_sum") or 0) / 1000000
+    total_sum = to_mln((total_row or {}).get("total_sum"))
 
     def _card(status):
         row = status_rows.get(status)
         count = (row or {}).get("count") or 0
-        vv_sum = ((row or {}).get("vv_sum") or 0) / 1000000
+        vv_sum = to_mln((row or {}).get("vv_sum"))
         return {
             "count": count,
             "sum": vv_sum,
-            "percent": (count / total * 100) if total else 0,
+            "percent": percent(count, total),
             "status_param": status,
         }
 
