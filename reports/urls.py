@@ -76,6 +76,7 @@ urlpatterns = [
     # ========================================================================
     # Страница загрузки Excel-файлов (договоры, заявки ФЗД, заявки SAP)
     path("upload/", pages.upload_excel, name="upload_excel"),
+    path("goz-report/", pages.goz_report, name="goz_report"),
     # Страница со списком доступных Excel-выгрузок
     path("export/", pages.export_page, name="export_page"),
     # ========================================================================

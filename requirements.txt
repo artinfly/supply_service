@@ -12,3 +12,4 @@ idna==3.19
 urllib3==2.7.0
 requests==2.34.2
 xlrd==2.0.2
+python-dotenv==1.2.2
