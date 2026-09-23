@@ -45,6 +45,7 @@ urlpatterns = [
     # --- Загрузка и выбор выгрузок ---
     path("upload/", pages.upload_excel, name="upload_excel"),
     path("goz-report/", pages.goz_report, name="goz_report"),
+    path("upload-gk-directory/", pages.upload_gk_directory, name="upload_gk_directory"),
     path("export/", pages.export_page, name="export_page"),
     # --- Выгрузки Excel ---
     path(

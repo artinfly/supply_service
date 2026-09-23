@@ -6,12 +6,16 @@
 Сводки (плашки и таблицы по ЦФО) считаются на сервере.
 """
 
+import json
 import os
+import re
 import tempfile
 import zipfile
 from datetime import datetime
+from decimal import Decimal
 from io import StringIO
 
+import docx
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -22,7 +26,14 @@ from django.db.models.expressions import RawSQL
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
-from ..models import IgkStatData, NsiIgk, SystemEvent, ZnpData, ZnpDataSAP
+from ..models import (
+    GozContractVat,
+    IgkStatData,
+    NsiIgk,
+    SystemEvent,
+    ZnpData,
+    ZnpDataSAP,
+)
 from ..services import goz_analysis
 from ..services.dashboards import (
     EMPTY_CFO_STATS,
@@ -82,6 +93,11 @@ def _ctx(request):
 # Условие «у строки договора есть заказ» (для ORM).
 # ВАЖНО: синхронизировать с HAS_ORDER в queries.py
 HAS_ORDER_Q = Q(order__isnull=False) & ~Q(order__regex=r"^\s*$")
+
+
+def normalize_igk(s):
+    """Приводит имя ГК к общему виду (убирает слеши, подчёркивания и т.д.)."""
+    return re.sub(r"[^0-9a-zA-Z]", "", str(s))
 
 
 def _igk_and_cfo_lists():
@@ -333,24 +349,207 @@ def upload_excel(request):
 
 @login_required
 def goz_report(request):
-    """Анализ отчётов ЕИС ГОЗ."""
-    if request.method == "POST" and request.FILES.get("archive"):
-        try:
-            vat_rate = float(request.POST.get("vat_rate", "22").replace(",", "."))
-        except ValueError:
-            vat_rate = 22.0
-        try:
-            contracts = goz_analysis.read_archive(request.FILES["archive"])
-            data = goz_analysis.build_report(contracts, vat_rate)
-            return xlsx_response(data, "Анализ_ГОЗ")
-        except zipfile.BadZipFile:
-            messages.error(request, "Файл не является ZIP-архивом")
-        except Exception as e:
-            messages.error(request, f"Ошибка обработки архива: {e}")
-
+    """Анализ отчётов ЕИС ГОЗ с индивидуальными ставками НДС."""
     ctx = _ctx(request)
-    ctx["default_vat_rate"] = 22
+
+    if request.method == "POST":
+        temp_zip_path = request.POST.get("temp_zip_path")
+        vat_rates_json = request.POST.get("vat_rates")
+
+        # Шаг 2: Генерация отчёта после настройки ставок
+        if vat_rates_json and temp_zip_path and os.path.exists(temp_zip_path):
+            try:
+                vat_rates = json.loads(vat_rates_json)
+                save_to_dir = request.POST.get("save_to_dir") == "on"
+
+                # Сохраняем новые/изменённые ставки в справочник
+                if save_to_dir:
+                    for igk, rate in vat_rates.items():
+                        try:
+                            rate_val = Decimal(str(rate).replace(",", "."))
+                            GozContractVat.objects.update_or_create(
+                                igk=igk, defaults={"vat_rate": rate_val}
+                            )
+                        except Exception:
+                            pass
+
+                # Читаем архив и нормализуем имена ГК для матчинга с БД
+                contracts = goz_analysis.read_archive(temp_zip_path)
+                all_vats = list(GozContractVat.objects.all())
+                vats_mapping = {normalize_igk(v.igk): v.igk for v in all_vats}
+
+                normalized_contracts = []
+                for zip_igk, plan, fact in contracts:
+                    norm = normalize_igk(zip_igk)
+                    db_igk = vats_mapping.get(norm, zip_igk)
+                    normalized_contracts.append((db_igk, plan, fact))
+
+                # Формируем отчёт с индивидуальными ставками
+                data = goz_analysis.build_report(normalized_contracts, vat_rates)
+                os.unlink(temp_zip_path)
+                return xlsx_response(data, "Анализ_ГОЗ")
+            except Exception as e:
+                messages.error(request, f"Ошибка формирования отчёта: {e}")
+                if os.path.exists(temp_zip_path):
+                    os.unlink(temp_zip_path)
+
+        # Шаг 1: Загрузка ZIP-архива
+        elif request.FILES.get("archive"):
+            try:
+                archive = request.FILES["archive"]
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+                    for chunk in archive.chunks():
+                        tmp.write(chunk)
+                    tmp_path = tmp.name
+
+                # Читаем архив и ищем все ГК
+                contracts = goz_analysis.read_archive(tmp_path)
+                gks_in_archive = [c[0] for c in contracts]
+
+                # Матчим с базой через нормализацию имён
+                all_vats = list(GozContractVat.objects.all())
+                vats_mapping = {normalize_igk(v.igk): v for v in all_vats}
+
+                gk_list = []
+                for zip_igk in gks_in_archive:
+                    norm = normalize_igk(zip_igk)
+                    db_vat = vats_mapping.get(norm)
+
+                    if db_vat:
+                        gk_list.append(
+                            {
+                                "igk": db_vat.igk,
+                                "vat_rate": float(db_vat.vat_rate),
+                                "is_new": False,
+                            }
+                        )
+                    else:
+                        gk_list.append(
+                            {
+                                "igk": zip_igk,
+                                "vat_rate": 20.0,
+                                "is_new": True,
+                            }
+                        )
+
+                ctx["temp_zip_path"] = tmp_path
+                ctx["gk_list"] = gk_list
+                ctx["step2"] = True
+            except zipfile.BadZipFile:
+                messages.error(request, "Файл не является ZIP-архивом")
+                if "tmp_path" in locals() and os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+            except Exception as e:
+                messages.error(request, f"Ошибка обработки архива: {e}")
+                if "tmp_path" in locals() and os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+
+    if "step2" not in ctx:
+        ctx["default_vat_rate"] = 20.0
+
     return render(request, "goz_report.html", ctx)
+
+
+@login_required
+def upload_gk_directory(request):
+    """Загрузка справочника ГК из Word или Excel файла."""
+    if request.method == "POST" and request.FILES.get("doc_file"):
+        file = request.FILES["doc_file"]
+        ext = os.path.splitext(file.name)[1].lower()
+
+        added_count = 0
+        updated_count = 0
+
+        try:
+            if ext == ".docx":
+                doc = docx.Document(file)
+                for table in doc.tables:
+                    for row in table.rows:
+                        cells = row.cells
+                        if len(cells) >= 2:
+                            num_text = cells[0].text.strip()
+                            igk = cells[1].text.strip()
+
+                            if not igk or "гк" in igk.lower() or "номер" in igk.lower():
+                                continue
+                            if (
+                                num_text
+                                and not num_text.isdigit()
+                                and num_text.lower() not in ["№", "п/п"]
+                            ):
+                                continue
+
+                            try:
+                                rate_val = Decimal("20.0")
+                                obj, created = GozContractVat.objects.update_or_create(
+                                    igk=igk, defaults={"vat_rate": rate_val}
+                                )
+                                if created:
+                                    added_count += 1
+                                else:
+                                    updated_count += 1
+                            except Exception:
+                                continue
+            elif ext == ".xlsx":
+                import openpyxl
+
+                wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+                ws = wb.active
+                for row in ws.iter_rows(min_row=1, values_only=True):
+                    if len(row) >= 2:
+                        igk = str(row[1]).strip() if row[1] is not None else ""
+                        if not igk or igk.lower() in ["nan", "гк", "номер", "none"]:
+                            continue
+                        try:
+                            rate_val = Decimal("20.0")
+                            obj, created = GozContractVat.objects.update_or_create(
+                                igk=igk, defaults={"vat_rate": rate_val}
+                            )
+                            if created:
+                                added_count += 1
+                            else:
+                                updated_count += 1
+                        except Exception:
+                            continue
+            elif ext == ".xls":
+                import xlrd
+
+                book = xlrd.open_workbook(file_contents=file.read())
+                ws = book.sheet_by_index(0)
+                for rx in range(ws.nrows):
+                    if ws.ncols >= 2:
+                        igk = str(ws.cell_value(rx, 1)).strip()
+                        if not igk or igk.lower() in ["nan", "гк", "номер", "none"]:
+                            continue
+                        try:
+                            rate_val = Decimal("20.0")
+                            obj, created = GozContractVat.objects.update_or_create(
+                                igk=igk, defaults={"vat_rate": rate_val}
+                            )
+                            if created:
+                                added_count += 1
+                            else:
+                                updated_count += 1
+                        except Exception:
+                            continue
+            else:
+                messages.error(
+                    request,
+                    "Неподдерживаемый формат. Используйте .docx, .xlsx или .xls",
+                )
+                return redirect("goz_report")
+
+        except Exception as e:
+            messages.error(request, f"Ошибка парсинга файла: {e}")
+            return redirect("goz_report")
+
+        messages.success(
+            request,
+            f"Справочник обновлён. Добавлено: {added_count}, Обновлено: {updated_count}.",
+        )
+        return redirect("goz_report")
+
+    return redirect("goz_report")
 
 
 # --- Сводки ---
@@ -371,7 +570,6 @@ def dashboard(request):
     year_q = Q(**{year_field: True})
     advance_q = Q(payment_type=ADVANCE)
 
-    # Плашка «Все договоры»
     totals_all = IgkStatData.objects.filter(
         HAS_ORDER_Q, contract__isnull=False
     ).aggregate(
@@ -383,7 +581,6 @@ def dashboard(request):
         not_concluded_plan=Sum("plan", filter=not_concl_q),
     )
 
-    # Плашка «Выбранный год» (расторгнутые исключаются)
     totals_year = (
         IgkStatData.objects.exclude(status="Расторгнут")
         .filter(HAS_ORDER_Q, contract__isnull=False, **{year_field: True})
@@ -397,7 +594,6 @@ def dashboard(request):
         )
     )
 
-    # Таблица по ЦФО для выбранного ИГК
     available_cfo = list(
         IgkStatData.objects.filter(igk=selected_igk)
         .values_list("cfo", flat=True)
@@ -451,14 +647,12 @@ def dashboard(request):
             "selected_year": str(year),
             "available_igk": available_igk,
             "selected_igk": selected_igk,
-            # Плашка «Все договоры»
             "all_contracts_count": totals_all["count"],
             "all_contracts_sum": to_mln(totals_all["plan_sum"]),
             "all_concluded_count": totals_all["concluded_count"],
             "all_concluded_sum": to_mln(totals_all["concluded_plan"]),
             "all_not_concluded_count": totals_all["not_concluded_count"],
             "all_not_concluded_sum": to_mln(totals_all["not_concluded_plan"]),
-            # Плашка «Выбранный год»
             "curr_year_contracts_count": year_count,
             "curr_year_contracts_sum": to_mln(year_plan),
             "curr_year_concluded_count": year_concluded_count,
@@ -467,11 +661,9 @@ def dashboard(request):
             "curr_year_not_concluded_sum": to_mln(year_plan - year_concluded_plan),
             "curr_year_fact": to_mln(advance_fact),
             "curr_year_plan": to_mln(advance_plan),
-            # Проценты
             "curr_year_percent_count": percent(year_concluded_count, year_count),
             "curr_year_percent_sum": percent(year_concluded_plan, year_plan),
             "curr_year_percent_prepaid": percent(advance_fact, advance_plan),
-            # Таблица по ЦФО
             "igk_table": igk_table,
             "has_data": IgkStatData.objects.exists(),
             "no_data_hint": "Договоры ещё не загружены. Нужен файл выгрузки по договорам.",
@@ -518,7 +710,6 @@ def znp_table(request):
             qs = qs.filter(igk=igk)
         return qs
 
-    # Плашки по всем годам и по выбранному году
     all_not_issued_qs = _not_issued_qs()
     all_znp_qs = _znp_qs()
     all_stages_qs = _stages_qs()
@@ -537,7 +728,6 @@ def znp_table(request):
     all_breakdown = _breakdown(all_not_issued_qs, all_znp_qs, all_stages_qs)
     year_breakdown = _breakdown(year_not_issued_qs, year_znp_qs, year_stages_qs)
 
-    # Таблица по ЦФО для выбранного ИГК и года
     available_cfo = list(
         IgkStatData.objects.filter(igk=selected_igk)
         .values_list("cfo", flat=True)
@@ -582,7 +772,6 @@ def znp_table(request):
         ZNP_STAGE_LABELS,
     )
 
-    # Период графика
     chart_start = request.GET.get("start", "").strip()
     chart_end = request.GET.get("end", "").strip()
     if not (valid_date(chart_start) and valid_date(chart_end)):
@@ -630,7 +819,6 @@ def znp_sap_table(request):
 
     all_breakdown = _breakdown(qs)
 
-    # Две даты платежей для карточек
     date_param = request.GET.get("date", "")
     first_date = (
         datetime.strptime(date_param, "%Y-%m-%d").date()
@@ -641,7 +829,6 @@ def znp_sap_table(request):
     first_date_breakdown = _breakdown(qs.filter(payment_possible=first_date))
     second_date_breakdown = _breakdown(qs.filter(payment_possible=second_date))
 
-    # Список ИГК для селектора
     available_igk = list(
         qs.exclude(igk__isnull=True)
         .exclude(igk="")
@@ -653,7 +840,6 @@ def znp_sap_table(request):
         available_igk[0] if available_igk else ""
     )
 
-    # Таблица по ЦФО для выбранного ИГК
     cfo_qs = qs.filter(igk=selected_igk) if selected_igk else qs
     available_cfo = list(
         cfo_qs.values_list("cfo", flat=True).distinct().order_by("cfo")
@@ -698,7 +884,6 @@ def znp_sap_table(request):
         }
     )
 
-    # Время последней загрузки SAP
     try:
         sap_load_event = SystemEvent.objects.filter(event_key="sap_load").first()
         ctx["sap_load_time"] = sap_load_event.event_time if sap_load_event else None

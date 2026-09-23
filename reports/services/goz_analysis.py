@@ -330,17 +330,32 @@ def _merge_block(ws, first_row):
 # --- Генерация отчёта ---
 
 
-def build_report(contracts, vat_rate):
+def build_report(contracts, vat_rates):
     """
     Генерирует Excel-отчёт анализа ГОЗ.
 
     Args:
         contracts: результат read_archive()
-        vat_rate: ставка НДС в процентах (например, 22 для 22%)
+        vat_rates: dict {igk: vat_rate} или float для совместимости
 
     Returns:
         bytes готового .xlsx файла
     """
+    if isinstance(vat_rates, (int, float, str)):
+        # fallback для совместимости - если передана одна ставка
+        try:
+            rate = float(str(vat_rates).replace(",", "."))
+        except:
+            rate = 20.0
+        vat_rates_dict = {c[0]: rate for c in contracts}
+    else:
+        vat_rates_dict = {}
+        for k, v in vat_rates.items():
+            try:
+                vat_rates_dict[k] = float(str(v).replace(",", "."))
+            except:
+                vat_rates_dict[k] = 20.0
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Анализ ГОЗ"
@@ -365,15 +380,17 @@ def build_report(contracts, vat_rate):
 
     row_i = 3
     for num, (igk, plan, fact) in enumerate(contracts, 1):
-        block = _block_rows(igk, num, plan, fact, vat_rate)
+        # Берем индивидуальную ставку для каждого ГК
+        rate = vat_rates_dict.get(igk, 20.0)
+        block = _block_rows(igk, num, plan, fact, rate)
 
         _write_row(ws, row_i, block[0])
-        plan_m = _line_metrics(plan, vat_rate)
+        plan_m = _line_metrics(plan, rate)
         _apply_report_checks(ws, row_i, plan_m)
         row_i += 1
 
         _write_row(ws, row_i, block[1])
-        fact_m = _line_metrics(fact, vat_rate)
+        fact_m = _line_metrics(fact, rate)
         fact_extra = block[1][4 + 10 : 4 + 10 + 7]
         _apply_report_checks(ws, row_i, fact_m)
         _apply_fact_checks(ws, row_i, fact_extra)

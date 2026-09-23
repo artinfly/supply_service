@@ -2,21 +2,99 @@
 {% block title %}Анализ ГОЗ{% endblock %}
 
 {% block content %}
-<div class="page-header">
+<div class="page-header d-flex justify-content-between align-items-center">
     <h5>Анализ отчётов ЕИС ГОЗ</h5>
+    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#uploadDirForm">
+        Загрузить справочник ГК
+    </button>
 </div>
 
-<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);padding:1.5rem;max-width:420px;">
-    {% if messages %}
-    {% for msg in messages %}
-    <div class="alert alert-{{ msg.tags }} mb-3" style="font-size:0.82rem">{{ msg }}</div>
-    {% endfor %}
-    {% endif %}
+<div class="collapse mb-4" id="uploadDirForm">
+    <div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);padding:1.5rem;max-width:600px;">
+        <h6 class="mb-3">Загрузка справочника ГК из Word/Excel</h6>
+        <p class="text-muted" style="font-size:0.85rem;">
+            Файл должен содержать таблицу, где в первом столбце порядковый номер, а во втором — код ГК (например, 1234/5).
+            Ставка НДС для новых ГК будет установлена по умолчанию (20%).
+        </p>
+        <form method="post" action="{% url 'upload_gk_directory' %}" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="mb-3">
+                <input type="file" name="doc_file" accept=".docx,.xlsx,.xls" class="form-control form-control-sm" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Обновить справочник</button>
+        </form>
+    </div>
+</div>
 
-    <div class="format-note">
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags }} mb-3" style="font-size:0.82rem">{{ msg }}</div>
+{% endfor %}
+{% endif %}
+
+{% if step2 %}
+<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);padding:1.5rem;">
+    <h6 class="mb-3">Настройка ставок НДС для контрактов в архиве</h6>
+    <p class="text-muted" style="font-size:0.85rem;">В архиве найдено {{ gk_list|length }} контрактов. Откорректируйте ставки НДС при необходимости.</p>
+    <form method="post" onsubmit="prepareVatRates()">
+        {% csrf_token %}
+        <input type="hidden" name="temp_zip_path" value="{{ temp_zip_path }}">
+        <input type="hidden" name="vat_rates" id="vat_rates_input" value="">
+        
+        <div class="table-responsive mb-3" style="max-height: 400px; overflow-y: auto;">
+            <table class="table table-sm table-bordered table-hover" style="font-size: 0.85rem;">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th style="width: 50px;">№</th>
+                        <th>ГК (Контрагент)</th>
+                        <th style="width: 150px;">Ставка НДС, %</th>
+                        <th style="width: 100px;">Статус</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for gk in gk_list %}
+                    <tr>
+                        <td class="align-middle">{{ forloop.counter }}</td>
+                        <td class="align-middle">{{ gk.igk }}</td>
+                        <td>
+                            <input type="number" step="0.1" min="0" max="100" 
+                                   class="form-control form-control-sm vat-input" 
+                                   data-igk="{{ gk.igk }}"
+                                   value="{{ gk.vat_rate|stringformat:'g' }}">
+                        </td>
+                        <td class="align-middle text-center">
+                            {% if gk.is_new %}
+                                <span class="badge bg-warning text-dark">Новый</span>
+                            {% else %}
+                                <span class="badge bg-success">В справочнике</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="save_to_dir" id="save_to_dir" checked>
+            <label class="form-check-label" for="save_to_dir" style="font-size: 0.85rem;">
+                Сохранить новые и изменённые ставки НДС в справочник
+            </label>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn-orange" id="goz-btn">Сформировать отчёт</button>
+            <a href="{% url 'goz_report' %}" class="btn btn-secondary">Отмена</a>
+        </div>
+    </form>
+</div>
+
+{% else %}
+<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);padding:1.5rem;max-width:420px;">
+    <div class="format-note mb-3">
         <div class="format-note-ext">ZIP</div>
         <div class="format-note-text">
-            Архив с файлами <b>.xls</b> (форма ЕИС ГОЗ). Имя каждого файла — 4 последние цифры ИГК
+            Архив с файлами <b>.xls</b> (форма ЕИС ГОЗ). Имя каждого файла — последние цифры ГК
         </div>
     </div>
 
@@ -26,13 +104,8 @@
             <label class="filter-label">ZIP-архив с отчётами по контрактам</label>
             <input type="file" name="archive" accept=".zip" class="form-control mt-1" style="font-size:0.82rem">
         </div>
-        <div class="mb-3">
-            <label class="filter-label">Ставка НДС, %</label>
-            <input type="number" name="vat_rate" value="{{ default_vat_rate }}" step="0.1" min="0" max="100"
-                   class="form-control mt-1" style="font-size:0.82rem;max-width:120px">
-        </div>
         <div class="d-flex align-items-center">
-            <button type="submit" class="btn-orange" id="goz-btn">Сформировать отчёт</button>
+            <button type="submit" class="btn-orange" id="goz-btn">Загрузить и настроить НДС</button>
         </div>
         <div id="goz-progress" style="display:none;margin-top:0.75rem;font-size:0.82rem;color:#555">
             Обрабатываем архив, подождите...
@@ -40,6 +113,7 @@
         <div id="goz-error" style="display:none;color:#c0392b;font-size:0.8rem;margin-top:0.5rem"></div>
     </form>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -64,9 +138,24 @@ function checkArchive() {
     document.getElementById('goz-progress').style.display = 'block';
     setTimeout(function () {
         document.getElementById('goz-btn').disabled = false;
-        document.getElementById('goz-btn').textContent = 'Сформировать отчёт';
+        document.getElementById('goz-btn').textContent = 'Загрузить и настроить НДС';
         document.getElementById('goz-progress').style.display = 'none';
     }, 3000);
+    return true;
+}
+
+function prepareVatRates() {
+    const inputs = document.querySelectorAll('.vat-input');
+    const rates = {};
+    inputs.forEach(input => {
+        const igk = input.getAttribute('data-igk');
+        const val = parseFloat(input.value.replace(',', '.'));
+        rates[igk] = isNaN(val) ? 20.0 : val;
+    });
+    document.getElementById('vat_rates_input').value = JSON.stringify(rates);
+    
+    document.getElementById('goz-btn').disabled = true;
+    document.getElementById('goz-btn').textContent = 'Формируем отчёт...';
     return true;
 }
 </script>
