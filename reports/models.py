@@ -11,6 +11,8 @@
 - nsi_igk: справочник ИГК
 """
 
+from decimal import Decimal
+
 from django.contrib.auth.models import User
 from django.db import models
 
@@ -30,6 +32,31 @@ class NsiIgk(models.Model):
 
     def __str__(self):
         return self.igk
+
+
+class GozContractVat(models.Model):
+    """
+    Справочник ГК для анализа отчётов ЕИС ГОЗ — ставка НДС по контракту.
+    У контрактов разных лет ставка НДС может отличаться, но для одного
+    и того же ГК она всегда одна.
+    """
+
+    igk = models.CharField(max_length=10, unique=True, verbose_name="ГК")
+    vat_rate = models.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        default=Decimal("20.0"),
+        verbose_name="Ставка НДС, %",
+    )
+
+    class Meta:
+        db_table = "goz_contract_vat"
+        verbose_name = "ГК (ставка НДС)"
+        verbose_name_plural = "Анализ ГОЗ: справочник ставок НДС"
+        ordering = ["igk"]
+
+    def __str__(self):
+        return f"{self.igk} — {self.vat_rate}%"
 
 
 # --- Основные рабочие таблицы ---

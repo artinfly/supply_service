@@ -21,6 +21,7 @@ from django.utils import timezone
 from .models import (
     ContractCountsSnapshot,
     ContractsHistory,
+    GozContractVat,
     IgkStatData,
     NsiIgk,
     Profile,
@@ -44,6 +45,15 @@ class NsiIgkAdmin(admin.ModelAdmin):
 
     list_display = ("igk",)
     search_fields = ("igk",)
+
+
+@admin.register(GozContractVat)
+class GozContractVatAdmin(admin.ModelAdmin):
+    """Справочник ГК: ставки НДС для анализа ЕИС ГОЗ."""
+
+    list_display = ("igk", "vat_rate")
+    search_fields = ("igk",)
+    ordering = ("igk",)
 
 
 @admin.register(IgkStatData)

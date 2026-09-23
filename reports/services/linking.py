@@ -5,21 +5,20 @@
 заявок (ЗнП) с позициями договоров без прямых внешних ключей.
 """
 
-import hashlib
+from zlib import crc32
 
 from django.db import connection
 
 
 def contract_hash(igk, c_agent, contract, stage):
     """
-    Вычисляет 64-битный хеш позиции договора для привязки заявок.
+    Вычисляет хеш позиции договора для привязки заявок.
 
     Хеш строится из четырёх ключевых полей: ИГК, контрагент, договор, этап.
-    Возвращает знаковое 64-битное целое, совместимое с BigIntegerField.
+    Значения None приводятся к пустой строке для детерминированности.
     """
     parts = [str(v) if v is not None else "" for v in (igk, c_agent, contract, stage)]
-    digest = hashlib.md5("".join(parts).encode()).digest()
-    return int.from_bytes(digest[:8], byteorder="big", signed=True)
+    return crc32("".join(parts).encode())
 
 
 def relink_znp_parents():
