@@ -67,7 +67,16 @@ HEADERS = [
     "Примечание",
     "Комментарий",
 ]
-_COL_WIDTHS = [6, 10, 16, 14] + [14] * 17 + [28, 28]
+TOTAL_COLS = len(HEADERS)  # 23
+
+# Ширина колонок: №, ГК, Наименование, метка строки, E..N (деньги/деньги/.../%/%),
+# O..U (деньги), Примечание, Комментарий. Денежные — широкие, чтобы не было "#####".
+_COL_WIDTHS = (
+    [6, 8, 16, 12] + [19, 19, 19, 19, 19, 19, 19, 19, 10, 10] + [19] * 7 + [30, 30]
+)
+
+# Колонки, объединяемые на 4 строки блока (значение одно на весь ГК).
+_MERGE_COLS = [1, 2, 3, 22, 23]  # №, ГК, Наименование, Примечание, Комментарий
 
 _K_COL, _L_COL, _M_COL, _N_COL = 11, 12, 13, 14
 _Q_COL, _R_COL = 17, 18
@@ -80,12 +89,37 @@ _MISMATCH_EPS = 1.0  # допуск в рублях при сравнении
 
 _THIN = Side(style="thin")
 _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
-_FONT = Font(name="Arial", size=9)
-_BOLD_FONT = Font(name="Arial", size=9, bold=True)
-_RED_FONT = Font(name="Arial", size=9, color="9C0006")
-_RED_FILL = PatternFill("solid", fgColor="FFC7CE")
-_WARN_FILL = PatternFill("solid", fgColor="FFEB9C")
-_SUBTOTAL_FILL = PatternFill("solid", fgColor="F2F2F2")
+_FONT_NAME = "Times New Roman"
+_FONT = Font(name=_FONT_NAME, size=10)
+_TITLE_FONT = Font(name=_FONT_NAME, size=14, bold=True)
+_RED_FONT = Font(name=_FONT_NAME, size=10, color="9C0006")
+_RENT_FILL = PatternFill(
+    "solid", fgColor="FFC7CE"
+)  # рентабельность > 7.5% (с красным шрифтом)
+_NEGATIVE_FILL = PatternFill("solid", fgColor="FFC7CE")  # Q < 0 (без красного шрифта)
+_PROFIT_MISMATCH_FILL = PatternFill("solid", fgColor="CCC1DA")  # K ≠ L
+_RESOURCE_MISMATCH_FILL = PatternFill("solid", fgColor="FAC090")  # Q ≠ R
+_BOTTOM_ONLY = Border(bottom=_THIN)
+_CENTER = Alignment(horizontal="center", vertical="center")
+_LEFT_WRAP = Alignment(horizontal="left", vertical="center", wrap_text=True)
+_RIGHT = Alignment(horizontal="right")
+
+# Пункты легенды: (заливка, шрифт-акцент, текст пояснения) — цвета и охват
+# в точности как в исходных правилах условного форматирования файла-примера.
+_LEGEND_ITEMS = [
+    (_RENT_FILL, _RED_FONT, "Рентабельность к себестоимости (столбцы M, N) выше 7,5%"),
+    (_NEGATIVE_FILL, _FONT, "«+/- ресурсов ГК» (столбец Q) — отрицательное значение"),
+    (
+        _PROFIT_MISMATCH_FILL,
+        _FONT,
+        "Прибыль в отчёте (K) не совпадает с расчётной прибылью (L)",
+    ),
+    (
+        _RESOURCE_MISMATCH_FILL,
+        _FONT,
+        "«+/- ресурсов ГК»: расчёт (Q) не совпадает со значением из формы (R)",
+    ),
+]
 
 
 # --- Парсинг .xls ---
@@ -140,7 +174,7 @@ def read_archive(archive_file):
 def _line_metrics(values, vat_rate):
     """
     Вычисляет 10 показателей (колонки E..N) из 6 исходных строк формы.
-    Возвращает список [shipment, cost, amr, commercial, vat, credit_pct, profit, calc_profit, rent_calc, rent_report].
+    Возвращает [shipment, cost, amr, commercial, vat, credit_pct, profit, calc_profit, rent_calc, rent_report].
     """
     shipment = values["shipment"]
     cost = values["cost"]
@@ -182,63 +216,115 @@ def _deviation(fact_m, plan_m):
     return abs_dev, rel_dev
 
 
+def _block_rows(igk, num, plan, fact, vat_rate):
+    """
+    Строит 4 строки блока (Целевые/Факт/откл.абсол./откл.отн.%), каждая
+    ровно TOTAL_COLS элементов — чтобы рамка потом легла на всю таблицу
+    целиком, а не только на колонки с данными.
+    """
+    plan_m = _line_metrics(plan, vat_rate)
+    fact_m = _line_metrics(fact, vat_rate)
+    fact_extra = [
+        fact["financing"],
+        fact["distribution"],
+        fact["distribution"] - fact["financing"],
+        fact["resource_delta"],
+        fact["wip"],
+        fact["materials"],
+        fact["vat_in"],
+    ]
+    abs_dev, rel_dev = _deviation(fact_m, plan_m)
+    pad_extra = [None] * 7  # для строк, где O..U не считаются
+    pad_notes = [None, None]  # Примечание, Комментарий — всегда пустые
+
+    return [
+        [num, igk, "", "Целевые", *plan_m, *pad_extra, *pad_notes],
+        [None, None, None, "Факт", *fact_m, *fact_extra, *pad_notes],
+        [None, None, None, "откл.абсол.", *abs_dev, *pad_extra, *pad_notes],
+        [None, None, None, "откл.отн.%", *rel_dev, *pad_extra, *pad_notes],
+    ]
+
+
 # --- Запись строк в .xlsx ---
 
 
-def _write_row(ws, row_idx, values, bold=False, force_percent=False):
-    """Записывает строку с рамкой и форматом чисел."""
+def _write_row(ws, row_idx, values, force_percent=False):
+    """Записывает строку целиком по TOTAL_COLS колонок — рамка на каждой ячейке."""
     for ci, val in enumerate(values, 1):
         cell = ws.cell(row=row_idx, column=ci, value=val)
         cell.border = _BORDER
-        cell.font = _BOLD_FONT if bold else _FONT
-        if bold:
-            cell.fill = _SUBTOTAL_FILL
+        cell.font = _FONT
 
         is_num = isinstance(val, (int, float)) and not isinstance(val, bool)
         if ci in (1, 2):
-            cell.alignment = Alignment(horizontal="center")
+            cell.alignment = _CENTER
+        elif ci in (3, 22, 23):
+            cell.alignment = _LEFT_WRAP
         elif is_num and ci >= 5:
             is_percent = force_percent or ci in _PERCENT_COLS
             cell.number_format = "0.0%" if is_percent else "#,##0.00"
-            cell.alignment = Alignment(horizontal="right")
+            cell.alignment = _RIGHT
 
 
 def _apply_report_checks(ws, row_idx, metrics):
     """
-    Подсветка для строк «Целевые» и «Факт»:
-    - жёлтый: K (прибыль в отчёте) ≠ L (прибыль расчётная)
-    - красный: M/N (рентабельность) > 7.5%
+    Подсветка для строк «Целевые» и «Факт» (цвета — как в примере):
+    - светло-сиреневый (CCC1DA): K (прибыль в отчёте) ≠ L (прибыль расчётная)
+    - красный (FFC7CE) + красный шрифт: M/N (рентабельность) > 7.5%
     """
     profit_report, profit_calc = metrics[6], metrics[7]
     if isinstance(profit_report, (int, float)) and isinstance(
         profit_calc, (int, float)
     ):
         if abs(profit_report - profit_calc) > _MISMATCH_EPS:
-            ws.cell(row=row_idx, column=_K_COL).fill = _WARN_FILL
-            ws.cell(row=row_idx, column=_L_COL).fill = _WARN_FILL
+            ws.cell(row=row_idx, column=_K_COL).fill = _PROFIT_MISMATCH_FILL
+            ws.cell(row=row_idx, column=_L_COL).fill = _PROFIT_MISMATCH_FILL
 
     for val, col in ((metrics[8], _M_COL), (metrics[9], _N_COL)):
         if isinstance(val, (int, float)) and val > _RENT_THRESHOLD:
             cell = ws.cell(row=row_idx, column=col)
-            cell.fill = _RED_FILL
+            cell.fill = _RENT_FILL
             cell.font = _RED_FONT
 
 
 def _apply_fact_checks(ws, row_idx, fact_extra):
     """
-    Подсветка только для строки «Факт»:
-    - жёлтый: Q (+/- ресурсов расчёт) ≠ R (значение из формы)
-    - красный: Q < 0 (перекрывает жёлтый)
+    Подсветка только для строки «Факт» (цвета — как в примере):
+    - светло-оранжевый (FAC090): Q (+/- ресурсов расчёт) ≠ R (значение из формы)
+    - красный (FFC7CE), без красного шрифта: Q < 0 (перекрывает предыдущую заливку)
     """
     q_calc, r_report = fact_extra[2], fact_extra[3]
     if isinstance(q_calc, (int, float)) and isinstance(r_report, (int, float)):
         if abs(q_calc - r_report) > _MISMATCH_EPS:
-            ws.cell(row=row_idx, column=_Q_COL).fill = _WARN_FILL
-            ws.cell(row=row_idx, column=_R_COL).fill = _WARN_FILL
+            ws.cell(row=row_idx, column=_Q_COL).fill = _RESOURCE_MISMATCH_FILL
+            ws.cell(row=row_idx, column=_R_COL).fill = _RESOURCE_MISMATCH_FILL
     if isinstance(q_calc, (int, float)) and q_calc < 0:
-        cell = ws.cell(row=row_idx, column=_Q_COL)
-        cell.fill = _RED_FILL
-        cell.font = _RED_FONT
+        ws.cell(row=row_idx, column=_Q_COL).fill = _NEGATIVE_FILL
+
+
+def _write_legend(ws, start_row):
+    """Пишет легенду цветовых отметок: цветной образец + пояснение в строке."""
+    header = ws.cell(row=start_row, column=1, value="Легенда цветовых отметок:")
+    header.font = Font(name=_FONT_NAME, size=11, bold=True)
+
+    for i, (fill, font, text) in enumerate(_LEGEND_ITEMS):
+        r = start_row + 1 + i
+        swatch = ws.cell(row=r, column=1)
+        swatch.fill = fill
+        swatch.border = _BORDER
+        label = ws.cell(row=r, column=2, value=text)
+        label.font = font
+        label.alignment = Alignment(horizontal="left", vertical="center")
+        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=8)
+
+
+def _merge_block(ws, first_row):
+    """Объединяет №/ГК/Наименование/Примечание/Комментарий на все 4 строки блока."""
+    last_row = first_row + 3
+    for col in _MERGE_COLS:
+        ws.merge_cells(
+            start_row=first_row, start_column=col, end_row=last_row, end_column=col
+        )
 
 
 # --- Генерация отчёта ---
@@ -260,48 +346,48 @@ def build_report(contracts, vat_rate):
     ws.title = "Анализ ГОЗ"
     ws.freeze_panes = "A3"
 
-    ws.cell(row=1, column=1, value="Анализ отчётов ЕИС ГОЗ").font = Font(
-        name="Arial", size=11, bold=True
-    )
+    title_cell = ws.cell(row=1, column=1, value="Анализ отчётов ЕИС ГОЗ")
+    title_cell.font = _TITLE_FONT
+    title_cell.alignment = Alignment(horizontal="center")
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=TOTAL_COLS)
+    for ci in range(1, TOTAL_COLS + 1):
+        ws.cell(row=1, column=ci).border = _BOTTOM_ONLY
+    ws.row_dimensions[1].height = 24
 
-    hdr_font = Font(name="Arial", size=9, bold=True)
-    hdr_aln = Alignment(horizontal="center", wrap_text=True)
+    hdr_aln = Alignment(horizontal="center", vertical="center", wrap_text=True)
     for ci, (h, w) in enumerate(zip(HEADERS, _COL_WIDTHS), 1):
         cell = ws.cell(row=2, column=ci, value=h)
-        cell.font = hdr_font
+        cell.font = _FONT
         cell.border = _BORDER
         cell.alignment = hdr_aln
         ws.column_dimensions[get_column_letter(ci)].width = w
+    ws.row_dimensions[2].height = 60
 
     row_i = 3
     for num, (igk, plan, fact) in enumerate(contracts, 1):
-        plan_m = _line_metrics(plan, vat_rate)
-        fact_m = _line_metrics(fact, vat_rate)
-        fact_extra = [
-            fact["financing"],
-            fact["distribution"],
-            fact["distribution"] - fact["financing"],
-            fact["resource_delta"],
-            fact["wip"],
-            fact["materials"],
-            fact["vat_in"],
-        ]
-        abs_dev, rel_dev = _deviation(fact_m, plan_m)
+        block = _block_rows(igk, num, plan, fact, vat_rate)
 
-        _write_row(ws, row_i, [num, igk, "", "Целевые", *plan_m])
+        _write_row(ws, row_i, block[0])
+        plan_m = _line_metrics(plan, vat_rate)
         _apply_report_checks(ws, row_i, plan_m)
         row_i += 1
 
-        _write_row(ws, row_i, ["", "", "", "Факт", *fact_m, *fact_extra], bold=True)
+        _write_row(ws, row_i, block[1])
+        fact_m = _line_metrics(fact, vat_rate)
+        fact_extra = block[1][4 + 10 : 4 + 10 + 7]
         _apply_report_checks(ws, row_i, fact_m)
         _apply_fact_checks(ws, row_i, fact_extra)
         row_i += 1
 
-        _write_row(ws, row_i, ["", "", "", "откл.абсол.", *abs_dev])
+        _write_row(ws, row_i, block[2])
         row_i += 1
 
-        _write_row(ws, row_i, ["", "", "", "откл.отн.%", *rel_dev], force_percent=True)
+        _write_row(ws, row_i, block[3], force_percent=True)
         row_i += 1
+
+        _merge_block(ws, row_i - 4)
+
+    _write_legend(ws, row_i + 1)
 
     buf = BytesIO()
     wb.save(buf)

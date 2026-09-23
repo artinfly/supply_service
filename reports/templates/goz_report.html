@@ -62,6 +62,11 @@ function checkArchive() {
     document.getElementById('goz-btn').disabled = true;
     document.getElementById('goz-btn').textContent = 'Обработка...';
     document.getElementById('goz-progress').style.display = 'block';
+    setTimeout(function () {
+        document.getElementById('goz-btn').disabled = false;
+        document.getElementById('goz-btn').textContent = 'Сформировать отчёт';
+        document.getElementById('goz-progress').style.display = 'none';
+    }, 3000);
     return true;
 }
 </script>
