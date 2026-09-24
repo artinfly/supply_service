@@ -42,10 +42,16 @@ class GozContractVat(models.Model):
     """
 
     igk = models.CharField(max_length=10, unique=True, verbose_name="ГК")
+    year = models.CharField(
+        max_length=4, blank=True, null=True, unique=True, verbose_name="Год"
+    )
+    product = models.CharField(
+        max_length=255, blank=True, null=True, unique=True, verbose_name="Изделие"
+    )
     vat_rate = models.DecimalField(
         max_digits=4,
         decimal_places=1,
-        default=Decimal("20.0"),
+        default=Decimal("22.0"),
         verbose_name="Ставка НДС, %",
     )
 
@@ -56,7 +62,7 @@ class GozContractVat(models.Model):
         ordering = ["igk"]
 
     def __str__(self):
-        return f"{self.igk} — {self.vat_rate}%"
+        return f"{self.igk} ({self.year or 'без года'}) — {self.vat_rate}%"
 
 
 # --- Основные рабочие таблицы ---

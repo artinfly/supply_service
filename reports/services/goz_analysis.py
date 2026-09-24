@@ -346,7 +346,7 @@ def build_report(contracts, vat_rates):
         try:
             rate = float(str(vat_rates).replace(",", "."))
         except:
-            rate = 20.0
+            rate = 22.0
         vat_rates_dict = {c[0]: rate for c in contracts}
     else:
         vat_rates_dict = {}
@@ -354,7 +354,7 @@ def build_report(contracts, vat_rates):
             try:
                 vat_rates_dict[k] = float(str(v).replace(",", "."))
             except:
-                vat_rates_dict[k] = 20.0
+                vat_rates_dict[k] = 22.0
 
     wb = Workbook()
     ws = wb.active
@@ -381,7 +381,7 @@ def build_report(contracts, vat_rates):
     row_i = 3
     for num, (igk, plan, fact) in enumerate(contracts, 1):
         # Берем индивидуальную ставку для каждого ГК
-        rate = vat_rates_dict.get(igk, 20.0)
+        rate = vat_rates_dict.get(igk, 22.0)
         block = _block_rows(igk, num, plan, fact, rate)
 
         _write_row(ws, row_i, block[0])

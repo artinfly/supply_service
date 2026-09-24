@@ -2,71 +2,184 @@
 {% block title %}Анализ ГОЗ{% endblock %}
 
 {% block content %}
-<div class="page-header d-flex justify-content-between align-items-center">
+<div class="page-header">
     <h5>Анализ отчётов ЕИС ГОЗ</h5>
-    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#uploadDirForm">
-        Загрузить справочник ГК
-    </button>
-</div>
-
-<div class="collapse mb-4" id="uploadDirForm">
-    <div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);padding:1.5rem;max-width:600px;">
-        <h6 class="mb-3">Загрузка справочника ГК из Word/Excel</h6>
-        <p class="text-muted" style="font-size:0.85rem;">
-            Файл должен содержать таблицу, где в первом столбце порядковый номер, а во втором — код ГК (например, 1234/5).
-            Ставка НДС для новых ГК будет установлена по умолчанию (20%).
-        </p>
-        <form method="post" action="{% url 'upload_gk_directory' %}" enctype="multipart/form-data">
-            {% csrf_token %}
-            <div class="mb-3">
-                <input type="file" name="doc_file" accept=".docx,.xlsx,.xls" class="form-control form-control-sm" required>
-            </div>
-            <button type="submit" class="btn btn-primary btn-sm">Обновить справочник</button>
-        </form>
+    <div class="d-flex gap-2">
+        {% if user.is_superuser %}
+        <button class="btn-ghost btn-fixed" type="button" data-bs-toggle="collapse"
+                data-bs-target="#uploadDirForm" aria-expanded="false" aria-controls="uploadDirForm">
+            Загрузить справочник из файла
+        </button>
+        {% endif %}
+        <button class="btn-ghost btn-fixed" type="button" data-bs-toggle="collapse"
+                data-bs-target="#directoryBlock" aria-expanded="false" aria-controls="directoryBlock">
+            Справочник ГК
+        </button>
     </div>
 </div>
 
 {% if messages %}
 {% for msg in messages %}
-<div class="alert alert-{{ msg.tags }} mb-3" style="font-size:0.82rem">{{ msg }}</div>
+<div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}{{ msg.tags }}{% endif %} py-2 px-3 mb-3" style="font-size:0.82rem">{{ msg }}</div>
 {% endfor %}
 {% endif %}
 
+<div id="goz-panels">
+
+    {% if user.is_superuser %}
+    <!-- Загрузка справочника из файла (только суперпользователи) -->
+    <div class="collapse mb-3" id="uploadDirForm" data-bs-parent="#goz-panels">
+        <div class="goz-card goz-card-narrow">
+            <h6 class="goz-card-title">Загрузка справочника ГК из Word или Excel</h6>
+            <p class="goz-hint">
+                В таблице файла первый столбец — порядковый номер, второй — код ГК.
+                Год и изделие можно указать позже в справочнике. Ставка НДС по умолчанию — 22%.
+            </p>
+            <form method="post" action="{% url 'upload_gk_directory' %}" enctype="multipart/form-data" id="gk-upload-form">
+                {% csrf_token %}
+                <input type="file" name="doc_file" accept=".docx,.xlsx,.xls" class="form-control mb-3" style="font-size:0.82rem" required>
+                <button type="submit" class="btn-orange btn-fixed">Обновить справочник</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Справочник ГК -->
+    <div class="collapse mb-3" id="directoryBlock" data-bs-parent="#goz-panels">
+        <div class="goz-card">
+            <h6 class="goz-card-title">Справочник ГК</h6>
+
+            <div class="gk-toolbar">
+                <div class="gk-search">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>
+                    </svg>
+                    <input type="text" id="gk-search" class="filter-input field-fill"
+                           placeholder="Поиск по ГК, году, изделию" autocomplete="off">
+                </div>
+                <span class="row-count-label" id="gk-count"></span>
+                <button type="button" class="btn-orange btn-fixed" id="gk-add-btn">Добавить</button>
+            </div>
+
+            <!-- Форма добавления и правки записи -->
+            <div class="gk-editor" id="gk-editor" hidden>
+                <p class="gk-editor-title" id="gk-editor-title">Новая запись</p>
+                <form method="post" action="{% url 'gk_directory_save' %}" id="gk-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="record_id" id="record_id" value="">
+                    <div class="gk-editor-grid">
+                        <div class="filter-group">
+                            <label class="filter-label" for="form-igk">ГК</label>
+                            <input type="text" name="igk" id="form-igk" class="filter-input field-fill" autocomplete="off" required>
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label" for="form-year">Год</label>
+                            <input type="text" name="year" id="form-year" class="filter-input field-fill" inputmode="numeric" autocomplete="off">
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label" for="form-product">Изделие</label>
+                            <input type="text" name="product" id="form-product" class="filter-input field-fill" autocomplete="off">
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label" for="form-vat">НДС, %</label>
+                            <input type="number" name="vat_rate" id="form-vat" class="filter-input field-fill"
+                                   step="1" min="0" max="100" value="22" required>
+                        </div>
+                    </div>
+                    <div class="gk-editor-actions">
+                        <button type="submit" class="btn-orange btn-fixed" id="form-submit-btn">Добавить</button>
+                        <button type="button" class="btn-ghost btn-fixed" id="gk-cancel-btn">Отмена</button>
+                        <button type="submit" form="gk-delete-form" class="btn-ghost btn-ghost-danger btn-fixed" id="gk-delete-btn" hidden>Удалить</button>
+                    </div>
+                </form>
+                <form method="post" action="{% url 'gk_directory_delete' %}" id="gk-delete-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="record_id" id="delete_record_id" value="">
+                </form>
+            </div>
+
+            <div class="table-container goz-scroll">
+                <table class="report-table" id="gk-table">
+                    <thead>
+                        <tr>
+                            <th>ГК</th>
+                            <th style="width: 90px;">Год</th>
+                            <th>Изделие</th>
+                            <th class="text-center" style="width: 100px;">НДС, %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in directory_list %}
+                        <tr class="gk-row" tabindex="0"
+                            data-id="{{ item.id }}"
+                            data-igk="{{ item.igk }}"
+                            data-year="{{ item.year|default_if_none:'' }}"
+                            data-product="{{ item.product|default_if_none:'' }}"
+                            data-vat="{{ item.vat_rate|stringformat:'g' }}">
+                            <td>{{ item.igk }}</td>
+                            <td>{{ item.year|default:"—" }}</td>
+                            <td class="wrap">{{ item.product|default:"—" }}</td>
+                            <td class="text-center">{{ item.vat_rate|floatformat:"-1" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="cell-empty">Справочник пуст. Нажмите «Добавить», чтобы создать первую запись.</td>
+                        </tr>
+                        {% endfor %}
+                        <tr id="gk-nothing" hidden>
+                            <td colspan="4" class="cell-empty">Ничего не найдено</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
 {% if step2 %}
-<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);padding:1.5rem;">
-    <h6 class="mb-3">Настройка ставок НДС для контрактов в архиве</h6>
-    <p class="text-muted" style="font-size:0.85rem;">В архиве найдено {{ gk_list|length }} контрактов. Откорректируйте ставки НДС при необходимости.</p>
+<div class="goz-card">
+    <h6 class="goz-card-title">Настройка ставок НДС для контрактов в архиве</h6>
+    <p class="goz-hint">В архиве найдено контрактов: {{ gk_list|length }}. Откорректируйте ставки НДС при необходимости.</p>
     <form method="post" onsubmit="prepareVatRates()">
         {% csrf_token %}
         <input type="hidden" name="temp_zip_path" value="{{ temp_zip_path }}">
         <input type="hidden" name="vat_rates" id="vat_rates_input" value="">
-        
-        <div class="table-responsive mb-3" style="max-height: 400px; overflow-y: auto;">
-            <table class="table table-sm table-bordered table-hover" style="font-size: 0.85rem;">
-                <thead class="table-light sticky-top">
+
+        <div class="table-container goz-scroll mb-3">
+            <table class="report-table">
+                <thead>
                     <tr>
                         <th style="width: 50px;">№</th>
-                        <th>ГК (Контрагент)</th>
-                        <th style="width: 150px;">Ставка НДС, %</th>
-                        <th style="width: 100px;">Статус</th>
+                        <th>ГК</th>
+                        <th style="width: 110px;">Год</th>
+                        <th>Изделие</th>
+                        <th style="width: 110px;">НДС, %</th>
+                        <th class="text-center" style="width: 130px;">Статус</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for gk in gk_list %}
                     <tr>
-                        <td class="align-middle">{{ forloop.counter }}</td>
-                        <td class="align-middle">{{ gk.igk }}</td>
-                        <td>
-                            <input type="number" step="0.1" min="0" max="100" 
-                                   class="form-control form-control-sm vat-input" 
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ gk.igk }}</td>
+                        <td class="cell-input">
+                            <input type="text" class="filter-input field-fill year-input" data-igk="{{ gk.igk }}" value="{{ gk.year }}">
+                        </td>
+                        <td class="cell-input">
+                            <input type="text" class="filter-input field-fill product-input" data-igk="{{ gk.igk }}" value="{{ gk.product }}">
+                        </td>
+                        <td class="cell-input">
+                            <input type="number" step="1" min="0" max="100"
+                                   class="filter-input field-fill vat-input"
                                    data-igk="{{ gk.igk }}"
                                    value="{{ gk.vat_rate|stringformat:'g' }}">
                         </td>
-                        <td class="align-middle text-center">
+                        <td class="text-center">
                             {% if gk.is_new %}
-                                <span class="badge bg-warning text-dark">Новый</span>
+                                <span class="status-pill status-pill-new">Новый</span>
                             {% else %}
-                                <span class="badge bg-success">В справочнике</span>
+                                <span class="status-pill status-pill-ok">В справочнике</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -74,24 +187,22 @@
                 </tbody>
             </table>
         </div>
-        
-        <div class="form-check mb-3">
-            <input class="form-check-input" type="checkbox" name="save_to_dir" id="save_to_dir" checked>
-            <label class="form-check-label" for="save_to_dir" style="font-size: 0.85rem;">
-                Сохранить новые и изменённые ставки НДС в справочник
-            </label>
-        </div>
-        
+
+        <label class="status-check mb-3" for="save_to_dir">
+            <input type="checkbox" name="save_to_dir" id="save_to_dir" checked>
+            Сохранить новые и изменённые ставки НДС в справочник
+        </label>
+
         <div class="d-flex gap-2">
-            <button type="submit" class="btn-orange" id="goz-btn">Сформировать отчёт</button>
-            <a href="{% url 'goz_report' %}" class="btn btn-secondary">Отмена</a>
+            <button type="submit" class="btn-orange btn-fixed" id="goz-btn">Сформировать отчёт</button>
+            <a href="{% url 'goz_report' %}" class="btn-ghost btn-fixed">Отмена</a>
         </div>
     </form>
 </div>
 
 {% else %}
-<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);padding:1.5rem;max-width:420px;">
-    <div class="format-note mb-3">
+<div class="goz-card goz-card-narrow">
+    <div class="format-note">
         <div class="format-note-ext">ZIP</div>
         <div class="format-note-text">
             Архив с файлами <b>.xls</b> (форма ЕИС ГОЗ). Имя каждого файла — последние цифры ГК
@@ -104,9 +215,7 @@
             <label class="filter-label">ZIP-архив с отчётами по контрактам</label>
             <input type="file" name="archive" accept=".zip" class="form-control mt-1" style="font-size:0.82rem">
         </div>
-        <div class="d-flex align-items-center">
-            <button type="submit" class="btn-orange" id="goz-btn">Загрузить и настроить НДС</button>
-        </div>
+        <button type="submit" class="btn-orange btn-fixed" id="goz-btn">Загрузить и настроить НДС</button>
         <div id="goz-progress" style="display:none;margin-top:0.75rem;font-size:0.82rem;color:#555">
             Обрабатываем архив, подождите...
         </div>
@@ -150,13 +259,143 @@ function prepareVatRates() {
     inputs.forEach(input => {
         const igk = input.getAttribute('data-igk');
         const val = parseFloat(input.value.replace(',', '.'));
-        rates[igk] = isNaN(val) ? 20.0 : val;
+        rates[igk] = isNaN(val) ? 22.0 : val;
     });
     document.getElementById('vat_rates_input').value = JSON.stringify(rates);
-    
+
     document.getElementById('goz-btn').disabled = true;
     document.getElementById('goz-btn').textContent = 'Формируем отчёт...';
     return true;
 }
+
+// Справочник ГК: поиск, правка по клику на строку, добавление, удаление
+(function () {
+    const DEFAULT_VAT = '22';
+    const $ = id => document.getElementById(id);
+
+    const dirBlock = $('directoryBlock');
+    const editor = $('gk-editor');
+    const form = $('gk-form');
+    const delForm = $('gk-delete-form');
+    const title = $('gk-editor-title');
+    const submitBtn = $('form-submit-btn');
+    const deleteBtn = $('gk-delete-btn');
+    const search = $('gk-search');
+    const counter = $('gk-count');
+    const nothing = $('gk-nothing');
+    const fields = {
+        id: $('record_id'),
+        igk: $('form-igk'),
+        year: $('form-year'),
+        product: $('form-product'),
+        vat: $('form-vat'),
+    };
+    const rows = Array.from(document.querySelectorAll('#gk-table .gk-row'));
+    let selected = null;
+
+    // --- Поиск ---
+    const norm = s => s.toLowerCase().replace(/[^0-9a-zа-яё]/g, '');
+
+    rows.forEach(row => {
+        row._fields = [row.dataset.igk, row.dataset.year, row.dataset.product].map(s => s.toLowerCase());
+        row._norm = row._fields.map(norm);
+    });
+
+    function applyFilter() {
+        const q = search.value.trim().toLowerCase();
+        const qn = norm(q);
+        let shown = 0;
+        rows.forEach(row => {
+            const ok = !q
+                || row._fields.some(f => f.includes(q))
+                || (qn && row._norm.some(f => f.includes(qn)));
+            row.hidden = !ok;
+            if (ok) shown++;
+        });
+        nothing.hidden = shown > 0 || rows.length === 0;
+        counter.textContent = 'Найдено: ' + shown + ' из ' + rows.length;
+    }
+
+    // --- Форма добавления и правки ---
+    function openEditor(row) {
+        if (selected) selected.classList.remove('is-selected');
+        selected = row || null;
+
+        if (row) {
+            row.classList.add('is-selected');
+            fields.id.value = row.dataset.id;
+            fields.igk.value = row.dataset.igk;
+            fields.year.value = row.dataset.year;
+            fields.product.value = row.dataset.product;
+            fields.vat.value = row.dataset.vat;
+            $('delete_record_id').value = row.dataset.id;
+            title.textContent = 'Редактирование: ' + row.dataset.igk;
+            submitBtn.textContent = 'Сохранить';
+            deleteBtn.hidden = false;
+        } else {
+            form.reset();
+            fields.id.value = '';
+            fields.vat.value = DEFAULT_VAT;
+            $('delete_record_id').value = '';
+            title.textContent = 'Новая запись';
+            submitBtn.textContent = 'Добавить';
+            deleteBtn.hidden = true;
+        }
+
+        editor.hidden = false;
+        editor.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        fields.igk.focus();
+    }
+
+    function closeEditor() {
+        if (selected) selected.classList.remove('is-selected');
+        selected = null;
+        editor.hidden = true;
+    }
+
+    rows.forEach(row => {
+        row.addEventListener('click', () => openEditor(row));
+        row.addEventListener('keydown', e => {
+            if (e.target !== row) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openEditor(row);
+            }
+        });
+    });
+
+    $('gk-add-btn').addEventListener('click', () => openEditor(null));
+    $('gk-cancel-btn').addEventListener('click', closeEditor);
+    editor.addEventListener('keydown', e => { if (e.key === 'Escape') closeEditor(); });
+    search.addEventListener('input', applyFilter);
+
+    // --- Удаление с подтверждением ---
+    delForm.addEventListener('submit', e => {
+        const name = selected ? selected.dataset.igk : '';
+        if (!confirm('Удалить запись ГК «' + name + '»?')) {
+            e.preventDefault();
+            return;
+        }
+        markDirOpen();
+    });
+
+    // После сохранения или удаления страница перезагружается:
+    // запоминаем, что справочник был открыт, и раскрываем его снова
+    function markDirOpen() {
+        try { sessionStorage.setItem('gkDirOpen', '1'); } catch (e) {}
+    }
+    form.addEventListener('submit', markDirOpen);
+    const uploadForm = $('gk-upload-form');
+    if (uploadForm) uploadForm.addEventListener('submit', markDirOpen);
+
+    try {
+        if (sessionStorage.getItem('gkDirOpen')) {
+            sessionStorage.removeItem('gkDirOpen');
+            bootstrap.Collapse.getOrCreateInstance(dirBlock, { toggle: false }).show();
+        }
+    } catch (e) {}
+
+    applyFilter();
+})();
 </script>
 {% endblock %}

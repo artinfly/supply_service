@@ -13,6 +13,7 @@ import tempfile
 import zipfile
 from datetime import datetime
 from decimal import Decimal
+from functools import wraps
 from io import StringIO
 
 import docx
@@ -88,6 +89,21 @@ def _ctx(request):
         "years": YEARS,
         "year_cols": [(y, f"y{str(y)[2:]}") for y in YEARS],
     }
+
+
+def superuser_required(view_func):
+    """Пускает только суперпользователей, остальных возвращает на «Анализ ГОЗ»."""
+
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_superuser:
+            messages.error(
+                request, "Загрузка справочника доступна только суперпользователям."
+            )
+            return redirect("goz_report")
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
 
 
 # Условие «у строки договора есть заказ» (для ORM).
@@ -352,6 +368,10 @@ def goz_report(request):
     """Анализ отчётов ЕИС ГОЗ с индивидуальными ставками НДС."""
     ctx = _ctx(request)
 
+    # Список справочника для отображения на странице
+    directory_list = GozContractVat.objects.all().order_by("igk", "year")
+    ctx["directory_list"] = directory_list
+
     if request.method == "POST":
         temp_zip_path = request.POST.get("temp_zip_path")
         vat_rates_json = request.POST.get("vat_rates")
@@ -362,29 +382,40 @@ def goz_report(request):
                 vat_rates = json.loads(vat_rates_json)
                 save_to_dir = request.POST.get("save_to_dir") == "on"
 
-                # Сохраняем новые/изменённые ставки в справочник
                 if save_to_dir:
                     for igk, rate in vat_rates.items():
                         try:
                             rate_val = Decimal(str(rate).replace(",", "."))
+                            # При сохранении из архива обновляем/создаём запись без года
                             GozContractVat.objects.update_or_create(
-                                igk=igk, defaults={"vat_rate": rate_val}
+                                igk=igk,
+                                year=None,
+                                defaults={"vat_rate": rate_val},
                             )
                         except Exception:
                             pass
 
-                # Читаем архив и нормализуем имена ГК для матчинга с БД
                 contracts = goz_analysis.read_archive(temp_zip_path)
                 all_vats = list(GozContractVat.objects.all())
-                vats_mapping = {normalize_igk(v.igk): v.igk for v in all_vats}
+                vats_mapping = {}
+                for v in all_vats:
+                    key = normalize_igk(v.igk)
+                    # Берём запись с максимальным годом (если год указан), иначе первую попавшуюся
+                    if key not in vats_mapping:
+                        vats_mapping[key] = v
+                    else:
+                        current_year = vats_mapping[key].year or ""
+                        new_year = v.year or ""
+                        if new_year > current_year:
+                            vats_mapping[key] = v
 
                 normalized_contracts = []
                 for zip_igk, plan, fact in contracts:
                     norm = normalize_igk(zip_igk)
-                    db_igk = vats_mapping.get(norm, zip_igk)
+                    db_vat = vats_mapping.get(norm)
+                    db_igk = db_vat.igk if db_vat else zip_igk
                     normalized_contracts.append((db_igk, plan, fact))
 
-                # Формируем отчёт с индивидуальными ставками
                 data = goz_analysis.build_report(normalized_contracts, vat_rates)
                 os.unlink(temp_zip_path)
                 return xlsx_response(data, "Анализ_ГОЗ")
@@ -402,13 +433,20 @@ def goz_report(request):
                         tmp.write(chunk)
                     tmp_path = tmp.name
 
-                # Читаем архив и ищем все ГК
                 contracts = goz_analysis.read_archive(tmp_path)
                 gks_in_archive = [c[0] for c in contracts]
 
-                # Матчим с базой через нормализацию имён
                 all_vats = list(GozContractVat.objects.all())
-                vats_mapping = {normalize_igk(v.igk): v for v in all_vats}
+                vats_mapping = {}
+                for v in all_vats:
+                    key = normalize_igk(v.igk)
+                    if key not in vats_mapping:
+                        vats_mapping[key] = v
+                    else:
+                        current_year = vats_mapping[key].year or ""
+                        new_year = v.year or ""
+                        if new_year > current_year:
+                            vats_mapping[key] = v
 
                 gk_list = []
                 for zip_igk in gks_in_archive:
@@ -419,6 +457,8 @@ def goz_report(request):
                         gk_list.append(
                             {
                                 "igk": db_vat.igk,
+                                "year": db_vat.year or "",
+                                "product": db_vat.product or "",
                                 "vat_rate": float(db_vat.vat_rate),
                                 "is_new": False,
                             }
@@ -427,7 +467,9 @@ def goz_report(request):
                         gk_list.append(
                             {
                                 "igk": zip_igk,
-                                "vat_rate": 20.0,
+                                "year": "",
+                                "product": "",
+                                "vat_rate": 22.0,
                                 "is_new": True,
                             }
                         )
@@ -445,12 +487,13 @@ def goz_report(request):
                     os.unlink(tmp_path)
 
     if "step2" not in ctx:
-        ctx["default_vat_rate"] = 20.0
+        ctx["default_vat_rate"] = 22.0
 
     return render(request, "goz_report.html", ctx)
 
 
 @login_required
+@superuser_required
 def upload_gk_directory(request):
     """Загрузка справочника ГК из Word или Excel файла."""
     if request.method == "POST" and request.FILES.get("doc_file"):
@@ -480,7 +523,7 @@ def upload_gk_directory(request):
                                 continue
 
                             try:
-                                rate_val = Decimal("20.0")
+                                rate_val = Decimal("22.0")
                                 obj, created = GozContractVat.objects.update_or_create(
                                     igk=igk, defaults={"vat_rate": rate_val}
                                 )
@@ -501,7 +544,7 @@ def upload_gk_directory(request):
                         if not igk or igk.lower() in ["nan", "гк", "номер", "none"]:
                             continue
                         try:
-                            rate_val = Decimal("20.0")
+                            rate_val = Decimal("22.0")
                             obj, created = GozContractVat.objects.update_or_create(
                                 igk=igk, defaults={"vat_rate": rate_val}
                             )
@@ -522,7 +565,7 @@ def upload_gk_directory(request):
                         if not igk or igk.lower() in ["nan", "гк", "номер", "none"]:
                             continue
                         try:
-                            rate_val = Decimal("20.0")
+                            rate_val = Decimal("22.0")
                             obj, created = GozContractVat.objects.update_or_create(
                                 igk=igk, defaults={"vat_rate": rate_val}
                             )
@@ -549,6 +592,66 @@ def upload_gk_directory(request):
         )
         return redirect("goz_report")
 
+    return redirect("goz_report")
+
+
+@login_required
+def gk_directory_save(request):
+    """Создание или редактирование записи справочника ГК."""
+    if request.method == "POST":
+        record_id = request.POST.get("record_id", "").strip()
+        igk = request.POST.get("igk", "").strip()
+        year = request.POST.get("year", "").strip()
+        product = request.POST.get("product", "").strip()
+        vat_rate_raw = request.POST.get("vat_rate", "22.0").strip()
+
+        if not igk:
+            messages.error(request, "Поле «ГК» обязательно для заполнения.")
+            return redirect("goz_report")
+
+        try:
+            vat_rate = Decimal(vat_rate_raw.replace(",", "."))
+        except Exception:
+            vat_rate = Decimal("22.0")
+
+        try:
+            if record_id:
+                obj = GozContractVat.objects.get(id=record_id)
+                obj.igk = igk
+                obj.year = year or None
+                obj.product = product or None
+                obj.vat_rate = vat_rate
+                obj.save()
+                messages.success(request, f"Запись для ГК «{igk}» обновлена.")
+            else:
+                GozContractVat.objects.create(
+                    igk=igk,
+                    year=year or None,
+                    product=product or None,
+                    vat_rate=vat_rate,
+                )
+                messages.success(request, f"ГК «{igk}» добавлен в справочник.")
+        except Exception as e:
+            messages.error(request, f"Ошибка сохранения: {e}")
+
+    return redirect("goz_report")
+
+
+@login_required
+def gk_directory_delete(request):
+    """Удаление записи справочника ГК."""
+    if request.method == "POST":
+        record_id = request.POST.get("record_id", "").strip()
+        if record_id:
+            try:
+                obj = GozContractVat.objects.get(id=record_id)
+                igk = obj.igk
+                obj.delete()
+                messages.success(request, f"Запись для ГК «{igk}» удалена.")
+            except GozContractVat.DoesNotExist:
+                messages.error(request, "Запись не найдена.")
+            except Exception as e:
+                messages.error(request, f"Ошибка удаления: {e}")
     return redirect("goz_report")
 
 

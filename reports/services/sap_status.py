@@ -1,17 +1,26 @@
 """
 Статусы заявок на платёж SAP.
 
-Логика статусов основана на датах этапов (stage_e, stage_f) и наличии
-нормализованного номера документа (normalize_doc_num).
+Статус определяется по датам этапов (stage_e, stage_f) и наличию
+нормализованного номера документа (normalize_doc_num):
 
-ВАЖНО: stage_e в текущих данных не заполняется, поэтому статусы
-sent_18 и ready_18 не вычисляются. При появлении данных в stage_e
-необходимо вернуть полную логику (см. историю коммитов).
+  Оплачено                 - заполнен stage_f, номер документа есть
+  Подтверждено 18 отделом  - заполнен stage_f, номера документа нет
+                             (для этих двух статусов stage_e не учитывается)
+  На согласовании          - stage_f и stage_e пусты
+  Готово к передаче        - stage_f пуст, stage_e в будущем
+  Передано в 18 отдел      - stage_f пуст, stage_e сегодня или раньше
+
+ВАЖНО: логика задана в трёх местах, и они должны совпадать:
+sap_status_conditions() (списки), sap_status_expr() (ORM, карточки сводки)
+и sap_status_sql() (сырой SQL). При правке статусов менять все три.
+В каждой функции старая версия оставлена в комментарии.
 """
 
 from datetime import timedelta
 
 from django.db.models import Case, CharField, Q, Value, When
+from django.utils import timezone
 
 # --- Константы ---
 
@@ -31,29 +40,51 @@ SAP_STAGE_PARAMS = list(SAP_STAGE_LABELS.keys())
 
 
 def sap_status_conditions():
-    """
-    Условия Q для определения статуса заявки через ORM.
-
-    Без stage_e доступно только три статуса:
-    waiting_agreement, confirmed_18, paid.
-    """
+    today = timezone.localdate()
+    # return {
+    #     "waiting_agreement": Q(stage_e__isnull=True),
+    #     "sent_18": Q(stage_e__isnull=False, stage_f__isnull=True, stage_e__lte=today),
+    #     "confirmed_18": Q(
+    #         stage_e__isnull=False, stage_f__isnull=False, normalize_doc_num__isnull=True
+    #     ),
+    #     "paid": Q(
+    #         stage_e__isnull=False,
+    #         stage_f__isnull=False,
+    #         normalize_doc_num__isnull=False,
+    #     ),
+    #     "ready_18": Q(stage_e__isnull=False, stage_f__isnull=True, stage_e__gt=today),
+    # }
     return {
-        "waiting_agreement": Q(stage_f__isnull=True, normalize_doc_num__isnull=True),
+        # "На согласовании" только без stage_f (иначе заявка попадёт в два статуса)
+        "waiting_agreement": Q(stage_e__isnull=True, stage_f__isnull=True),
+        "sent_18": Q(stage_e__isnull=False, stage_f__isnull=True, stage_e__lte=today),
         "confirmed_18": Q(stage_f__isnull=False, normalize_doc_num__isnull=True),
-        "paid": Q(normalize_doc_num__isnull=False),
+        "paid": Q(stage_f__isnull=False, normalize_doc_num__isnull=False),
+        "ready_18": Q(stage_e__isnull=False, stage_f__isnull=True, stage_e__gt=today),
     }
 
 
 def sap_status_expr():
-    """
-    Выражение CASE для определения статуса заявки через ORM.
-
-    Без stage_e доступно только три статуса:
-    waiting_agreement, confirmed_18, paid.
-    """
+    today = timezone.localdate()
+    # return Case(
+    #     When(stage_e__isnull=True, then=Value("waiting_agreement")),
+    #     When(
+    #         stage_f__isnull=False, normalize_doc_num__isnull=False, then=Value("paid")
+    #     ),
+    #     When(stage_f__isnull=False, then=Value("confirmed_18")),
+    #     When(stage_e__gt=today, then=Value("ready_18")),
+    #     When(stage_e__isnull=False, then=Value("sent_18")),
+    #     default=Value("waiting_agreement"),
+    #     output_field=CharField(),
+    # )
     return Case(
-        When(normalize_doc_num__isnull=False, then=Value("paid")),
+        When(
+            stage_f__isnull=False, normalize_doc_num__isnull=False, then=Value("paid")
+        ),
         When(stage_f__isnull=False, then=Value("confirmed_18")),
+        When(stage_e__isnull=True, then=Value("waiting_agreement")),
+        When(stage_e__gt=today, then=Value("ready_18")),
+        When(stage_e__isnull=False, then=Value("sent_18")),
         default=Value("waiting_agreement"),
         output_field=CharField(),
     )
@@ -63,14 +94,24 @@ def sap_status_expr():
 
 
 def sap_status_sql():
-    """SQL-выражение CASE для определения статуса заявки (для charts.py)."""
+    # return """
+    #         CASE
+    #             WHEN stage_e IS NULL THEN 'waiting_agreement'
+    #             WHEN stage_f IS NOT NULL AND normalize_doc_num IS NOT NULL THEN 'paid'
+    #             WHEN stage_f IS NOT NULL THEN 'confirmed_18'
+    #             WHEN stage_e > CURRENT_DATE THEN 'ready_18'
+    #             WHEN stage_e IS NOT NULL THEN 'sent_18'
+    #             ELSE 'waiting_agreement'
+    #         END"""
     return """
-        CASE
-            WHEN normalize_doc_num IS NOT NULL THEN 'paid'
-            WHEN stage_f IS NOT NULL THEN 'confirmed_18'
-            ELSE 'waiting_agreement'
-        END
-    """
+            CASE
+                WHEN stage_f IS NOT NULL AND normalize_doc_num IS NOT NULL THEN 'paid'
+                WHEN stage_f IS NOT NULL THEN 'confirmed_18'
+                WHEN stage_e IS NULL THEN 'waiting_agreement'
+                WHEN stage_e > CURRENT_DATE THEN 'ready_18'
+                WHEN stage_e IS NOT NULL THEN 'sent_18'
+                ELSE 'waiting_agreement'
+            END"""
 
 
 # --- Вспомогательные функции ---
