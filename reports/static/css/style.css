@@ -694,3 +694,92 @@ body.login-page {
     color: var(--text-muted);
     padding-bottom: 0.35rem;
 }
+
+/* ============================================================
+   Анализ ГОЗ: справочник ГК и настройка ставок НДС
+   ============================================================ */
+
+/* Атрибут hidden всегда прячет элемент, даже если у него задан display */
+[hidden] { display: none !important; }
+
+/* Одинаковая высота кнопок и полей: всё на странице выровнено по одной линии */
+.btn-fixed {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 2rem; padding-top: 0; padding-bottom: 0;
+    line-height: 1; white-space: nowrap; text-decoration: none;
+}
+.filter-input.field-fill { width: 100%; height: 2rem; }
+
+/* Кнопка-переключатель выглядит нажатой, пока её блок раскрыт */
+.btn-ghost[aria-expanded="true"] {
+    border-color: var(--orange); color: var(--orange);
+    background: var(--orange-soft);
+}
+
+/* Опасное действие (удаление) */
+.btn-ghost-danger { color: #c0392b; border-color: #e6b8b3; }
+.btn-ghost.btn-ghost-danger:hover {
+    color: #c0392b; border-color: #c0392b; background: #fdf0ef;
+}
+
+/* Кнопка недоступна, пока идёт обработка */
+.btn-orange:disabled { opacity: 0.6; cursor: default; }
+.btn-orange:disabled:hover { background: var(--orange); }
+
+/* Белая карточка страницы */
+.goz-card {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    padding: 1.1rem 1.25rem;
+}
+.goz-card-narrow { max-width: 460px; }
+.goz-card-title { margin: 0 0 0.75rem; font-size: 0.9rem; font-weight: 700; color: var(--text); }
+.goz-hint { margin: 0 0 0.85rem; font-size: 0.8rem; line-height: 1.5; color: var(--text-muted); }
+
+/* Панель над таблицей справочника: поиск, счётчик, кнопка добавления */
+.gk-toolbar {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: 0.75rem; margin-bottom: 0.75rem;
+}
+.gk-search { position: relative; flex: 0 1 320px; min-width: 200px; }
+.gk-search svg {
+    position: absolute; left: 0.6rem; top: 50%; transform: translateY(-50%);
+    width: 14px; height: 14px; color: var(--text-muted); pointer-events: none;
+}
+.gk-search .filter-input { padding-left: 2rem; }
+.gk-toolbar .btn-orange { margin-left: auto; }
+
+/* Форма добавления и правки записи */
+.gk-editor {
+    background: var(--subtotal-bg); border: 1px solid #f0d9c3;
+    border-radius: 8px; padding: 0.85rem 1rem; margin-bottom: 0.85rem;
+}
+.gk-editor-title { margin: 0 0 0.65rem; font-size: 0.82rem; font-weight: 700; color: var(--text); }
+.gk-editor-grid {
+    display: grid; gap: 0.65rem; margin-bottom: 0.75rem;
+    grid-template-columns: 1.3fr 0.6fr 2fr 0.7fr;
+}
+.gk-editor-actions { display: flex; align-items: center; gap: 0.5rem; }
+.gk-editor-actions .btn-ghost-danger { margin-left: auto; }
+@media (max-width: 900px) {
+    .gk-editor-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+    .gk-editor-grid { grid-template-columns: 1fr; }
+}
+
+/* Таблицы страницы: своя высота прокрутки, кликабельные строки, поля внутри ячеек */
+.table-container.goz-scroll { max-height: 380px; }
+.report-table .gk-row { cursor: pointer; }
+.report-table .gk-row:hover td { background: var(--subtotal-bg); }
+.report-table .gk-row.is-selected td { background: var(--orange-soft); }
+.report-table td.cell-input { padding: 0.2rem 0.5rem; }
+.report-table td.cell-empty { padding: 1.25rem; text-align: center; color: var(--text-muted); }
+
+/* Статус контракта из архива */
+.status-pill {
+    display: inline-block; padding: 0.1rem 0.6rem; border-radius: 10px;
+    font-size: 0.7rem; font-weight: 600; white-space: nowrap;
+}
+.status-pill-new { background: var(--orange-soft); color: var(--orange-dark); }
+.status-pill-ok { background: rgba(22,163,74,.12); color: #16a34a; }
