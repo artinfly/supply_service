@@ -450,7 +450,7 @@ def normalize_znp_sap():
     with transaction.atomic(), connection.cursor() as cur:
         cur.execute("""
             SELECT igk, cfo, c_agent, reg_num, items, vv_sum,
-                   bank_name, stage_e, stage_f, payment_possible,
+                   bank_name, stage_e, stage_f, stage_c, payment_possible,
                    init_payment_date, normalize_doc_num
             FROM staging_znp_sap_excel
             WHERE c_type = 'ГОЗ'
@@ -469,9 +469,9 @@ def normalize_znp_sap():
             """
             INSERT INTO znp_data_sap
                 (igk, cfo, c_agent, reg_num, items, vv_sum,
-                 bank_name, stage_e, stage_f, payment_possible,
+                 bank_name, stage_e, stage_f, stage_c, payment_possible,
                  init_payment_date, normalize_doc_num)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """,
             new_data,
         )
