@@ -77,6 +77,7 @@ from ..services.sap_status import (
     SAP_STAGE_NAMES,
     SAP_STAGE_PARAMS,
     sap_second_date,
+    sap_status_conditions,
     sap_status_expr,
 )
 
@@ -388,7 +389,7 @@ def goz_report(request):
                             rate_val = Decimal(str(rate).replace(",", "."))
                             # При сохранении из архива обновляем/создаём запись без года
                             GozContractVat.objects.update_or_create(
-                                igk=igk,
+                                igk=goz_analysis.igk_key(igk),
                                 year=None,
                                 defaults={"vat_rate": rate_val},
                             )
@@ -411,9 +412,10 @@ def goz_report(request):
 
                 normalized_contracts = []
                 for zip_igk, plan, fact in contracts:
-                    norm = normalize_igk(zip_igk)
-                    db_vat = vats_mapping.get(norm)
-                    db_igk = db_vat.igk if db_vat else zip_igk
+                    base = goz_analysis.igk_key(zip_igk)
+                    suffix = zip_igk[len(base) :]
+                    db_vat = vats_mapping.get(normalize_igk(base))
+                    db_igk = db_vat.igk + suffix if db_vat else zip_igk
                     normalized_contracts.append((db_igk, plan, fact))
 
                 data = goz_analysis.build_report(normalized_contracts, vat_rates)
@@ -450,13 +452,14 @@ def goz_report(request):
 
                 gk_list = []
                 for zip_igk in gks_in_archive:
-                    norm = normalize_igk(zip_igk)
-                    db_vat = vats_mapping.get(norm)
+                    base = goz_analysis.igk_key(zip_igk)
+                    suffix = zip_igk[len(base) :]
+                    db_vat = vats_mapping.get(normalize_igk(base))
 
                     if db_vat:
                         gk_list.append(
                             {
-                                "igk": db_vat.igk,
+                                "igk": db_vat.igk + suffix,
                                 "year": db_vat.year or "",
                                 "product": db_vat.product or "",
                                 "vat_rate": float(db_vat.vat_rate),
@@ -907,17 +910,30 @@ def znp_sap_table(request):
     qs = ZnpDataSAP.objects.annotate(sap_status=sap_status_expr()).filter(
         cfo__in=SAP_CFO
     )
+    sent_18_cond = sap_status_conditions()["sent_18"]
+    conditions = sap_status_conditions()
+    independet = {
+        "sent_18": "stage_e",
+        "agreed_registry": "stage_c",
+    }
 
-    def _breakdown(qs):
+    def _breakdown(qs, date=None):
         """Собирает карточки сводки: всего + по каждому статусу."""
+        base = qs.filter(stage_e=date) if date else qs
+        status_rows = {
+            row["sap_status"]: row
+            for row in base.values("sap_status").annotate(
+                count=Count("id"), vv_sum=Sum("vv_sum")
+            )
+        }
+        for status, date_field in independet.items():
+            scope = qs.filter(**{date_field: date}) if date else qs
+            status_rows[status] = scope.filter(conditions[status]).aggregate(
+                count=Count("id"), vv_sum=Sum("vv_sum")
+            )
         return sap_cards(
-            qs.aggregate(total=Count("id"), total_sum=Sum("vv_sum")),
-            {
-                row["sap_status"]: row
-                for row in qs.values("sap_status").annotate(
-                    count=Count("id"), vv_sum=Sum("vv_sum")
-                )
-            },
+            base.aggregate(total=Count("id"), total_sum=Sum("vv_sum")),
+            status_rows,
         )
 
     all_breakdown = _breakdown(qs)
@@ -929,8 +945,8 @@ def znp_sap_table(request):
         else timezone.localdate()
     )
     second_date = sap_second_date(first_date)
-    first_date_breakdown = _breakdown(qs.filter(payment_possible=first_date))
-    second_date_breakdown = _breakdown(qs.filter(payment_possible=second_date))
+    first_date_breakdown = _breakdown(qs, first_date)
+    second_date_breakdown = _breakdown(qs, second_date)
 
     available_igk = list(
         qs.exclude(igk__isnull=True)
@@ -959,6 +975,15 @@ def znp_sap_table(request):
         count=Count("id"), vv_sum=Sum("vv_sum")
     ):
         cfo_status.setdefault(row["cfo"], {})[row["sap_status"]] = row
+
+    cfo_sent_18 = {
+        row["cfo"]: row
+        for row in cfo_qs.filter(sent_18_cond)
+        .values("cfo")
+        .annotate(count=Count("id"), vv_sum=Sum("vv_sum"))
+    }
+    for cfo, rows in cfo_status.items():
+        rows["sent_18"] = cfo_sent_18.get(cfo)
 
     cfo_table = [
         cfo_breakdown_row(

@@ -26,6 +26,7 @@ from django.utils import timezone
 
 SAP_STAGE_LABELS = {
     "waiting_agreement": "На согласовании",
+    "agreed_registry": "Согласовано для передачи в реестр",
     "sent_18": "Передано в 18 отдел",
     "confirmed_18": "Подтверждено 18 отделом",
     "paid": "Оплачено",
@@ -57,9 +58,10 @@ def sap_status_conditions():
     return {
         # "На согласовании" только без stage_f (иначе заявка попадёт в два статуса)
         "waiting_agreement": Q(stage_e__isnull=True, stage_f__isnull=True),
-        "sent_18": Q(stage_e__isnull=False, stage_f__isnull=True, stage_e__lte=today),
+        "agreed_registry": Q(stage_c__isnull=False),
+        "sent_18": Q(stage_e__isnull=False),
         "confirmed_18": Q(stage_f__isnull=False, normalize_doc_num__isnull=True),
-        "paid": Q(stage_f__isnull=False, normalize_doc_num__isnull=False),
+        "paid": Q(normalize_doc_num__isnull=False),
         "ready_18": Q(stage_e__isnull=False, stage_f__isnull=True, stage_e__gt=today),
     }
 
@@ -78,11 +80,11 @@ def sap_status_expr():
     #     output_field=CharField(),
     # )
     return Case(
-        When(
-            stage_f__isnull=False, normalize_doc_num__isnull=False, then=Value("paid")
-        ),
+        When(normalize_doc_num__isnull=False, then=Value("paid")),
         When(stage_f__isnull=False, then=Value("confirmed_18")),
-        When(stage_e__isnull=True, then=Value("waiting_agreement")),
+        When(
+            stage_e__isnull=True, stage_f__isnull=True, then=Value("waiting_agreement")
+        ),
         When(stage_e__gt=today, then=Value("ready_18")),
         When(stage_e__isnull=False, then=Value("sent_18")),
         default=Value("waiting_agreement"),
@@ -105,9 +107,9 @@ def sap_status_sql():
     #         END"""
     return """
             CASE
-                WHEN stage_f IS NOT NULL AND normalize_doc_num IS NOT NULL THEN 'paid'
+                WHEN normalize_doc_num IS NOT NULL THEN 'paid'
                 WHEN stage_f IS NOT NULL THEN 'confirmed_18'
-                WHEN stage_e IS NULL THEN 'waiting_agreement'
+                WHEN stage_e IS NULL AND stage_f IS NULL THEN 'waiting_agreement'
                 WHEN stage_e > CURRENT_DATE THEN 'ready_18'
                 WHEN stage_e IS NOT NULL THEN 'sent_18'
                 ELSE 'waiting_agreement'

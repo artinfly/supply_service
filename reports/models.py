@@ -276,6 +276,7 @@ class ZnpDataSAP(models.Model):
 
     stage_e = models.DateField(null=True, verbose_name="Этап E")
     stage_f = models.DateField(null=True, verbose_name="Этап F")
+    stage_c = models.DateField(null=True, verbose_name="Этап C")
     payment_possible = models.DateField(
         null=True, verbose_name="Возможная дата платежа"
     )
@@ -314,6 +315,7 @@ class StagingZnpSAPExcel(models.Model):
 
     stage_e = models.DateField(null=True, verbose_name="Этап E")
     stage_f = models.DateField(null=True, verbose_name="Этап F")
+    stage_c = models.DateField(null=True, verbose_name="Этап С")
     payment_possible = models.DateField(
         null=True, verbose_name="Возможная дата платежа"
     )
