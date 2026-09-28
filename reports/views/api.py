@@ -321,17 +321,28 @@ def api_znp_sap_list(request):
     if cfo_filter:
         qs = qs.filter(cfo__icontains=cfo_filter)
     if valid_date(date_filter):
-        qs = qs.filter(payment_possible=date_filter)
+        qs = qs.filter(stage_e=date_filter)
 
     conditions = sap_status_conditions()
+    date_ok = valid_date(date_filter)
     status_q = Q()
     for s in statuses:
-        if s in conditions:
-            status_q |= conditions[s]
+        if s not in conditions:
+            continue
+        q = conditions[s]
+        if date_ok:
+            q &= (
+                Q(stage_c=date_filter)
+                if s == "agreed_registry"
+                else Q(stage_e=date_filter)
+            )
+        status_q |= q
     if status_q:
         qs = qs.filter(status_q)
     elif raw_statuses:
         qs = qs.none()
+    elif date_ok:
+        qs = qs.filter(stage_e=date_filter)
 
     data = list(
         qs.annotate(status_key=sap_status_expr())
@@ -347,6 +358,7 @@ def api_znp_sap_list(request):
             "bank_name",
             "stage_e",
             "stage_f",
+            "stage_c",
             "payment_possible",
             "normalize_doc_num",
             "status_key",

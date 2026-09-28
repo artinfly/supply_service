@@ -6,6 +6,7 @@
 колонка D — целевые (план), колонка G — сальдо операций (факт).
 """
 
+import re
 import zipfile
 from io import BytesIO
 
@@ -72,7 +73,7 @@ TOTAL_COLS = len(HEADERS)  # 23
 # Ширина колонок: №, ГК, Наименование, метка строки, E..N (деньги/деньги/.../%/%),
 # O..U (деньги), Примечание, Комментарий. Денежные — широкие, чтобы не было "#####".
 _COL_WIDTHS = (
-    [6, 8, 16, 12] + [19, 19, 19, 19, 19, 19, 19, 19, 10, 10] + [19] * 7 + [30, 30]
+    [6, 14, 16, 12] + [19, 19, 19, 19, 19, 19, 19, 19, 10, 10] + [19] * 7 + [30, 30]
 )
 
 # Колонки, объединяемые на 4 строки блока (значение одно на весь ГК).
@@ -121,6 +122,27 @@ _LEGEND_ITEMS = [
     ),
 ]
 
+_IGK_RE = re.compile(r"ИГК\s*(\d+)", re.IGNORECASE)
+_SB_RE = re.compile(r"№\s*\d+_(\d+)\s*сб", re.IGNORECASE)
+
+
+def _contract_label(filename):
+    """
+    Из имени файла делает подпись ГК
+    """
+    igk_match = _IGK_RE.search(filename)
+    if not igk_match:
+        return filename[:-4]
+    label = igk_match.group(1)[-4:]
+    sb_match = _SB_RE.search(filename)
+    if sb_match:
+        label += f" сб{sb_match.group(1)}"
+    return label
+
+
+def igk_key(label):
+    return label.split(" сб", 1)[0].strip()
+
 
 # --- Парсинг .xls ---
 
@@ -157,7 +179,7 @@ def read_archive(archive_file):
         for name in zf.namelist():
             if name.endswith("/") or not name.lower().endswith(".xls"):
                 continue
-            igk = name.rsplit("/", 1)[-1][:-4]
+            igk = _contract_label(name.rsplit("/", 1)[-1])
             with zf.open(name) as fh:
                 contracts.append(_read_contract_file(igk, fh.read()))
 

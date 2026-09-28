@@ -69,6 +69,7 @@ ZNP_SAP_COLUMNS = {
     "bank_name": 24,
     "stage_e": 29,
     "stage_f": 30,
+    "stage_c": 27,
     "payment_possible": 31,
     "init_payment_date": 26,
     "c_type": 8,
