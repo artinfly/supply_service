@@ -24,6 +24,7 @@ from django.core.management import call_command
 from django.db import connection
 from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.db.models.expressions import RawSQL
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
@@ -39,6 +40,7 @@ from ..services import goz_analysis
 from ..services.dashboards import (
     EMPTY_CFO_STATS,
     EMPTY_NOT_ISSUED,
+    EMPTY_SAP,
     EMPTY_STAGES,
     EMPTY_ZNP,
     ZNP_STAGE_LABELS,
@@ -50,6 +52,7 @@ from ..services.dashboards import (
     filter_by_year,
     not_issued_aggregates,
     percent,
+    sap_aggregates,
     sap_cards,
     stage_aggregates,
     to_mln,
@@ -77,8 +80,6 @@ from ..services.sap_status import (
     SAP_STAGE_NAMES,
     SAP_STAGE_PARAMS,
     sap_second_date,
-    sap_status_conditions,
-    sap_status_expr,
 )
 
 # --- Общие вспомогательные функции ---
@@ -364,98 +365,113 @@ def upload_excel(request):
     return render(request, "upload.html", ctx)
 
 
+def _vats_by_igk():
+    """Справочник ГК: {нормализованный ГК: запись}. При дублях берётся запись с большим годом."""
+    mapping = {}
+    for v in GozContractVat.objects.all():
+        key = normalize_igk(v.igk)
+        current = mapping.get(key)
+        if current is None or (v.year or "") > (current.year or ""):
+            mapping[key] = v
+    return mapping
+
+
+def _to_vat(value):
+    """Ставка НДС как Decimal; при ошибке — 22."""
+    try:
+        return Decimal(str(value).replace(",", "."))
+    except Exception:
+        return Decimal("22.0")
+
+
+def _save_gk_to_directory(gk_data):
+    """
+    Пишет ГК из архива в справочник (ключ — ГК без «сб», как в справочнике).
+    Год и изделие обновляются, только если заполнены, чтобы не стереть
+    уже сохранённые значения. Возвращает список текстов ошибок.
+    """
+    errors = []
+    for label, item in gk_data.items():
+        base = goz_analysis.igk_key(label)
+        defaults = {"vat_rate": _to_vat(item.get("vat"))}
+        year = str(item.get("year") or "").strip()
+        product = str(item.get("product") or "").strip()
+        if year:
+            defaults["year"] = year
+        if product:
+            defaults["product"] = product
+        try:
+            GozContractVat.objects.update_or_create(igk=base, defaults=defaults)
+        except Exception as e:
+            errors.append(f"{base}: {e}")
+    return errors
+
+
+def _is_own_temp_zip(path):
+    """Путь должен указывать на .zip во временной папке (защита от подмены в форме)."""
+    if not path or not path.lower().endswith(".zip"):
+        return False
+    folder = os.path.dirname(os.path.abspath(path))
+    return folder == os.path.abspath(tempfile.gettempdir()) and os.path.exists(path)
+
+
 @login_required
 def goz_report(request):
-    """Анализ отчётов ЕИС ГОЗ с индивидуальными ставками НДС."""
+    """Анализ отчётов ЕИС ГОЗ: загрузка архива, настройка ГК, формирование отчёта."""
     ctx = _ctx(request)
-
-    # Список справочника для отображения на странице
-    directory_list = GozContractVat.objects.all().order_by("igk", "year")
-    ctx["directory_list"] = directory_list
+    ctx["directory_list"] = GozContractVat.objects.all().order_by("igk", "year")
 
     if request.method == "POST":
         temp_zip_path = request.POST.get("temp_zip_path")
-        vat_rates_json = request.POST.get("vat_rates")
+        gk_data_json = request.POST.get("gk_data")
+        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
-        # Шаг 2: Генерация отчёта после настройки ставок
-        if vat_rates_json and temp_zip_path and os.path.exists(temp_zip_path):
+        # Шаг 2: формирование отчёта
+        if gk_data_json and _is_own_temp_zip(temp_zip_path):
             try:
-                vat_rates = json.loads(vat_rates_json)
-                save_to_dir = request.POST.get("save_to_dir") == "on"
+                gk_data = json.loads(gk_data_json)
 
-                if save_to_dir:
-                    for igk, rate in vat_rates.items():
-                        try:
-                            rate_val = Decimal(str(rate).replace(",", "."))
-                            # При сохранении из архива обновляем/создаём запись без года
-                            GozContractVat.objects.update_or_create(
-                                igk=goz_analysis.igk_key(igk),
-                                year=None,
-                                defaults={"vat_rate": rate_val},
-                            )
-                        except Exception:
-                            pass
+                if request.POST.get("save_to_dir") == "on":
+                    for err in _save_gk_to_directory(gk_data):
+                        messages.warning(request, f"Не сохранено в справочник: {err}")
 
-                contracts = goz_analysis.read_archive(temp_zip_path)
-                all_vats = list(GozContractVat.objects.all())
-                vats_mapping = {}
-                for v in all_vats:
-                    key = normalize_igk(v.igk)
-                    # Берём запись с максимальным годом (если год указан), иначе первую попавшуюся
-                    if key not in vats_mapping:
-                        vats_mapping[key] = v
-                    else:
-                        current_year = vats_mapping[key].year or ""
-                        new_year = v.year or ""
-                        if new_year > current_year:
-                            vats_mapping[key] = v
-
+                vats = _vats_by_igk()
                 normalized_contracts = []
-                for zip_igk, plan, fact in contracts:
+                for zip_igk, plan, fact in goz_analysis.read_archive(temp_zip_path):
                     base = goz_analysis.igk_key(zip_igk)
-                    suffix = zip_igk[len(base) :]
-                    db_vat = vats_mapping.get(normalize_igk(base))
-                    db_igk = db_vat.igk + suffix if db_vat else zip_igk
+                    db_vat = vats.get(normalize_igk(base))
+                    db_igk = db_vat.igk + zip_igk[len(base) :] if db_vat else zip_igk
                     normalized_contracts.append((db_igk, plan, fact))
 
-                data = goz_analysis.build_report(normalized_contracts, vat_rates)
+                vat_rates = {k: v.get("vat") for k, v in gk_data.items()}
+                products = {k: (v.get("product") or "").strip() for k, v in gk_data.items()}
+                data = goz_analysis.build_report(normalized_contracts, vat_rates, products)
                 os.unlink(temp_zip_path)
                 return xlsx_response(data, "Анализ_ГОЗ")
             except Exception as e:
-                messages.error(request, f"Ошибка формирования отчёта: {e}")
                 if os.path.exists(temp_zip_path):
                     os.unlink(temp_zip_path)
+                if is_ajax:
+                    return JsonResponse(
+                        {"error": f"Ошибка формирования отчёта: {e}"}, status=400
+                    )
+                messages.error(request, f"Ошибка формирования отчёта: {e}")
 
-        # Шаг 1: Загрузка ZIP-архива
+        # Шаг 1: загрузка ZIP-архива
         elif request.FILES.get("archive"):
+            tmp_path = None
             try:
-                archive = request.FILES["archive"]
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
-                    for chunk in archive.chunks():
+                    for chunk in request.FILES["archive"].chunks():
                         tmp.write(chunk)
                     tmp_path = tmp.name
 
-                contracts = goz_analysis.read_archive(tmp_path)
-                gks_in_archive = [c[0] for c in contracts]
-
-                all_vats = list(GozContractVat.objects.all())
-                vats_mapping = {}
-                for v in all_vats:
-                    key = normalize_igk(v.igk)
-                    if key not in vats_mapping:
-                        vats_mapping[key] = v
-                    else:
-                        current_year = vats_mapping[key].year or ""
-                        new_year = v.year or ""
-                        if new_year > current_year:
-                            vats_mapping[key] = v
-
+                vats = _vats_by_igk()
                 gk_list = []
-                for zip_igk in gks_in_archive:
+                for zip_igk, _plan, _fact in goz_analysis.read_archive(tmp_path):
                     base = goz_analysis.igk_key(zip_igk)
                     suffix = zip_igk[len(base) :]
-                    db_vat = vats_mapping.get(normalize_igk(base))
-
+                    db_vat = vats.get(normalize_igk(base))
                     if db_vat:
                         gk_list.append(
                             {
@@ -482,12 +498,10 @@ def goz_report(request):
                 ctx["step2"] = True
             except zipfile.BadZipFile:
                 messages.error(request, "Файл не является ZIP-архивом")
-                if "tmp_path" in locals() and os.path.exists(tmp_path):
-                    os.unlink(tmp_path)
             except Exception as e:
                 messages.error(request, f"Ошибка обработки архива: {e}")
-                if "tmp_path" in locals() and os.path.exists(tmp_path):
-                    os.unlink(tmp_path)
+            if "step2" not in ctx and tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
 
     if "step2" not in ctx:
         ctx["default_vat_rate"] = 22.0
@@ -907,34 +921,11 @@ def znp_table(request):
 def znp_sap_table(request):
     """Сводка заявок SAP: плашки, таблица по ЦФО, карточки по датам."""
     ctx = _ctx(request)
-    qs = ZnpDataSAP.objects.annotate(sap_status=sap_status_expr()).filter(
-        cfo__in=SAP_CFO
-    )
-    sent_18_cond = sap_status_conditions()["sent_18"]
-    conditions = sap_status_conditions()
-    independet = {
-        "sent_18": "stage_e",
-        "agreed_registry": "stage_c",
-    }
+    qs = ZnpDataSAP.objects.filter(cfo__in=SAP_CFO)
 
-    def _breakdown(qs, date=None):
-        """Собирает карточки сводки: всего + по каждому статусу."""
-        base = qs.filter(stage_e=date) if date else qs
-        status_rows = {
-            row["sap_status"]: row
-            for row in base.values("sap_status").annotate(
-                count=Count("id"), vv_sum=Sum("vv_sum")
-            )
-        }
-        for status, date_field in independet.items():
-            scope = qs.filter(**{date_field: date}) if date else qs
-            status_rows[status] = scope.filter(conditions[status]).aggregate(
-                count=Count("id"), vv_sum=Sum("vv_sum")
-            )
-        return sap_cards(
-            base.aggregate(total=Count("id"), total_sum=Sum("vv_sum")),
-            status_rows,
-        )
+    def _breakdown(queryset, date=None):
+        """Карточки сводки: всего + по каждому статусу."""
+        return sap_cards(queryset.aggregate(**sap_aggregates(date)))
 
     all_breakdown = _breakdown(qs)
 
@@ -963,32 +954,14 @@ def znp_sap_table(request):
     available_cfo = list(
         cfo_qs.values_list("cfo", flat=True).distinct().order_by("cfo")
     )
-
-    cfo_totals = {
-        row["cfo"]: row
-        for row in cfo_qs.values("cfo").annotate(
-            total=Count("id"), total_sum=Sum("vv_sum")
-        )
+    cfo_stats = {
+        row["cfo"]: row for row in cfo_qs.values("cfo").annotate(**sap_aggregates())
     }
-    cfo_status = {}
-    for row in cfo_qs.values("cfo", "sap_status").annotate(
-        count=Count("id"), vv_sum=Sum("vv_sum")
-    ):
-        cfo_status.setdefault(row["cfo"], {})[row["sap_status"]] = row
-
-    cfo_sent_18 = {
-        row["cfo"]: row
-        for row in cfo_qs.filter(sent_18_cond)
-        .values("cfo")
-        .annotate(count=Count("id"), vv_sum=Sum("vv_sum"))
-    }
-    for cfo, rows in cfo_status.items():
-        rows["sent_18"] = cfo_sent_18.get(cfo)
 
     cfo_table = [
         cfo_breakdown_row(
             cfo,
-            sap_cards(cfo_totals.get(cfo), cfo_status.get(cfo, {})),
+            sap_cards(cfo_stats.get(cfo, EMPTY_SAP)),
             SAP_STAGE_PARAMS,
         )
         for cfo in available_cfo

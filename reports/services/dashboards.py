@@ -5,7 +5,7 @@ from decimal import Decimal
 from django.db.models import Count, Q, Sum
 
 from .queries import ADVANCE, POSTPAYMENT, ZNP_APPROVED
-from .sap_status import SAP_STAGE_PARAMS
+from .sap_status import SAP_STAGE_PARAMS, sap_date_field, sap_status_conditions
 
 # --- Вспомогательные функции ---
 
@@ -283,24 +283,46 @@ def breakdown_from_stats(ni, zs, st):
 # --- Сводка заявок SAP ---
 
 
-def sap_cards(total_row, status_rows):
-    """Формирует структуру карточек для сводки заявок SAP."""
-    total = (total_row or {}).get("total") or 0
-    total_sum = to_mln((total_row or {}).get("total_sum"))
+def sap_aggregates(date=None):
+    """
+    Агрегаты сводки SAP: всего и по каждому статусу.
+    Условия статусов те же, что в списке заявок. При date считаются заявки
+    с этой датой (для каждого статуса по своему полю даты).
+    """
+    total_filter = Q(stage_e=date) if date else None
+    aggregates = {
+        "total": Count("id", filter=total_filter),
+        "total_sum": Sum("vv_sum", filter=total_filter),
+    }
+    for status, condition in sap_status_conditions().items():
+        if date:
+            condition = condition & Q(**{sap_date_field(status): date})
+        aggregates[f"{status}_count"] = Count("id", filter=condition)
+        aggregates[f"{status}_sum"] = Sum("vv_sum", filter=condition)
+    return aggregates
 
-    def _card(status):
-        row = status_rows.get(status)
-        count = (row or {}).get("count") or 0
-        vv_sum = to_mln((row or {}).get("vv_sum"))
-        return {
+
+EMPTY_SAP = {
+    "total": 0,
+    "total_sum": None,
+    **{f"{status}_count": 0 for status in SAP_STAGE_PARAMS},
+    **{f"{status}_sum": None for status in SAP_STAGE_PARAMS},
+}
+
+
+def sap_cards(stats):
+    """Формирует структуру карточек для сводки заявок SAP."""
+    total = stats["total"] or 0
+    cards = {
+        "total_count": total,
+        "total_sum": to_mln(stats["total_sum"]),
+    }
+    for status in SAP_STAGE_PARAMS:
+        count = stats[f"{status}_count"] or 0
+        cards[status] = {
             "count": count,
-            "sum": vv_sum,
+            "sum": to_mln(stats[f"{status}_sum"]),
             "percent": percent(count, total),
             "status_param": status,
         }
-
-    return {
-        "total_count": total,
-        "total_sum": total_sum,
-        **{status: _card(status) for status in SAP_STAGE_PARAMS},
-    }
+    return cards

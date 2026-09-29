@@ -34,6 +34,7 @@
             <label class="filter-label">Этап согласования</label>
             <div class="d-flex gap-2 flex-wrap">
                 <label class="status-check"><input type="checkbox" id="cb-waiting-agreement" checked> На согласовании</label>
+                <label class="status-check"><input type="checkbox" id="cb-agreed-registry" checked> Согласовано для передачи в реестр</label>
                 <label class="status-check"><input type="checkbox" id="cb-sent-18" checked> Передано в 18 отдел</label>
                 <label class="status-check"><input type="checkbox" id="cb-confirmed-18" checked> Подтверждено 18 отделом</label>
                 <label class="status-check"><input type="checkbox" id="cb-paid" checked> Оплачено</label>
@@ -73,12 +74,13 @@ const COLS = [
     { field: 'c_agent',            title: 'Контрагент' },
     { field: 'reg_num',            title: 'Рег. номер' },
     { field: 'items',              title: 'Текст' },
-    { field: 'sap_status',         title: 'Этап',                     style: 'style="width: 140px;"' },
+    { field: 'sap_status',         title: 'Этап',                     style: 'style="width: 120px;"' },
     { field: 'bank_name',          title: 'Банк' },
-    { field: 'stage_e',            title: 'Передано в 18 отдел',      style: 'style="width: 100px;"', format: 'date' },
-    { field: 'stage_f',            title: 'Подтверждено 18 отделом',  style: 'style="width: 100px;"', format: 'date' },
-    { field: 'payment_possible',   title: 'Дата оплаты',           style: 'style="width: 100px;"', format: 'date' },
-    { field: 'vv_sum',             title: 'Сумма во ВВ, руб.',        format: 'number' },
+    { field: 'stage_c',            title: 'В реестре',                style: 'style="width: 80px;"', format: 'date' },
+    { field: 'stage_e',            title: 'Передано в 18 отдел',      style: 'style="width: 80px;"', format: 'date' },
+    { field: 'stage_f',            title: 'Подтверждено 18 отделом',  style: 'style="width: 80px;"', format: 'date' },
+    { field: 'payment_possible',   title: 'Дата оплаты',              style: 'style="width: 80px;"', format: 'date' },
+    { field: 'vv_sum',             title: 'Сумма ВВ, руб.',        format: 'number' },
 ];
 
 const apiUrl = document.getElementById('page-data').dataset.apiUrl;
@@ -88,6 +90,7 @@ let selectedDate = '';
 
 const STATUS_BOXES = [
     ['cb-waiting-agreement', 'waiting_agreement'],
+    ['cb-agreed-registry',   'agreed_registry'],
     ['cb-sent-18',           'sent_18'],
     ['cb-confirmed-18',      'confirmed_18'],
     ['cb-paid',              'paid'],
@@ -158,7 +161,7 @@ function loadFiltersFromURL() {
     if (params.has('date'))
         selectedDate = params.get('date');
     if (params.has('statuses')) {
-        const asked = params.get('statuses').split(',');
+        const asked = params.get('statuses').split(',').map(s => s.trim());
         for (const [id, status] of STATUS_BOXES)
             document.getElementById(id).checked = asked.includes(status);
     }

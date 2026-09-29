@@ -280,9 +280,6 @@ class ZnpDataSAP(models.Model):
     payment_possible = models.DateField(
         null=True, verbose_name="Возможная дата платежа"
     )
-    init_payment_date = models.DateField(
-        null=True, verbose_name="Изначальная дата платежа"
-    )
     normalize_doc_num = models.CharField(
         max_length=255, null=True, verbose_name="Нормализованный номер"
     )
@@ -318,9 +315,6 @@ class StagingZnpSAPExcel(models.Model):
     stage_c = models.DateField(null=True, verbose_name="Этап С")
     payment_possible = models.DateField(
         null=True, verbose_name="Возможная дата платежа"
-    )
-    init_payment_date = models.DateField(
-        null=True, verbose_name="Изначальная дата платежа"
     )
     normalize_doc_num = models.CharField(
         max_length=255, null=True, verbose_name="Нормализованный номер"

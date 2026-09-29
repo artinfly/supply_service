@@ -11,7 +11,7 @@ from .queries import (
     ZNP_APPROVED,
     needs_znp,
 )
-from .sap_status import SAP_STAGE_LABELS, sap_status_sql
+from .sap_status import SAP_STAGE_LABELS, SAP_STAGES_OVERLAPPING, sap_status_sql
 
 # --- Константы для графиков ---
 
@@ -29,7 +29,11 @@ ZNP_STAGES = (
     ("paid", "Оплачено"),
 )
 
-SAP_STAGES = tuple(SAP_STAGE_LABELS.items())
+SAP_STAGES = tuple(
+    (key, label)
+    for key, label in SAP_STAGE_LABELS.items()
+    if key not in SAP_STAGES_OVERLAPPING
+)
 
 
 def to_decimal(value):

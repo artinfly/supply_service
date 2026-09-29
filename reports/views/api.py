@@ -49,6 +49,7 @@ from ..services.queries import (
 )
 from ..services.sap_status import (
     SAP_STAGE_LABELS,
+    sap_date_field,
     sap_status_conditions,
     sap_status_expr,
 )
@@ -317,11 +318,9 @@ def api_znp_sap_list(request):
     if agent:
         qs = qs.filter(Q(c_agent__icontains=agent) | Q(reg_num__icontains=agent))
     if igk_filter:
-        qs = qs.filter(igk__icontains=igk_filter)
+        qs = qs.filter(igk__endswith=igk_filter)
     if cfo_filter:
         qs = qs.filter(cfo__icontains=cfo_filter)
-    if valid_date(date_filter):
-        qs = qs.filter(stage_e=date_filter)
 
     conditions = sap_status_conditions()
     date_ok = valid_date(date_filter)
@@ -331,11 +330,7 @@ def api_znp_sap_list(request):
             continue
         q = conditions[s]
         if date_ok:
-            q &= (
-                Q(stage_c=date_filter)
-                if s == "agreed_registry"
-                else Q(stage_e=date_filter)
-            )
+            q &= Q(**{sap_date_field(s): date_filter})
         status_q |= q
     if status_q:
         qs = qs.filter(status_q)

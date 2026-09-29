@@ -88,7 +88,7 @@
                     </div>
                     <div class="gk-editor-actions">
                         <button type="submit" class="btn-orange btn-fixed" id="form-submit-btn">Добавить</button>
-                        <button type="button" class="btn-ghost btn-fixed" id="gk-cancel-btn">Отмена</button>
+                        <button type="button" class="btn-ghost btn-fixed" id="gk-cancel-btn">Назад</button>
                         <button type="submit" form="gk-delete-form" class="btn-ghost btn-ghost-danger btn-fixed" id="gk-delete-btn" hidden>Удалить</button>
                     </div>
                 </form>
@@ -141,10 +141,10 @@
 <div class="goz-card">
     <h6 class="goz-card-title">Настройка ставок НДС для контрактов в архиве</h6>
     <p class="goz-hint">В архиве найдено контрактов: {{ gk_list|length }}. Откорректируйте ставки НДС при необходимости.</p>
-    <form method="post" onsubmit="prepareVatRates()">
+    <form method="post" id="gk-report-form">
         {% csrf_token %}
         <input type="hidden" name="temp_zip_path" value="{{ temp_zip_path }}">
-        <input type="hidden" name="vat_rates" id="vat_rates_input" value="">
+        <input type="hidden" name="gk_data" id="gk_data_input" value="">
 
         <div class="table-container goz-scroll mb-3">
             <table class="report-table">
@@ -195,8 +195,9 @@
 
         <div class="d-flex gap-2">
             <button type="submit" class="btn-orange btn-fixed" id="goz-btn">Сформировать отчёт</button>
-            <a href="{% url 'goz_report' %}" class="btn-ghost btn-fixed">Отмена</a>
+            <a href="{% url 'goz_report' %}" class="btn-ghost btn-fixed">Назад</a>
         </div>
+        <div id="goz-report-error" style="display:none;color:#c0392b;font-size:0.8rem;margin-top:0.5rem"></div>
     </form>
 </div>
 
@@ -253,20 +254,72 @@ function checkArchive() {
     return true;
 }
 
-function prepareVatRates() {
-    const inputs = document.querySelectorAll('.vat-input');
-    const rates = {};
-    inputs.forEach(input => {
-        const igk = input.getAttribute('data-igk');
-        const val = parseFloat(input.value.replace(',', '.'));
-        rates[igk] = isNaN(val) ? 22.0 : val;
-    });
-    document.getElementById('vat_rates_input').value = JSON.stringify(rates);
+// Шаг 2: собираем ГК, год, изделие и НДС, формируем отчёт без ухода со страницы,
+// скачиваем файл и возвращаем экран загрузки архива
+(function () {
+    const form = document.getElementById('gk-report-form');
+    if (!form) return;
+    const btn = document.getElementById('goz-btn');
+    const err = document.getElementById('goz-report-error');
+    const homeUrl = "{% url 'goz_report' %}";
 
-    document.getElementById('goz-btn').disabled = true;
-    document.getElementById('goz-btn').textContent = 'Формируем отчёт...';
-    return true;
-}
+    function collectGkData() {
+        const data = {};
+        form.querySelectorAll('.vat-input').forEach(input => {
+            const row = input.closest('tr');
+            const val = parseFloat(input.value.replace(',', '.'));
+            data[input.dataset.igk] = {
+                vat: isNaN(val) ? 22.0 : val,
+                year: row.querySelector('.year-input').value.trim(),
+                product: row.querySelector('.product-input').value.trim(),
+            };
+        });
+        return data;
+    }
+
+    function fileNameFrom(resp) {
+        const cd = resp.headers.get('Content-Disposition') || '';
+        let m = cd.match(/filename\*=UTF-8''([^;]+)/i);
+        if (m) return decodeURIComponent(m[1]);
+        m = cd.match(/filename="?([^";]+)"?/i);
+        return m ? m[1] : 'Анализ_ГОЗ.xlsx';
+    }
+
+    form.addEventListener('submit', async e => {
+        e.preventDefault();
+        document.getElementById('gk_data_input').value = JSON.stringify(collectGkData());
+        err.style.display = 'none';
+        btn.disabled = true;
+        btn.textContent = 'Формирование...';
+        try {
+            const resp = await fetch(form.action || window.location.href, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            });
+            const type = resp.headers.get('Content-Type') || '';
+            if (!resp.ok || !type.includes('spreadsheet')) {
+                let text = 'Не удалось сформировать отчёт';
+                try { text = (await resp.json()).error || text; } catch (_) {}
+                throw new Error(text);
+            }
+            const blob = await resp.blob();
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = fileNameFrom(resp);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            setTimeout(() => { window.location.href = homeUrl; }, 500);
+        } catch (ex) {
+            err.textContent = ex.message + '. Нажмите «Назад» и загрузите архив заново.';
+            err.style.display = 'block';
+            btn.textContent = 'Сформировать отчёт';
+        }
+    });
+})();
 
 // Справочник ГК: поиск, правка по клику на строку, добавление, удаление
 (function () {

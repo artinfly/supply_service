@@ -1,0 +1,84 @@
+{% load custom_filters %}
+{# Карточки сводки SAP. Параметры: b — данные карточек, date — дата блока (пусто для блока «Все заявки») #}
+{% url 'znp_sap_list_table' as list_url %}
+<div class="dash-row">
+    <a href="{{ list_url }}?{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses=waiting_agreement,sent_18,confirmed_18,paid,ready_18" class="text-decoration-none">
+        <div class="dash-card stage-total">
+            <div class="dash-card-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
+            </div>
+            <div>
+                <div class="dash-card-num">Всего ЗнП (SAP): {{ b.total_count }}</div>
+                <div class="dash-card-lbl">на сумму {{ b.total_sum|floatformat:2|intspace }} млн. &#8381</div>
+            </div>
+        </div>
+    </a>
+    <a href="{{ list_url }}?{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses=waiting_agreement" class="text-decoration-none">
+        <div class="dash-card stage-wait">
+            <div class="dash-card-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/><path d="M13 3l5 5h-5V3z"/><circle cx="17" cy="17" r="4"/><path d="M17 15.3v1.9l1.3 1"/></svg>
+            </div>
+            <div>
+                <div class="dash-card-num">На согласовании: {{ b.waiting_agreement.count }}</div>
+                <div class="dash-card-lbl">{{ b.waiting_agreement.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ b.waiting_agreement.percent|floatformat:1 }}%</div>
+            </div>
+        </div>
+    </a>
+    <a href="{{ list_url }}?{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses=sent_18" class="text-decoration-none">
+        <div class="dash-card stage-late">
+            <div class="dash-card-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h6"/><path d="M13 3l5 5h-5V3z"/><path d="M14 15h7"/><path d="M18 12l3 3-3 3"/></svg>
+            </div>
+            <div>
+                <div class="dash-card-num">Передано в 18 отдел: {{ b.sent_18.count }}</div>
+                <div class="dash-card-lbl">{{ b.sent_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ b.sent_18.percent|floatformat:1 }}%</div>
+            </div>
+        </div>
+    </a>
+    <a href="{{ list_url }}?{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses=confirmed_18" class="text-decoration-none">
+        <div class="dash-card stage-ready">
+            <div class="dash-card-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/><path d="M13 3l5 5h-5V3z"/><path d="M9 14l2 2 4-4"/></svg>
+            </div>
+            <div>
+                <div class="dash-card-num">Подтверждено 18 отделом: {{ b.confirmed_18.count }}</div>
+                <div class="dash-card-lbl">{{ b.confirmed_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ b.confirmed_18.percent|floatformat:1 }}%</div>
+            </div>
+        </div>
+    </a>
+</div>
+<div class="dash-row">
+    <a href="{{ list_url }}?{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses=agreed_registry" class="text-decoration-none">
+        <div class="dash-card stage-registry">
+            <div class="dash-card-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/><path d="M13 3l5 5h-5V3z"/><path d="M9 13h6"/><path d="M9 16.5h4"/></svg>
+            </div>
+            <div>
+                <div class="dash-card-num">Согласовано для передачи в реестр: {{ b.agreed_registry.count }}</div>
+                <div class="dash-card-lbl">{{ b.agreed_registry.sum|floatformat:2|intspace }} млн. &#8381{% if not date %} &middot; {{ b.agreed_registry.percent|floatformat:1 }}%{% endif %}</div>
+            </div>
+        </div>
+    </a>
+    <a href="{{ list_url }}?{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses=paid" class="text-decoration-none">
+        <div class="dash-card stage-done">
+            <div class="dash-card-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+            </div>
+            <div>
+                <div class="dash-card-num">Оплачено: {{ b.paid.count }}</div>
+                <div class="dash-card-lbl">{{ b.paid.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ b.paid.percent|floatformat:1 }}%</div>
+            </div>
+        </div>
+    </a>
+    <a href="{{ list_url }}?{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses=ready_18" class="text-decoration-none">
+        <div class="dash-card stage-upnext">
+            <div class="dash-card-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+            </div>
+            <div>
+                <div class="dash-card-num">Готово к передаче в 18 отдел: {{ b.ready_18.count }}</div>
+                <div class="dash-card-lbl">{{ b.ready_18.sum|floatformat:2|intspace }} млн. &#8381 &middot; {{ b.ready_18.percent|floatformat:1 }}%</div>
+            </div>
+        </div>
+    </a>
+</div>
