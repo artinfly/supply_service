@@ -90,6 +90,16 @@ urlpatterns = [
         exports.export_appeared_not_concluded,
         name="export_appeared_not_concluded",
     ),
+    path(
+        "export/sum-report/",
+        exports.export_sum_report,
+        name="export_sum_report",
+    ),
+    path(
+        "export/sum-report-cycle/",
+        exports.export_sum_report_cycle,
+        name="export_sum_report_cycle",
+    ),
     # --- JSON API: таблицы ---
     path("api/kdr/<str:year>/", api.api_kdr, name="api_kdr"),
     path(

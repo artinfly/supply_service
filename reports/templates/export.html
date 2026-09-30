@@ -86,6 +86,16 @@
             <a href="{% url 'export_appeared_not_concluded' %}" class="btn-index">Новые незаключённые ↓</a>
         </div>
     </div>
+    <div class="index-card"> 
+        <div class="index-card-title">Краткая справка (SumReport)</div> 
+        <p style="font-size:0.8rem;color:#888;margin-bottom:1rem"> 
+            Формирует ZIP-архив с отчётами по каждому ИГК на основе загруженной краткой справки 
+        </p> 
+        <div class="d-flex gap-2 flex-wrap"> 
+            <a href="{% url 'export_sum_report' %}" class="btn-index">Обычная ↓</a> 
+            <a href="{% url 'export_sum_report_cycle' %}" class="btn-index">Длинноцикл. ↓</a> 
+        </div> 
+    </div> 
 
 </div>
 {% endblock %}

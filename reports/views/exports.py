@@ -462,3 +462,24 @@ def export_contracts_by_agent(request, year):
         make_wb(f"Договоры {year}", headers, col_w, data_rows),
         f'контрагент{"_" + agent_safe if agent_safe else ""}_{year}',
     )
+
+
+from ..services.sum_report import generate_sum_reports_zip
+
+
+@login_required
+def export_sum_report(request):
+    """Выгрузка Краткой справки (обычная) — ZIP-архив по всем ИГК."""
+    try:
+        return generate_sum_reports_zip(is_cycle=False)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)
+
+
+@login_required
+def export_sum_report_cycle(request):
+    """Выгрузка Краткой справки (Длинноцикловая) — ZIP-архив по всем ИГК."""
+    try:
+        return generate_sum_reports_zip(is_cycle=True)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)

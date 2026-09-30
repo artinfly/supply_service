@@ -123,25 +123,36 @@ _LEGEND_ITEMS = [
 ]
 
 _IGK_RE = re.compile(r"ИГК\s*(\d+)", re.IGNORECASE)
-_SB_RE = re.compile(r"№\s*\d+_(\d+)\s*сб", re.IGNORECASE)
+# После «№»: число (берём его последние 4 цифры), затем всё от первого «_» до первой точки
+_NUM_RE = re.compile(r"№\s*(\d+)(?:_([^.]*))?")
 
 
 def _contract_label(filename):
     """
-    Из имени файла делает подпись ГК
+    Из имени файла делает подпись ГК.
+
+    «ИГК 123412341234 № 123412341234_1234сб_1234_137.совдбстслаба»
+    -> «1234 1234сб_1234_137»
+    (последние 4 цифры числа после «№» + всё от первого «_» до первой точки).
+    Если «№» нет — последние 4 цифры ИГК; если нет и ИГК — имя файла без расширения.
     """
+    num_match = _NUM_RE.search(filename)
+    if num_match:
+        label = num_match.group(1)[-4:]
+        suffix = (num_match.group(2) or "").strip()
+        if suffix:
+            label += f" {suffix}"
+        return label
     igk_match = _IGK_RE.search(filename)
-    if not igk_match:
-        return filename[:-4]
-    label = igk_match.group(1)[-4:]
-    sb_match = _SB_RE.search(filename)
-    if sb_match:
-        label += f" сб{sb_match.group(1)}"
-    return label
+    if igk_match:
+        return igk_match.group(1)[-4:]
+    return filename[:-4]
 
 
 def igk_key(label):
-    return label.split(" сб", 1)[0].strip()
+    """Возвращает 4-значный ИГК из подписи ГК (без суффикса после пробела)."""
+    m = re.match(r"\d{4}(?= |$)", label)
+    return m.group(0) if m else label.strip()
 
 
 # --- Парсинг .xls ---

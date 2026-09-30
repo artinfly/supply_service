@@ -302,18 +302,21 @@ FILE_TYPE_COMMANDS = {
     "contracts": "load_contracts",
     "znp": "load_znp",
     "znp_sap": "load_znp_sap",
+    "sum_report": "load_sum_report",
 }
 
 FILE_TYPE_COLUMNS = {
     "contracts": list(CONTRACT_COLUMNS),
     "znp": list(ZNP_COLUMNS),
     "znp_sap": list(ZNP_SAP_COLUMNS),
+    "sum_report": ["Парсинг по позициям колонок", "ИГК берётся из имени листа"],
 }
 
 FILE_TYPE_LABELS = {
     "contracts": "Договоры",
     "znp": "ЗНП (ФЗД)",
     "znp_sap": "ЗНП (SAP)",
+    "sum_report": "Краткая справка (SumReport)",
 }
 
 
@@ -444,8 +447,12 @@ def goz_report(request):
                     normalized_contracts.append((db_igk, plan, fact))
 
                 vat_rates = {k: v.get("vat") for k, v in gk_data.items()}
-                products = {k: (v.get("product") or "").strip() for k, v in gk_data.items()}
-                data = goz_analysis.build_report(normalized_contracts, vat_rates, products)
+                products = {
+                    k: (v.get("product") or "").strip() for k, v in gk_data.items()
+                }
+                data = goz_analysis.build_report(
+                    normalized_contracts, vat_rates, products
+                )
                 os.unlink(temp_zip_path)
                 return xlsx_response(data, "Анализ_ГОЗ")
             except Exception as e:

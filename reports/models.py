@@ -43,10 +43,10 @@ class GozContractVat(models.Model):
 
     igk = models.CharField(max_length=10, unique=True, verbose_name="ГК")
     year = models.CharField(
-        max_length=4, blank=True, null=True, unique=True, verbose_name="Год"
+        max_length=4, blank=True, null=True, unique=False, verbose_name="Год"
     )
     product = models.CharField(
-        max_length=255, blank=True, null=True, unique=True, verbose_name="Изделие"
+        max_length=255, blank=True, null=True, unique=False, verbose_name="Изделие"
     )
     vat_rate = models.DecimalField(
         max_digits=4,
@@ -516,3 +516,41 @@ class Profile(models.Model):
 
     def __str__(self):
         return f"Профиль: {self.user.username}"
+
+
+class StagingSumExcel(models.Model):
+    """Временная таблица для импорта Краткой справки (SumReport)."""
+
+    id = models.AutoField(primary_key=True)
+    igk = models.CharField(max_length=50, verbose_name="ИГК (имя листа)")
+    is_cycle = models.BooleanField(default=False, verbose_name="Длинноцикличный")
+
+    dep = models.CharField(max_length=50, null=True, verbose_name="ЦФО")
+    counteragent = models.TextField(null=True, verbose_name="Контрагент")
+    inn = models.TextField(null=True, verbose_name="ИНН")
+    contract = models.CharField(max_length=255, null=True, verbose_name="Договор")
+    status = models.CharField(max_length=255, null=True, verbose_name="Состояние")
+    stage = models.CharField(max_length=255, null=True, verbose_name="Этап")
+    item = models.TextField(null=True, verbose_name="Предмет")
+    order_doc = models.CharField(max_length=255, null=True, verbose_name="Заказ")
+
+    contract_sum = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    plan_avans = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    percent_doc = models.DecimalField(max_digits=8, decimal_places=2, null=True)
+    fact_paid = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    note = models.TextField(null=True)
+    completed_sum = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    znp_count = models.IntegerField(null=True)
+    sum_80 = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    paid_from_znp = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    remains_pay = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    sum_avans = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    sum_issued_znp = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+
+    period_reg_date = models.DateField(null=True)
+    plan_date_contract = models.DateField(null=True)
+
+    class Meta:
+        db_table = "staging_sum_excel"
+        verbose_name = "Строка импорта Краткой справки"
+        verbose_name_plural = "Строки импорта Краткой справки"
