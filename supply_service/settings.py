@@ -13,19 +13,20 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / ".env")
 
 # --- Core Settings ---
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-fallback")
-DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
+SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-fallback")
+DEBUG = os.getenv("DEBUG", "True").lower() == "true"
+
+if DEBUG:
+    from dotenv import load_dotenv
+
+    load_dotenv(BASE_DIR / ".env")
+
 ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
-    if host.strip()
+    host.strip() for host in os.getenv("ALLOWED_HOSTS", "").split(",") if host.strip()
 ]
 
 # --- Applications ---
@@ -77,8 +78,8 @@ WSGI_APPLICATION = "supply_service.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME", "supply_service"),
-        "USER": os.getenv("DB_USER", "postgres"),
+        "NAME": os.getenv("DB_NAME", "supply_service_test"),
+        "USER": os.getenv("DB_USER", ""),
         "PASSWORD": os.getenv("DB_PASSWORD", ""),
         "HOST": os.getenv("DB_HOST", "localhost"),
         "PORT": os.getenv("DB_PORT", "5432"),

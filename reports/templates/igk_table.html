@@ -4,6 +4,13 @@
 {% block content %}
 <div class="page-header">
     <h5>{{ title }}</h5>
+    <div class="d-flex gap-2 align-items-center">
+        <span class="filter-label" style="margin:0">Год:</span>
+        {% for y in years %}
+        <a href="{% url url_name y|stringformat:'s' %}"
+           class="idx-btn{% if y == year %} idx-btn-active{% endif %}">{{ y }}</a>
+        {% endfor %}
+    </div>
 </div>
 <div class="table-container" id="table-wrapper"></div>
 <div id="page-data"

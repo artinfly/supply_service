@@ -73,7 +73,7 @@ TOTAL_COLS = len(HEADERS)  # 23
 # Ширина колонок: №, ГК, Наименование, метка строки, E..N (деньги/деньги/.../%/%),
 # O..U (деньги), Примечание, Комментарий. Денежные — широкие, чтобы не было "#####".
 _COL_WIDTHS = (
-    [6, 14, 16, 12] + [19, 19, 19, 19, 19, 19, 19, 19, 10, 10] + [19] * 7 + [30, 30]
+    [6, 14, 18, 12] + [19, 19, 19, 19, 19, 19, 19, 19, 10, 10] + [19] * 7 + [30, 30]
 )
 
 # Колонки, объединяемые на 4 строки блока (значение одно на весь ГК).
@@ -123,25 +123,36 @@ _LEGEND_ITEMS = [
 ]
 
 _IGK_RE = re.compile(r"ИГК\s*(\d+)", re.IGNORECASE)
-_SB_RE = re.compile(r"№\s*\d+_(\d+)\s*сб", re.IGNORECASE)
+# После «№»: число (берём его последние 4 цифры), затем всё от первого «_» до первой точки
+_NUM_RE = re.compile(r"№\s*(\d+)(?:_([^.]*))?")
 
 
 def _contract_label(filename):
     """
-    Из имени файла делает подпись ГК
+    Из имени файла делает подпись ГК.
+
+    «ИГК 123412341234 № 123412341234_1234сб_1234_137.совдбстслаба»
+    -> «1234 1234сб_1234_137»
+    (последние 4 цифры числа после «№» + всё от первого «_» до первой точки).
+    Если «№» нет — последние 4 цифры ИГК; если нет и ИГК — имя файла без расширения.
     """
+    num_match = _NUM_RE.search(filename)
+    if num_match:
+        label = num_match.group(1)[-4:]
+        suffix = (num_match.group(2) or "").strip()
+        if suffix:
+            label += f" {suffix}"
+        return label
     igk_match = _IGK_RE.search(filename)
-    if not igk_match:
-        return filename[:-4]
-    label = igk_match.group(1)[-4:]
-    sb_match = _SB_RE.search(filename)
-    if sb_match:
-        label += f" сб{sb_match.group(1)}"
-    return label
+    if igk_match:
+        return igk_match.group(1)[-4:]
+    return filename[:-4]
 
 
 def igk_key(label):
-    return label.split(" сб", 1)[0].strip()
+    """Возвращает 4-значный ИГК из подписи ГК (без суффикса после пробела)."""
+    m = re.match(r"\d{4}(?= |$)", label)
+    return m.group(0) if m else label.strip()
 
 
 # --- Парсинг .xls ---
@@ -238,7 +249,7 @@ def _deviation(fact_m, plan_m):
     return abs_dev, rel_dev
 
 
-def _block_rows(igk, num, plan, fact, vat_rate):
+def _block_rows(igk, num, plan, fact, vat_rate, product=""):
     """
     Строит 4 строки блока (Целевые/Факт/откл.абсол./откл.отн.%), каждая
     ровно TOTAL_COLS элементов — чтобы рамка потом легла на всю таблицу
@@ -260,7 +271,7 @@ def _block_rows(igk, num, plan, fact, vat_rate):
     pad_notes = [None, None]  # Примечание, Комментарий — всегда пустые
 
     return [
-        [num, igk, "", "Целевые", *plan_m, *pad_extra, *pad_notes],
+        [num, igk, product or "", "Целевые", *plan_m, *pad_extra, *pad_notes],
         [None, None, None, "Факт", *fact_m, *fact_extra, *pad_notes],
         [None, None, None, "откл.абсол.", *abs_dev, *pad_extra, *pad_notes],
         [None, None, None, "откл.отн.%", *rel_dev, *pad_extra, *pad_notes],
@@ -352,31 +363,28 @@ def _merge_block(ws, first_row):
 # --- Генерация отчёта ---
 
 
-def build_report(contracts, vat_rates):
+def _to_rate(value, default=22.0):
+    """Ставка НДС из строки или числа; при ошибке — значение по умолчанию."""
+    try:
+        return float(str(value).replace(",", "."))
+    except ValueError:
+        return default
+
+
+def build_report(contracts, vat_rates, products=None):
     """
     Генерирует Excel-отчёт анализа ГОЗ.
 
     Args:
         contracts: результат read_archive()
-        vat_rates: dict {igk: vat_rate} или float для совместимости
+        vat_rates: dict {ГК: ставка НДС}
+        products: dict {ГК: изделие} — пишется в колонку «Наименование»
 
     Returns:
         bytes готового .xlsx файла
     """
-    if isinstance(vat_rates, (int, float, str)):
-        # fallback для совместимости - если передана одна ставка
-        try:
-            rate = float(str(vat_rates).replace(",", "."))
-        except:
-            rate = 22.0
-        vat_rates_dict = {c[0]: rate for c in contracts}
-    else:
-        vat_rates_dict = {}
-        for k, v in vat_rates.items():
-            try:
-                vat_rates_dict[k] = float(str(v).replace(",", "."))
-            except:
-                vat_rates_dict[k] = 22.0
+    vat_rates_dict = {k: _to_rate(v) for k, v in vat_rates.items()}
+    products = products or {}
 
     wb = Workbook()
     ws = wb.active
@@ -402,9 +410,8 @@ def build_report(contracts, vat_rates):
 
     row_i = 3
     for num, (igk, plan, fact) in enumerate(contracts, 1):
-        # Берем индивидуальную ставку для каждого ГК
         rate = vat_rates_dict.get(igk, 22.0)
-        block = _block_rows(igk, num, plan, fact, rate)
+        block = _block_rows(igk, num, plan, fact, rate, products.get(igk, ""))
 
         _write_row(ws, row_i, block[0])
         plan_m = _line_metrics(plan, rate)

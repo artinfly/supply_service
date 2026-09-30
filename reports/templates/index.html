@@ -43,57 +43,24 @@
     </div>
     {% endif %}
 
-    {% if perms.reports.access_export %}
+    {% if perms.reports.access_kdr %}
     <div class="idx-card idx-card-accent">
         <div class="idx-label">КДР — контроль договорной работы</div>
         <div class="idx-desc">По каждому ИГК и ЦФО: договоры, суммы, % контрактации, авансирование</div>
-        <div class="idx-desc" style="color:#e07b00;font-size:0.75rem;margin-bottom:0.5rem">
-            Укажите период — он нужен для столбца «Заключено за период»
-        </div>
-        <div class="idx-dates">
-            <div class="idx-date-group">
-                <label class="idx-date-label">С</label>
-                <input type="date" id="idx-kdr-start" class="filter-input" style="width:145px">
-            </div>
-            <div class="idx-date-group">
-                <label class="idx-date-label">По</label>
-                <input type="date" id="idx-kdr-end" class="filter-input" style="width:145px">
-            </div>
-            <button class="btn-ghost" onclick="document.getElementById('idx-kdr-start').value='';document.getElementById('idx-kdr-end').value=''" style="padding:0.2rem 0.6rem;font-size:0.75rem">Сбросить</button>
-        </div>
         <div class="idx-row">
-            {% for y in years %}
-            <button class="idx-btn" onclick="downloadKDR('{% url "export_kdr" 0 %}', '{{ y }}', 'idx-kdr-start', 'idx-kdr-end')">КДР {{ y }} ↓</button>
-            {% endfor %}
+            <a href="{% url 'kdr_table_default' %}" class="idx-btn">Открыть</a>
         </div>
     </div>
     {% endif %}
 
     {% if perms.reports.access_igk %}
-    <div class="idx-card">
-        <div class="idx-label">ИГК — заключённые</div>
+    <div class="idx-card idx-card-accent">
+        <div class="idx-label">ИГК по годам</div>
+        <div class="idx-desc">Реестры заключённых, незаключённых и расторгнутых договоров. Год переключается внутри раздела</div>
         <div class="idx-row">
-            {% for y in years %}
-            <a href="{% url 'igk_concluded_table' y|stringformat:'s' %}" class="idx-btn">{{ y }}</a>
-            {% endfor %}
-        </div>
-    </div>
-
-    <div class="idx-card">
-        <div class="idx-label">ИГК — незаключённые</div>
-        <div class="idx-row">
-            {% for y in years %}
-            <a href="{% url 'igk_not_concluded_table' y|stringformat:'s' %}" class="idx-btn">{{ y }}</a>
-            {% endfor %}
-        </div>
-    </div>
-
-    <div class="idx-card">
-        <div class="idx-label">ИГК — расторгнутые</div>
-        <div class="idx-row">
-            {% for y in years %}
-            <a href="{% url 'igk_terminated_table' y|stringformat:'s' %}" class="idx-btn">{{ y }}</a>
-            {% endfor %}
+            <a href="{% url 'igk_concluded_table_default' %}" class="idx-btn">Заключённые</a>
+            <a href="{% url 'igk_not_concluded_table_default' %}" class="idx-btn">Незаключённые</a>
+            <a href="{% url 'igk_terminated_table_default' %}" class="idx-btn">Расторгнутые</a>
         </div>
     </div>
     {% endif %}

@@ -6,18 +6,20 @@
 {% block content %}
     <div class="page-header">
         <h5>Договорная работа</h5>
-        <form method="get" class="d-flex gap-2 align-items-center" id='options'>
-            <select class="form-select form-select-sm" name="year" onchange="this.form.submit()" style="width:auto">
+        {% if has_data %}
+        <form method="get" class="d-flex gap-2 align-items-center">
+            <select class="form-select form-select-sm filter-select-auto" name="year" onchange="this.form.submit()">
                 {% for y in available_years %}
                 <option value="{{ y }}" {% if selected_year == y|stringformat:"s" %}selected{% endif %}>{{ y }}</option>
                 {% endfor %}
             </select>
-            <select class="form-select form-select-sm" name="igk" onchange="this.form.submit()" style="width:auto">
+            <select class="form-select form-select-sm filter-select-auto" name="igk" onchange="this.form.submit()">
                 {% for i in available_igk %}
                 <option value="{{ i }}" {% if selected_igk == i|stringformat:"s" %}selected{% endif %}>{{ i }}</option>
                 {% endfor %}
             </select>
         </form>
+        {% endif %}
     </div>
 
     {% if not has_data %}
@@ -28,7 +30,7 @@
         <div class="block-title">Всего по всем годам</div>
         <div class="card-block">
             <div class="dash-row">
-                <a href="{% url 'all_contracts_table' %}?year=all" class="text-decoration-none">
+                <a href="{% url 'all_contracts_table' %}?year=all&statuses=concluded,not_concluded,terminated" class="text-decoration-none">
                     <div class="dash-card stage-total">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
@@ -67,7 +69,7 @@
         <div class="block-title">За {{ selected_year }} год</div>
         <div class="card-block">
             <div class="dash-row">
-                <a href="{% url 'all_contracts_table' %}?year={{ selected_year }}" class="text-decoration-none">
+                <a href="{% url 'all_contracts_table' %}?year={{ selected_year }}&statuses=concluded,not_concluded,terminated" class="text-decoration-none">
                     <div class="dash-card stage-total">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
@@ -164,29 +166,31 @@
     <div class="igk-stat-card">
         <table class="report-table">
             <thead>
-                <th>ЦФО</th>
-                <th>Всего договоров, шт.</th>
-                <th>Сумма всех договоров, млн.руб.</th>
-                <th>Заключено, шт.</th>
-                <th>Сумма заключенных договоров, млн.руб.</th>
-                <th>Всего договоров на {{ selected_year }}г.</th>
-                <th>Сумма договоров на {{ selected_year }}г., млн.руб.</th>
-                <th>Заключено договоров на {{ selected_year }}г., шт.</th>
-                <th>% контрактации {{ selected_year }}г. (кол-во)</th>
-                <th>Сумма заключенных договоров на {{ selected_year }}г., млн.руб.</th>
-                <th>% контрактации {{ selected_year }}г. (Сумма)</th>
-                <th>Не заключено, шт</th>
-                <th>Сумма не заключенных договоров, млн.руб.</th>
-                <th>Плановая сумма авнаса в {{ selected_year }} г., млн.руб.</th>
-                <th>Фактическая сумма аванса на {{ selected_year }}г., млн.руб.</th>
-                <th>% авансирования на {{ selected_year }}г.</th>
+                <tr>
+                    <th>ЦФО</th>
+                    <th>Всего договоров, шт.</th>
+                    <th>Сумма всех договоров, млн.руб.</th>
+                    <th>Заключено, шт.</th>
+                    <th>Сумма заключенных договоров, млн.руб.</th>
+                    <th>Всего договоров на {{ selected_year }}г.</th>
+                    <th>Сумма договоров на {{ selected_year }}г., млн.руб.</th>
+                    <th>Заключено договоров на {{ selected_year }}г., шт.</th>
+                    <th>% контрактации {{ selected_year }}г. (кол-во)</th>
+                    <th>Сумма заключенных договоров на {{ selected_year }}г., млн.руб.</th>
+                    <th>% контрактации {{ selected_year }}г. (Сумма)</th>
+                    <th>Не заключено, шт</th>
+                    <th>Сумма не заключенных договоров, млн.руб.</th>
+                    <th>Плановая сумма аванса в {{ selected_year }} г., млн.руб.</th>
+                    <th>Фактическая сумма аванса на {{ selected_year }}г., млн.руб.</th>
+                    <th>% авансирования на {{ selected_year }}г.</th>
+                </tr>
             </thead>
             <tbody>
                 {% for r in igk_table %}
-                    <tr class="{% if forloop.last %} row-total{% endif %}" style="width: auto;">
+                    <tr class="{% if forloop.last %} row-total{% endif %}">
                         <td class="clickable-cell">
                             <div class="cell-content">{{ r.cfo }}</div>
-                            <a href="{% url 'all_contracts_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&statuses=none{% if r.cfo != 'ИТОГО' %}&cfo={{ r.cfo }}{% endif %}"
+                            <a href="{% url 'all_contracts_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&statuses=concluded,not_concluded,terminated{% if r.cfo != 'ИТОГО' %}&cfo={{ r.cfo }}{% endif %}"
                                 class="text-decoration-none">
                             </a>
                         </td>
@@ -211,10 +215,10 @@
         </table>
     </div>
 
-    <div class="table-container mt-4 mb-4" style="padding:18px 20px 22px">
-        <h6 style="margin:0 0 2px;font-size:14px;font-weight:700">Незаключённые по ЦФО</h6>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Где сосредоточен завал и насколько он застарелый. ЦФО отсортированы по сумме</div>
-        <div style="position:relative;height:300px">
+    <div class="table-container chart-block mt-4 mb-4">
+        <h6 class="chart-block-title">Незаключённые по ЦФО</h6>
+        <div class="chart-block-hint">Где сосредоточен завал и насколько он застарелый. ЦФО отсортированы по сумме</div>
+        <div class="chart-canvas-wrap">
             <canvas id="chart-contracts"></canvas>
         </div>
     </div>
