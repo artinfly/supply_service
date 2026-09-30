@@ -16,8 +16,6 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.db import models
 
-# --- Справочники ---
-
 
 class NsiIgk(models.Model):
     """Справочник ИГК — используется для выпадающих списков на сводках."""
@@ -43,10 +41,10 @@ class GozContractVat(models.Model):
 
     igk = models.CharField(max_length=10, unique=True, verbose_name="ГК")
     year = models.CharField(
-        max_length=4, blank=True, null=True, unique=True, verbose_name="Год"
+        max_length=4, blank=True, null=True, unique=False, verbose_name="Год"
     )
     product = models.CharField(
-        max_length=255, blank=True, null=True, unique=True, verbose_name="Изделие"
+        max_length=255, blank=True, null=True, unique=False, verbose_name="Изделие"
     )
     vat_rate = models.DecimalField(
         max_digits=4,
@@ -63,9 +61,6 @@ class GozContractVat(models.Model):
 
     def __str__(self):
         return f"{self.igk} ({self.year or 'без года'}) — {self.vat_rate}%"
-
-
-# --- Основные рабочие таблицы ---
 
 
 class IgkStatData(models.Model):
@@ -86,12 +81,10 @@ class IgkStatData(models.Model):
         max_length=500, null=True, verbose_name="Тип платежа"
     )
     item = models.CharField(max_length=500, null=True, verbose_name="Предмет договора")
-    # Зарезервированное слово в SQL, экранируем через db_column
     order = models.CharField(
         max_length=500, null=True, db_column="order", verbose_name="Номер заказа"
     )
 
-    # Финансовые данные: используем Decimal для точности
     plan = models.DecimalField(
         max_digits=15, decimal_places=2, null=True, verbose_name="Плановая сумма"
     )
@@ -110,7 +103,6 @@ class IgkStatData(models.Model):
 
     stage = models.CharField(max_length=250, null=True, verbose_name="Этап графика")
 
-    # Флаги годов ИГК
     y25 = models.BooleanField(null=True, verbose_name="Флаг 2025 года")
     y26 = models.BooleanField(null=True, verbose_name="Флаг 2026 года")
     y27 = models.BooleanField(null=True, verbose_name="Флаг 2027 года")
@@ -138,9 +130,6 @@ class IgkStatData(models.Model):
 
     def __str__(self):
         return f"{self.igk} / {self.contract}"
-
-
-# --- Staging таблицы (импорт) ---
 
 
 class StagingExcel(models.Model):
@@ -280,9 +269,6 @@ class ZnpDataSAP(models.Model):
     payment_possible = models.DateField(
         null=True, verbose_name="Возможная дата платежа"
     )
-    init_payment_date = models.DateField(
-        null=True, verbose_name="Изначальная дата платежа"
-    )
     normalize_doc_num = models.CharField(
         max_length=255, null=True, verbose_name="Нормализованный номер"
     )
@@ -319,9 +305,6 @@ class StagingZnpSAPExcel(models.Model):
     payment_possible = models.DateField(
         null=True, verbose_name="Возможная дата платежа"
     )
-    init_payment_date = models.DateField(
-        null=True, verbose_name="Изначальная дата платежа"
-    )
     normalize_doc_num = models.CharField(
         max_length=255, null=True, verbose_name="Нормализованный номер"
     )
@@ -333,9 +316,6 @@ class StagingZnpSAPExcel(models.Model):
 
     def __str__(self):
         return f"Staging ЗнП SAP: {self.reg_num}"
-
-
-# --- История изменений и снимки ---
 
 
 class ContractsHistory(models.Model):
@@ -453,9 +433,6 @@ class ContractsAppeared(models.Model):
         return f"{self.contract} - {self.kind} на {self.upload_date}"
 
 
-# --- Права доступа и системные данные ---
-
-
 class Access(models.Model):
     """Модель-заглушка для кастомных прав доступа (таблица в БД не создаётся)."""
 
@@ -522,3 +499,44 @@ class Profile(models.Model):
 
     def __str__(self):
         return f"Профиль: {self.user.username}"
+
+
+class StagingSumExcel(models.Model):
+    """Временная таблица для импорта Краткой справки (SumReport)."""
+
+    id = models.AutoField(primary_key=True)
+    igk = models.CharField(max_length=50, verbose_name="ИГК (имя листа)")
+    is_cycle = models.BooleanField(default=False, verbose_name="Длинноцикличный")
+
+    dep = models.CharField(max_length=50, null=True, verbose_name="ЦФО")
+    counteragent = models.TextField(null=True, verbose_name="Контрагент")
+    inn = models.TextField(null=True, verbose_name="ИНН")
+    contract = models.CharField(max_length=255, null=True, verbose_name="Договор")
+    status = models.CharField(max_length=255, null=True, verbose_name="Состояние")
+    stage = models.CharField(max_length=255, null=True, verbose_name="Этап")
+    item = models.TextField(null=True, verbose_name="Предмет")
+    order_doc = models.CharField(max_length=255, null=True, verbose_name="Заказ")
+
+    contract_sum = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    plan_avans = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    percent_doc = models.DecimalField(max_digits=8, decimal_places=2, null=True)
+    fact_paid = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    note = models.TextField(null=True)
+    completed_sum = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    znp_count = models.IntegerField(null=True)
+    sum_80 = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    paid_from_znp = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    remains_pay = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    sum_avans = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+    sum_issued_znp = models.DecimalField(max_digits=15, decimal_places=2, null=True)
+
+    period_reg_date = models.DateField(null=True)
+    plan_date_contract = models.DateField(null=True)
+
+    class Meta:
+        db_table = "staging_sum_excel"
+        verbose_name = "Строка импорта Краткой справки"
+        verbose_name_plural = "Строки импорта Краткой справки"
+
+    def __str__(self):
+        return f"Staging Sum: {self.igk} / {self.contract}"

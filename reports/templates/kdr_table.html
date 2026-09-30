@@ -4,6 +4,13 @@
 {% block content %}
 <div class="page-header">
     <h5>Заключение договоров — {{ year }}</h5>
+    <div class="d-flex gap-2 align-items-center">
+        <span class="filter-label" style="margin:0">Год:</span>
+        {% for y in years %}
+        <a href="{% url 'kdr_table' y|stringformat:'s' %}"
+           class="idx-btn{% if y == year %} idx-btn-active{% endif %}">{{ y }}</a>
+        {% endfor %}
+    </div>
 </div>
 <div class="table-container" id="table-wrapper"></div>
 <div id="page-data" data-api-url="{% url 'api_kdr' year %}" style="display:none"></div>

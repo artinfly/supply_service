@@ -10,9 +10,8 @@
     <div class="d-flex flex-wrap gap-3 align-items-end">
         <div class="filter-group">
             <label class="filter-label">Контрагент или договор</label>
-            <input type="text" id="filter-agent" class="filter-input"
-                   placeholder="Часть названия или номера" autocomplete="off"
-                   style="width:260px">
+            <input type="text" id="filter-agent" class="filter-input filter-input-agent"
+                   placeholder="Часть названия или номера" autocomplete="off">
         </div>
         <div class="filter-group">
             <label class="filter-label">ИГК</label>
@@ -61,7 +60,7 @@
                 <option value="200">200</option>
             </select>
         </div>
-        <div class="filter-group" style="flex-direction:row;align-items:flex-end;gap:0.4rem">
+        <div class="filter-group filter-actions">
             <button id="btn-search" class="btn-orange">Найти</button>
             <button id="btn-reset" class="btn-ghost">Сбросить</button>
         </div>
@@ -90,8 +89,8 @@ const COLS = [
     { field: 'znp_status',        title: 'Статус',           style: 'style="width: 80px;"' },
     { field: 'plan_doc',          title: 'Док. план.',       style: 'style="width: 80px;"' },
     { field: 'payment_purpose',   title: 'Назначение' },
-    { field: 'plan_payment_date', title: 'Дата план',        style: ' style="width: 80px;"', format: 'date' },
-    { field: 'fact_payment_date', title: 'Дата факт',        style: ' style="width: 80px;"', format: 'date' },
+    { field: 'plan_payment_date', title: 'Дата план',        style: 'style="width: 80px;"', format: 'date' },
+    { field: 'fact_payment_date', title: 'Дата факт',        style: 'style="width: 80px;"', format: 'date' },
     { field: 'position_sum',      title: 'Сумма поз., руб.', format: 'number' },
     { field: 'znp_plan_sum',      title: 'План, руб.',       format: 'number' },
     { field: 'znp_fact_sum',      title: 'Факт, руб.',       format: 'number' },
@@ -145,7 +144,7 @@ function renderPage() {
     }
 
     let html = '<table class="report-table" style="table-layout: auto;"><thead><tr>';
-    COLS.forEach(col => { html += `<th ${col.style}>${col.title}</th>`; });
+    COLS.forEach(col => { html += `<th ${col.style || ''}>${col.title}</th>`; });
     html += '</tr></thead><tbody>';
 
     slice.forEach(row => {
@@ -208,9 +207,9 @@ document.getElementById('filter-agent').addEventListener('keydown', e => {
 });
 document.getElementById('btn-search').addEventListener('click', loadData);
 document.getElementById('btn-reset').addEventListener('click', () => {
-    document.getElementById('filter-agent').value      = '';
-    document.getElementById('filter-igk').value        = '';
-    document.getElementById('filter-cfo').value        = '';
+    document.getElementById('filter-agent').value = '';
+    document.getElementById('filter-igk').value   = '';
+    document.getElementById('filter-cfo').value   = '';
     for (const [id] of STATUS_BOXES) document.getElementById(id).checked = true;
     document.getElementById('filter-year').value = 'all';
     loadData();
