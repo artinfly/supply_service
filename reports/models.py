@@ -16,8 +16,6 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.db import models
 
-# --- Справочники ---
-
 
 class NsiIgk(models.Model):
     """Справочник ИГК — используется для выпадающих списков на сводках."""
@@ -65,9 +63,6 @@ class GozContractVat(models.Model):
         return f"{self.igk} ({self.year or 'без года'}) — {self.vat_rate}%"
 
 
-# --- Основные рабочие таблицы ---
-
-
 class IgkStatData(models.Model):
     """
     Позиция договора — основная рабочая таблица.
@@ -86,12 +81,10 @@ class IgkStatData(models.Model):
         max_length=500, null=True, verbose_name="Тип платежа"
     )
     item = models.CharField(max_length=500, null=True, verbose_name="Предмет договора")
-    # Зарезервированное слово в SQL, экранируем через db_column
     order = models.CharField(
         max_length=500, null=True, db_column="order", verbose_name="Номер заказа"
     )
 
-    # Финансовые данные: используем Decimal для точности
     plan = models.DecimalField(
         max_digits=15, decimal_places=2, null=True, verbose_name="Плановая сумма"
     )
@@ -110,7 +103,6 @@ class IgkStatData(models.Model):
 
     stage = models.CharField(max_length=250, null=True, verbose_name="Этап графика")
 
-    # Флаги годов ИГК
     y25 = models.BooleanField(null=True, verbose_name="Флаг 2025 года")
     y26 = models.BooleanField(null=True, verbose_name="Флаг 2026 года")
     y27 = models.BooleanField(null=True, verbose_name="Флаг 2027 года")
@@ -138,9 +130,6 @@ class IgkStatData(models.Model):
 
     def __str__(self):
         return f"{self.igk} / {self.contract}"
-
-
-# --- Staging таблицы (импорт) ---
 
 
 class StagingExcel(models.Model):
@@ -329,9 +318,6 @@ class StagingZnpSAPExcel(models.Model):
         return f"Staging ЗнП SAP: {self.reg_num}"
 
 
-# --- История изменений и снимки ---
-
-
 class ContractsHistory(models.Model):
     """История изменений договоров (статус, план, факт)."""
 
@@ -447,9 +433,6 @@ class ContractsAppeared(models.Model):
         return f"{self.contract} - {self.kind} на {self.upload_date}"
 
 
-# --- Права доступа и системные данные ---
-
-
 class Access(models.Model):
     """Модель-заглушка для кастомных прав доступа (таблица в БД не создаётся)."""
 
@@ -554,3 +537,6 @@ class StagingSumExcel(models.Model):
         db_table = "staging_sum_excel"
         verbose_name = "Строка импорта Краткой справки"
         verbose_name_plural = "Строки импорта Краткой справки"
+
+    def __str__(self):
+        return f"Staging Sum: {self.igk} / {self.contract}"

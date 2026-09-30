@@ -17,6 +17,8 @@ from functools import wraps
 from io import StringIO
 
 import docx
+import openpyxl
+import xlrd
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -90,6 +92,7 @@ def _ctx(request):
     return {
         "years": YEARS,
         "year_cols": [(y, f"y{str(y)[2:]}") for y in YEARS],
+        "last_year": YEARS[-1],
     }
 
 
@@ -167,51 +170,90 @@ def index(request):
 @login_required
 def kdr_table(request, year):
     """Контроль договорной работы за год."""
-    year = valid_year(year)
+    year_int = valid_year(year)
+    if str(year_int) != str(year):
+        return redirect("kdr_table", year=str(year_int))
     ctx = _ctx(request)
-    ctx["year"] = year
+    ctx["year"] = year_int
     return render(request, "kdr_table.html", ctx)
+
+
+@login_required
+def kdr_table_default(request):
+    """КДР за последний доступный год."""
+    return redirect("kdr_table", year=str(YEARS[-1]))
 
 
 @login_required
 def igk_concluded_table(request, year):
     """Заключённые договоры по ИГК за год."""
-    year = valid_year(year)
+    year_int = valid_year(year)
+    if str(year_int) != str(year):
+        return redirect("igk_concluded_table", year=str(year_int))
     ctx = _ctx(request)
     ctx.update(
-        {"year": year, "report_type": "concluded", "title": f"ИГК {year} — Заключённые"}
+        {
+            "year": year_int,
+            "report_type": "concluded",
+            "title": f"ИГК {year_int} — Заключённые",
+            "url_name": "igk_concluded_table",
+        }
     )
     return render(request, "igk_table.html", ctx)
+
+
+@login_required
+def igk_concluded_table_default(request):
+    """Заключённые по ИГК за последний год."""
+    return redirect("igk_concluded_table", year=str(YEARS[-1]))
 
 
 @login_required
 def igk_not_concluded_table(request, year):
     """Незаключённые договоры по ИГК за год."""
-    year = valid_year(year)
+    year_int = valid_year(year)
+    if str(year_int) != str(year):
+        return redirect("igk_not_concluded_table", year=str(year_int))
     ctx = _ctx(request)
     ctx.update(
         {
-            "year": year,
+            "year": year_int,
             "report_type": "not_concluded",
-            "title": f"ИГК {year} — Незаключённые",
+            "title": f"ИГК {year_int} — Незаключённые",
+            "url_name": "igk_not_concluded_table",
         }
     )
     return render(request, "igk_table.html", ctx)
 
 
 @login_required
+def igk_not_concluded_table_default(request):
+    """Незаключённые по ИГК за последний год."""
+    return redirect("igk_not_concluded_table", year=str(YEARS[-1]))
+
+
+@login_required
 def igk_terminated_table(request, year):
     """Расторгнутые договоры по ИГК за год."""
-    year = valid_year(year)
+    year_int = valid_year(year)
+    if str(year_int) != str(year):
+        return redirect("igk_terminated_table", year=str(year_int))
     ctx = _ctx(request)
     ctx.update(
         {
-            "year": year,
+            "year": year_int,
             "report_type": "terminated",
-            "title": f"ИГК {year} — Расторгнутые",
+            "title": f"ИГК {year_int} — Расторгнутые",
+            "url_name": "igk_terminated_table",
         }
     )
     return render(request, "igk_table.html", ctx)
+
+
+@login_required
+def igk_terminated_table_default(request):
+    """Расторгнутые по ИГК за последний год."""
+    return redirect("igk_terminated_table", year=str(YEARS[-1]))
 
 
 # --- Реестры: каркасы страниц ---
@@ -558,8 +600,6 @@ def upload_gk_directory(request):
                             except Exception:
                                 continue
             elif ext == ".xlsx":
-                import openpyxl
-
                 wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
                 ws = wb.active
                 for row in ws.iter_rows(min_row=1, values_only=True):
@@ -579,8 +619,6 @@ def upload_gk_directory(request):
                         except Exception:
                             continue
             elif ext == ".xls":
-                import xlrd
-
                 book = xlrd.open_workbook(file_contents=file.read())
                 ws = book.sheet_by_index(0)
                 for rx in range(ws.nrows):
@@ -685,7 +723,6 @@ def gk_directory_delete(request):
 @login_required
 def dashboard(request):
     """Сводка по договорам: плашки и таблица по ЦФО."""
-    available_years = YEARS
     available_igk = NsiIgk.objects.all()
     year = valid_year(request.GET.get("year"))
     selected_igk = request.GET.get("igk", "") or str(available_igk.first() or "")
@@ -770,7 +807,7 @@ def dashboard(request):
 
     ctx.update(
         {
-            "available_years": available_years,
+            "available_years": YEARS,
             "selected_year": str(year),
             "available_igk": available_igk,
             "selected_igk": selected_igk,
@@ -802,7 +839,6 @@ def dashboard(request):
 @login_required
 def znp_table(request):
     """Сводка заявок ФЗД: плашки, таблица по ЦФО, период для графика."""
-    available_years = YEARS
     available_igk = NsiIgk.objects.all()
     year = valid_year(request.GET.get("year"))
     selected_igk = request.GET.get("igk", "") or str(available_igk.first() or "")
@@ -906,7 +942,7 @@ def znp_table(request):
 
     ctx.update(
         {
-            "available_years": available_years,
+            "available_years": YEARS,
             "selected_year": str(year),
             "available_igk": available_igk,
             "selected_igk": selected_igk,

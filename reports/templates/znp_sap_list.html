@@ -10,7 +10,8 @@
     <div class="d-flex flex-wrap gap-3 align-items-end">
         <div class="filter-group">
             <label class="filter-label">Контрагент / рег. номер</label>
-            <input type="text" id="filter-agent" class="filter-input" placeholder="Поиск...">
+            <input type="text" id="filter-agent" class="filter-input filter-input-agent"
+                   placeholder="Поиск..." autocomplete="off">
         </div>
         <div class="filter-group">
             <label class="filter-label">ИГК</label>
@@ -49,7 +50,7 @@
                 <option value="200">200</option>
             </select>
         </div>
-        <div class="filter-group" style="flex-direction:row;align-items:flex-end;gap:0.4rem">
+        <div class="filter-group filter-actions">
             <button id="btn-search" class="btn-orange">Найти</button>
             <button id="btn-reset" class="btn-ghost">Сбросить</button>
         </div>
@@ -80,12 +81,12 @@ const COLS = [
     { field: 'stage_e',            title: 'Передано в 18 отдел',      style: 'style="width: 80px;"', format: 'date' },
     { field: 'stage_f',            title: 'Подтверждено 18 отделом',  style: 'style="width: 80px;"', format: 'date' },
     { field: 'payment_possible',   title: 'Дата оплаты',              style: 'style="width: 80px;"', format: 'date' },
-    { field: 'vv_sum',             title: 'Сумма ВВ, руб.',        format: 'number' },
+    { field: 'vv_sum',             title: 'Сумма ВВ, руб.',           format: 'number' },
 ];
 
 const apiUrl = document.getElementById('page-data').dataset.apiUrl;
-let loadedData  = [];
-let currentPage = 1;
+let loadedData   = [];
+let currentPage  = 1;
 let selectedDate = '';
 
 const STATUS_BOXES = [
@@ -105,7 +106,7 @@ function buildUrl() {
     if (agent) params.append('agent', agent);
     if (igk)   params.append('igk', igk);
     if (cfo)   params.append('cfo', cfo);
-    if (selectedDate)  params.append('date', selectedDate);
+    if (selectedDate) params.append('date', selectedDate);
     for (const [id, status] of STATUS_BOXES)
         if (document.getElementById(id).checked) params.append('status', status);
     if (!params.has('status')) params.append('status', '');
@@ -128,7 +129,7 @@ function renderPage() {
     }
 
     let html = '<table class="report-table" style="table-layout: auto;"><thead><tr>';
-    COLS.forEach(col => { html += `<th ${col.style}>${col.title}</th>`; });
+    COLS.forEach(col => { html += `<th ${col.style || ''}>${col.title}</th>`; });
     html += '</tr></thead><tbody>';
 
     slice.forEach(row => {

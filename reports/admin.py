@@ -200,7 +200,7 @@ class UserWithSectionsAdmin(UserAdmin):
 
     add_form = CustomUserCreationForm
     form = AccessUserForm
-    add_form_template = "admin/auth/user/add_form.html"
+    add_form_template = "admin/auth/user/change_form.html"
     change_form_template = "admin/auth/user/change_form.html"
 
     list_display = (
@@ -292,7 +292,7 @@ class UserWithSectionsAdmin(UserAdmin):
             defaults={
                 "patronymic": form.cleaned_data.get("patronymic", ""),
                 "api_key": form.cleaned_data.get("api_key", ""),
-                "is_fired": form.cleaned_data.get("is_fired", ""),
+                "is_fired": form.cleaned_data.get("is_fired", False),
             },
         )
 

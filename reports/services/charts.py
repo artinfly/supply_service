@@ -1,7 +1,5 @@
 """SQL-запросы для графиков (Chart.js)."""
 
-from decimal import Decimal
-
 from .queries import (
     ADVANCE,
     CONCLUDED,
@@ -34,18 +32,6 @@ SAP_STAGES = tuple(
     for key, label in SAP_STAGE_LABELS.items()
     if key not in SAP_STAGES_OVERLAPPING
 )
-
-
-def to_decimal(value):
-    """
-    Безопасно приводит значение к Decimal.
-    Используется для агрегации финансовых данных из SQL-запросов.
-    """
-    if value is None:
-        return Decimal("0")
-    if isinstance(value, Decimal):
-        return value
-    return Decimal(str(value))
 
 
 # --- SQL-запросы ---

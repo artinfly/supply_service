@@ -9,6 +9,8 @@
 import os
 import re
 from contextlib import contextmanager
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
 import openpyxl
 import xlrd
@@ -239,8 +241,7 @@ def import_znp_sap(filepath):
     return len(data)
 
 
-from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+# --- Конвертация значений для Краткой справки ---
 
 
 def _sum_to_decimal(val):
@@ -304,8 +305,6 @@ def import_sum_report(filepath):
     Читает все листы. Имя листа = ИГК. Данные парсятся по позициям колонок.
     Флаг is_cycle определяется по значению в 7-й колонке (Да/Нет).
     """
-    import openpyxl
-
     wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
 
     fields = [

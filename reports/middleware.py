@@ -8,14 +8,13 @@ Middleware для проверки прав доступа к разделам �
 
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.utils.deprecation import MiddlewareMixin
 
 from .services.queries import YEARS
 
 # Соответствие прав доступа и ключевых слов в имени маршрута.
-# Порядок важен: более специфичные разделы проверяются раньше,
-# чтобы избежать ложных срабатываний.
-# Например: "export" перед "kdr", чтобы "export_kdr" считался выгрузкой.
-# "znp_sap" раньше "znp", чтобы "znp_sap_list" не попал в "znp".
+# Порядок важен: более специфичные разделы идут раньше общих
+# (например, "export" перед "kdr", "znp_sap" перед "znp").
 SECTIONS = (
     ("access_upload", ("upload",)),
     ("access_goz_report", ("goz",)),
@@ -42,14 +41,8 @@ def perm_for(url_name):
     return None
 
 
-class SectionAccessMiddleware:
+class SectionAccessMiddleware(MiddlewareMixin):
     """Middleware для проверки прав доступа по разделам."""
-
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        return self.get_response(request)
 
     def process_view(self, request, view_func, view_args, view_kwargs):
         """Проверяет права доступа перед вызовом представления."""

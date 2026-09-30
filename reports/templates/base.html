@@ -44,27 +44,15 @@
     {% endif %}
 
     {% if perms.reports.access_kdr %}
-    <div class="nav-section">КДР по годам</div>
-    {% for y in years %}
-    <a href="{% url 'kdr_table' y|stringformat:'s' %}" class="nav-sub-link">{{ y }}</a>
-    {% endfor %}
+    <div class="nav-section">КДР</div>
+    <a href="{% url 'kdr_table_default' %}" class="nav-sub-link">Заключение договоров</a>
     {% endif %}
 
     {% if perms.reports.access_igk %}
-    <div class="nav-section">ИГК — заключённые</div>
-    {% for y in years %}
-    <a href="{% url 'igk_concluded_table' y|stringformat:'s' %}" class="nav-sub-link">{{ y }}</a>
-    {% endfor %}
-
-    <div class="nav-section">ИГК — незаключённые</div>
-    {% for y in years %}
-    <a href="{% url 'igk_not_concluded_table' y|stringformat:'s' %}" class="nav-sub-link">{{ y }}</a>
-    {% endfor %}
-
-    <div class="nav-section">ИГК — расторгнутые</div>
-    {% for y in years %}
-    <a href="{% url 'igk_terminated_table' y|stringformat:'s' %}" class="nav-sub-link">{{ y }}</a>
-    {% endfor %}
+    <div class="nav-section">ИГК</div>
+    <a href="{% url 'igk_concluded_table_default' %}" class="nav-sub-link">Заключённые</a>
+    <a href="{% url 'igk_not_concluded_table_default' %}" class="nav-sub-link">Незаключённые</a>
+    <a href="{% url 'igk_terminated_table_default' %}" class="nav-sub-link">Расторгнутые</a>
     {% endif %}
 
     {% if perms.reports.access_history %}
@@ -208,8 +196,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const saved   = sessionStorage.getItem('sidebar_scroll');
     if (saved) sidebar.scrollTop = parseInt(saved);
     sidebar.addEventListener('scroll', () => sessionStorage.setItem('sidebar_scroll', sidebar.scrollTop));
+
+    // Подсветка активной ссылки: точное совпадение или вложенный маршрут.
+    // «Обзор» (root) подсвечивается только при точном совпадении пути.
+    const curPath = window.location.pathname;
     document.querySelectorAll('.sidebar a').forEach(link => {
-        if (link.href === window.location.href) link.classList.add('active');
+        const linkPath = new URL(link.href).pathname;
+        const isRoot = linkPath === '/reports/' || linkPath === '/reports';
+        const active = isRoot
+            ? curPath === linkPath
+            : (curPath === linkPath || curPath.startsWith(linkPath));
+        if (active) link.classList.add('active');
     });
 });
 </script>

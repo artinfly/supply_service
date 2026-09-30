@@ -30,8 +30,9 @@
             <button type="button" id="filter-reset" class="btn-ghost">Сбросить</button>
         </div>
     </div>
-    <div class="filter-hint" style="font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem">
-        Фильтр применяется к таблице «Повторы по ИГК, предмету и заказу». «Полные повторы строк» показаны без фильтра.
+    <div class="dupes-hint">
+        Фильтр применяется только к таблице «Повторы по ИГК, предмету и заказу».
+        «Полные повторы строк» показываются без фильтра.
     </div>
 </div>
 
@@ -67,7 +68,7 @@ const COLS_FULL = [
     { field: 'item',      title: 'Предмет' },
     { field: 'order',     title: 'Заказ' },
     { field: 'stage',     title: 'Этап' },
-    { field: 'plan_date', title: 'Дата плана' },
+    { field: 'plan_date', title: 'Дата плана', format: 'date' },
 ];
 
 const COLS_ORDER = [
@@ -75,9 +76,9 @@ const COLS_ORDER = [
     { field: 'cfo',             title: 'ЦФО' },
     { field: 'item',            title: 'Предмет' },
     { field: 'order',           title: 'Заказ' },
-    { field: 'rows_count',      title: 'Строк',        format: 'int' },
-    { field: 'contracts_count', title: 'Договоров',    format: 'int' },
-    { field: 'agents_count',    title: 'Контрагентов', format: 'int' },
+    { field: 'rows_count',      title: 'Строк',            format: 'int' },
+    { field: 'contracts_count', title: 'Договоров',        format: 'int' },
+    { field: 'agents_count',    title: 'Контрагентов',     format: 'int' },
     { field: 'plan_sum',        title: 'Сумма плана, руб.', format: 'number' },
 ];
 
@@ -86,14 +87,14 @@ const data = document.getElementById('page-data').dataset;
 function query() {
     const params = new URLSearchParams();
     const year = document.getElementById('filter-year').value;
-    const cfo = document.getElementById('filter-cfo').value;
+    const cfo  = document.getElementById('filter-cfo').value;
     if (year) params.append('year', year);
-    if(cfo) params.append('cfo', cfo);
+    if (cfo)  params.append('cfo', cfo);
     const qs = params.toString();
     return qs ? '?' + qs : '';
 }
 
-function reloadOrder(){
+function reloadOrder() {
     loadTable(data.orderUrl + query(), 'wrap-order', COLS_ORDER);
 }
 
@@ -101,12 +102,11 @@ document.getElementById('filter-year').addEventListener('change', reloadOrder);
 document.getElementById('filter-cfo').addEventListener('change', reloadOrder);
 document.getElementById('filter-reset').addEventListener('click', () => {
     document.getElementById('filter-year').value = '';
-    document.getElementById('filter-cfo').value = '';
+    document.getElementById('filter-cfo').value  = '';
     reloadOrder();
 });
 
 loadTable(data.fullUrl, 'wrap-full', COLS_FULL);
 reloadOrder();
-
 </script>
 {% endblock %}

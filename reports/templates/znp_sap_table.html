@@ -5,14 +5,20 @@
 
 {% block content %}
     <div class="page-header">
-        <h5>Заявки на платёж (SAP) {% if sap_load_time %}<span style="font-size:14px;color:var(--text-muted);font-weight:400">(Актуально на {{ sap_load_time|date:"d.m.Y H:i" }})</span>{% endif %}</h5>
-        <form method="get" class="d-flex gap-2 align-items-center" id='options'>
-            <select class="form-select form-select-sm" name="igk" onchange="this.form.submit()" style="width:auto">
+        <h5>
+            Заявки на платёж (SAP)
+            {% if sap_load_time %}
+            <span class="page-header-hint">(Актуально на {{ sap_load_time|date:"d.m.Y H:i" }})</span>
+            {% endif %}
+        </h5>
+        <form method="get" class="d-flex gap-2 align-items-center">
+            <select class="form-select form-select-sm filter-select-auto" name="igk" onchange="this.form.submit()">
                 {% for i in available_igk %}
                 <option value="{{ i }}" {% if selected_igk == i %}selected{% endif %}>{{ i }}</option>
                 {% endfor %}
             </select>
-            <input type="date" name="date" class="filter-input" style="width:160px" value="{{ first_date|date:'Y-m-d' }}" onchange="this.form.submit()">
+            <input type="date" name="date" class="filter-input filter-input-date"
+                   value="{{ first_date|date:'Y-m-d' }}" onchange="this.form.submit()">
         </form>
     </div>
 
@@ -119,12 +125,12 @@
         {% endif %}
     </div>
 
-    <div class="table-container mt-4 mb-4" style="padding:18px 20px 22px">
-        <h6 style="margin:0 0 2px;font-size:14px;font-weight:700">Заявки SAP по ЦФО</h6>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+    <div class="table-container chart-block mt-4 mb-4">
+        <h6 class="chart-block-title">Заявки SAP по ЦФО</h6>
+        <div class="chart-block-hint">
             Этапы согласования в разрезе ЦФО — те же, что на карточках выше
         </div>
-        <div style="position:relative;height:300px">
+        <div class="chart-canvas-wrap">
             <canvas id="chart-znp-sap"></canvas>
         </div>
     </div>

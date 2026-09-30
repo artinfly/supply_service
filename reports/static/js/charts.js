@@ -21,9 +21,7 @@
      Цветовая палитра графиков
      ============================================================ */
 
-  // Основные цвета интерфейса
   const SURFACE = "#ffffff";   // фон поверхности (границы между сегментами стека)
-  const INK = "#1e1e1e";       // основной текст
   const INK_2 = "#52514e";     // вторичный текст (подписи осей, легенда)
   const MUTED = "#898781";     // приглушённый текст (деления осей)
   const GRID = "#e1e0d9";      // линии сетки
@@ -118,6 +116,39 @@
   };
 
   /* ============================================================
+     Заглушка «нет данных»: показать / скрыть
+     ============================================================ */
+
+  const EMPTY_MSG_CLASS = "chart-empty-msg";
+
+  /**
+   * Показывает сообщение «За выбранный период данных нет»
+   * вместо canvas (canvas скрывается, но остаётся в DOM —
+   * иначе следующий loadChart не найдёт его через getElementById).
+   */
+  function showEmpty(canvas, holder) {
+    let msg = holder.querySelector("." + EMPTY_MSG_CLASS);
+    if (!msg) {
+      msg = document.createElement("div");
+      msg.className = EMPTY_MSG_CLASS;
+      msg.textContent = "За выбранный период данных нет";
+      holder.appendChild(msg);
+    }
+    msg.hidden = false;
+    canvas.hidden = true;
+  }
+
+  /**
+   * Прячет заглушку и возвращает canvas в DOM.
+   * Вызывается перед рендером нового графика.
+   */
+  function hideEmpty(canvas, holder) {
+    const msg = holder.querySelector("." + EMPTY_MSG_CLASS);
+    if (msg) msg.hidden = true;
+    canvas.hidden = false;
+  }
+
+  /* ============================================================
      Рендеринг столбчатых графиков
      ============================================================ */
 
@@ -140,28 +171,38 @@
     const canvas = document.getElementById(canvasId);
     if (!canvas) return null;
 
+    const holder = canvas.parentElement;
+
+    // Уничтожаем предыдущий график (если был) ДО всех проверок,
+    // чтобы не оставлять висящих ссылок Chart.js на canvas.
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+
+    // Скрываем заглушку, показываем canvas — на случай, если ранее был пустой результат
+    hideEmpty(canvas, holder);
+
+    const datasets = payload.datasets || [];
     const unit = payload.unit || "";
     const ordinal = Boolean(payload.ordinal);
     const stacked = Boolean(payload.stacked);
     const horizontal = Boolean(payload.horizontal);
-    // Выбор палитры: для горизонтальных графиков — цвета стадий,
-    // для вертикальных — категориальные или ординальные
-    const colors = ordinal ? ORDINAL : CATEGORICAL;
 
-    // Если все данные пустые — показываем сообщение вместо графика
-    const empty = payload.datasets.every((d) =>
-      d.data.every((v) => !v)
-    );
-    const holder = canvas.parentElement;
+    // Если все данные пустые — показываем сообщение вместо графика.
+    // Canvas скрываем, но НЕ удаляем из DOM.
+    const empty =
+      datasets.length === 0 ||
+      datasets.every((d) => !d.data || d.data.every((v) => !v));
     if (empty) {
-      holder.innerHTML =
-        '<div class="p-4 text-muted text-center" style="font-size:13px">' +
-        "За выбранный период данных нет</div>";
+      showEmpty(canvas, holder);
       return null;
     }
 
+    // Выбор палитры: для горизонтальных — цвета стадий,
+    // для вертикальных — категориальные или ординальные
+    const colors = ordinal ? ORDINAL : CATEGORICAL;
+
     // Преобразуем данные сервера в формат датасетов Chart.js
-    const datasets = payload.datasets.map(function (d, i) {
+    const chartDatasets = datasets.map(function (d, i) {
       return {
         label: d.label,
         data: d.data,
@@ -172,20 +213,16 @@
           : colors[i % colors.length],
         maxBarThickness: 22,
         borderRadius: 2,
-        borderColor: SURFACE,        // белая граница между сегментами стека
+        borderColor: SURFACE,
         borderWidth: stacked ? 1 : 0,
       };
     });
 
-    // Если на этом канвасе уже есть график — уничтожаем его перед перерисовкой
-    const existing = Chart.getChart(canvas);
-    if (existing) existing.destroy();
-
     return new Chart(canvas, {
       type: "bar",
-      data: { labels: payload.labels, datasets: datasets },
+      data: { labels: payload.labels, datasets: chartDatasets },
       options: {
-        indexAxis: horizontal ? "y" : "x",  // ориентация столбцов
+        indexAxis: horizontal ? "y" : "x",
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
         scales: {
@@ -209,9 +246,7 @@
               : {
                   color: MUTED,
                   padding: 8,
-                  callback: function (v) {
-                    return fmt(v, unit);
-                  },
+                  callback: function (v) { return fmt(v, unit); },
                 },
             title: horizontal
               ? { display: false }
@@ -220,19 +255,20 @@
         },
         plugins: {
           // Легенда только если серий больше одной
-          legend: payload.datasets.length > 1 ? legendTop : { display: false },
+          legend: datasets.length > 1 ? legendTop : { display: false },
           // Тултипы: значение + количество позиций + сумма в миллионах
           tooltip: {
             callbacks: {
               label: function (ctx) {
                 const value = horizontal ? ctx.parsed.x : ctx.parsed.y;
                 let text = ctx.dataset.label + ": " + fmt(value, unit) + " " + unit;
+
                 const counts = ctx.dataset.counts;
-                if (counts) {
+                if (counts && counts[ctx.dataIndex] !== undefined && counts[ctx.dataIndex] !== null) {
                   text += " (" + nf0.format(counts[ctx.dataIndex]) + " поз.)";
                 }
                 const amounts = ctx.dataset.amounts;
-                if (amounts && amounts[ctx.dataIndex]) {
+                if (amounts && amounts[ctx.dataIndex] !== undefined && amounts[ctx.dataIndex] !== null && amounts[ctx.dataIndex] !== 0) {
                   text += " (" + nf1.format(amounts[ctx.dataIndex]) + " млн ₽)";
                 }
                 return text;

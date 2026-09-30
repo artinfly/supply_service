@@ -98,7 +98,7 @@ const COLS = [
     { field: 'item',       title: 'Предмет' },
     { field: 'order',      title: 'Заказ' },
     { field: 'stage',      title: 'Этап' },
-    { field: 'spec_sum',   title: 'Cумма договора., руб.',  format: 'number' },
+    { field: 'spec_sum',   title: 'Сумма договора, руб.',  format: 'number' },
     { field: 'pp_sum',     title: 'План, руб.',     format: 'number' },
     { field: 'pp_fact',    title: 'Факт, руб.',      format: 'number' },
     { field: 'pp_remain',  title: 'Остаток, руб.',   format: 'number' },
@@ -122,6 +122,8 @@ function buildUrl() {
         NOT_CONCL_STATUSES.forEach(s => params.append('status', s));
     if (document.getElementById('cb-terminated').checked)
         TERMINATED_STATUSES.forEach(s => params.append('status', s));
+    // Если ни один статус не выбран — отправляем пустой параметр,
+    // чтобы API вернул пустой результат, а не все статусы.
     if (!params.has('status')) params.append('status', '');
     const year = document.getElementById('filter-year').value;
     if (year !== 'all') params.append('year', year);
@@ -130,7 +132,6 @@ function buildUrl() {
 }
 
 function renderPage() {
-    // Добавлен чекбокс только итоги, отображаем данные из уже загруженных без нового запроса
     const onlyTotals = document.getElementById('cb-only-totals').checked;
     const rows = onlyTotals ? loadedData.filter(r => r.is_subtotal === 1) : loadedData;
     const ps    = pageSize();
@@ -147,7 +148,7 @@ function renderPage() {
     }
 
     let html = '<table class="report-table" style="table-layout: auto;"><thead><tr>';
-    COLS.forEach(col => { html += `<th ${col.style}>${col.title}</th>`; });
+    COLS.forEach(col => { html += `<th ${col.style || ''}>${col.title}</th>`; });
     html += '</tr></thead><tbody>';
 
     slice.forEach(row => {
@@ -187,9 +188,9 @@ function loadFiltersFromURL() {
     if (params.has('statuses')) {
         const statusesParams = params.get('statuses').split(',');
 
-        document.getElementById('cb-concluded').checked = false;
+        document.getElementById('cb-concluded').checked     = false;
         document.getElementById('cb-not-concluded').checked = false;
-        document.getElementById('cb-terminated').checked = false;
+        document.getElementById('cb-terminated').checked    = false;
 
         if (statusesParams.includes('concluded'))
             document.getElementById('cb-concluded').checked = true;
@@ -197,11 +198,6 @@ function loadFiltersFromURL() {
             document.getElementById('cb-not-concluded').checked = true;
         if (statusesParams.includes('terminated'))
             document.getElementById('cb-terminated').checked = true;
-        if (statusesParams.includes('none')) {
-            document.getElementById('cb-concluded').checked = false;
-            document.getElementById('cb-not-concluded').checked = false;
-            document.getElementById('cb-terminated').checked = false;
-        }
     }
 }
 

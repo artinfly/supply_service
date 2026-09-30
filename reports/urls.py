@@ -21,7 +21,24 @@ urlpatterns = [
     path("znp-list/", pages.znp_list_table, name="znp_list_table"),
     path("znp-sap-list/", pages.znp_sap_list_table, name="znp_sap_list_table"),
     path("contract-dupes/", pages.contract_dupes_table, name="contract_dupes_table"),
-    # --- Страницы по годам (КДР и ИГК) ---
+    # --- Страницы по годам (КДР и ИГК): дефолтные редиректы ---
+    path("kdr/", pages.kdr_table_default, name="kdr_table_default"),
+    path(
+        "igk-concluded/",
+        pages.igk_concluded_table_default,
+        name="igk_concluded_table_default",
+    ),
+    path(
+        "igk-not-concluded/",
+        pages.igk_not_concluded_table_default,
+        name="igk_not_concluded_table_default",
+    ),
+    path(
+        "igk-terminated/",
+        pages.igk_terminated_table_default,
+        name="igk_terminated_table_default",
+    ),
+    # --- Страницы по годам (КДР и ИГК): с указанием года ---
     path("kdr/<str:year>/", pages.kdr_table, name="kdr_table"),
     path(
         "igk-concluded/<str:year>/",

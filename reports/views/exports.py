@@ -31,6 +31,7 @@ from ..services.queries import (
     kdr_export,
     valid_date,
 )
+from ..services.sum_report import generate_sum_reports_zip
 
 # --- Вспомогательные функции ---
 
@@ -462,9 +463,6 @@ def export_contracts_by_agent(request, year):
         make_wb(f"Договоры {year}", headers, col_w, data_rows),
         f'контрагент{"_" + agent_safe if agent_safe else ""}_{year}',
     )
-
-
-from ..services.sum_report import generate_sum_reports_zip
 
 
 @login_required

@@ -112,8 +112,7 @@ def _get_filters(request):
 @login_required
 def api_kdr(request, year):
     """Данные для таблицы «Контроль договорной работы» за год."""
-    yc = YEAR_COL.get(year)
-    if not yc:
+    if year not in YEAR_COL:
         return JsonResponse({"error": "недопустимый год"}, status=400)
     return _json_response(kdr(year))
 
@@ -330,8 +329,8 @@ def api_znp_sap_list(request):
             continue
         q = conditions[s]
         if date_ok:
-            q &= Q(**{sap_date_field(s): date_filter})
-        status_q |= q
+            q = q & Q(**{sap_date_field(s): date_filter})
+        status_q = status_q | q
     if status_q:
         qs = qs.filter(status_q)
     elif raw_statuses:
@@ -380,7 +379,7 @@ def _chart_response(labels, datasets, extra=None):
     return JsonResponse(payload, json_dumps_params={"ensure_ascii": False})
 
 
-def _stacked_by_cfo(sql, params, stages, title):
+def _stacked_by_cfo(sql, params, stages):
     """
     Универсальный сборщик стековых графиков по ЦФО.
     Ось X — ЦФО (по убыванию суммы), сегменты стека — стадии.
@@ -418,7 +417,6 @@ def _stacked_by_cfo(sql, params, stages, title):
             "ordinal": True,
             "horizontal": True,
             "stacked": True,
-            "title": title,
         },
     )
 
@@ -431,12 +429,7 @@ def api_chart_contracts(request):
     if not igk:
         return _chart_response([], [])
     sql, params = contracts_by_cfo(YEAR_COL[str(year)], igk)
-    return _stacked_by_cfo(
-        sql,
-        params,
-        CONTRACT_AGE,
-        f"Незаключённые по ЦФО и давности срока, ГодИГК {year}",
-    )
+    return _stacked_by_cfo(sql, params, CONTRACT_AGE)
 
 
 @login_required
@@ -451,15 +444,14 @@ def api_chart_znp(request):
     if not igk:
         return _chart_response([], [])
     sql, params = znp_by_cfo(YEAR_COL[str(year)], igk, start, end)
-    title = f"Заявки по ЦФО и стадиям, ГодИГК {year}"
-    if start and end:
-        title += f", заявки с {start} по {end}"
-    return _stacked_by_cfo(sql, params, ZNP_STAGES, title)
+    return _stacked_by_cfo(sql, params, ZNP_STAGES)
 
 
 @login_required
 def api_chart_znp_sap(request):
     """График «Заявки SAP по ЦФО и этапам» для сводки заявок SAP."""
     igk = request.GET.get("igk", "").strip()
+    if not igk:
+        return _chart_response([], [])
     sql, params = znp_sap_by_cfo(igk)
-    return _stacked_by_cfo(sql, params, SAP_STAGES, "Заявки SAP по ЦФО и этапам")
+    return _stacked_by_cfo(sql, params, SAP_STAGES)

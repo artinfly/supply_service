@@ -20,7 +20,7 @@
 
 {% if messages %}
 {% for msg in messages %}
-<div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}{{ msg.tags }}{% endif %} py-2 px-3 mb-3" style="font-size:0.82rem">{{ msg }}</div>
+<div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}{{ msg.tags }}{% endif %} goz-alert">{{ msg }}</div>
 {% endfor %}
 {% endif %}
 
@@ -37,7 +37,7 @@
             </p>
             <form method="post" action="{% url 'upload_gk_directory' %}" enctype="multipart/form-data" id="gk-upload-form">
                 {% csrf_token %}
-                <input type="file" name="doc_file" accept=".docx,.xlsx,.xls" class="form-control mb-3" style="font-size:0.82rem" required>
+                <input type="file" name="doc_file" accept=".docx,.xlsx,.xls" class="form-control goz-file-input mb-3" required>
                 <button type="submit" class="btn-orange btn-fixed">Обновить справочник</button>
             </form>
         </div>
@@ -197,7 +197,7 @@
             <button type="submit" class="btn-orange btn-fixed" id="goz-btn">Сформировать отчёт</button>
             <a href="{% url 'goz_report' %}" class="btn-ghost btn-fixed">Назад</a>
         </div>
-        <div id="goz-report-error" style="display:none;color:#c0392b;font-size:0.8rem;margin-top:0.5rem"></div>
+        <div id="goz-report-error" class="goz-error" hidden></div>
     </form>
 </div>
 
@@ -214,13 +214,11 @@
         {% csrf_token %}
         <div class="mb-3">
             <label class="filter-label">ZIP-архив с отчётами по контрактам</label>
-            <input type="file" name="archive" accept=".zip" class="form-control mt-1" style="font-size:0.82rem">
+            <input type="file" name="archive" accept=".zip" class="form-control goz-file-input mt-1">
         </div>
         <button type="submit" class="btn-orange btn-fixed" id="goz-btn">Загрузить и настроить НДС</button>
-        <div id="goz-progress" style="display:none;margin-top:0.75rem;font-size:0.82rem;color:#555">
-            Обрабатываем архив, подождите...
-        </div>
-        <div id="goz-error" style="display:none;color:#c0392b;font-size:0.8rem;margin-top:0.5rem"></div>
+        <div id="goz-progress" class="goz-progress" hidden>Обрабатываем архив, подождите...</div>
+        <div id="goz-error" class="goz-error" hidden></div>
     </form>
 </div>
 {% endif %}
@@ -231,9 +229,12 @@
 function checkArchive() {
     const input = document.querySelector('input[name="archive"]');
     const err = document.getElementById('goz-error');
+    const progress = document.getElementById('goz-progress');
+    const btn = document.getElementById('goz-btn');
+
     function fail(text) {
         err.textContent = text;
-        err.style.display = 'block';
+        err.hidden = false;
         return false;
     }
     if (!input.files || !input.files.length) {
@@ -242,14 +243,14 @@ function checkArchive() {
     if (!input.files[0].name.toLowerCase().endsWith('.zip')) {
         return fail('Это не .zip архив');
     }
-    err.style.display = 'none';
-    document.getElementById('goz-btn').disabled = true;
-    document.getElementById('goz-btn').textContent = 'Обработка...';
-    document.getElementById('goz-progress').style.display = 'block';
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = 'Обработка...';
+    progress.hidden = false;
     setTimeout(function () {
-        document.getElementById('goz-btn').disabled = false;
-        document.getElementById('goz-btn').textContent = 'Загрузить и настроить НДС';
-        document.getElementById('goz-progress').style.display = 'none';
+        btn.disabled = false;
+        btn.textContent = 'Загрузить и настроить НДС';
+        progress.hidden = true;
     }, 3000);
     return true;
 }
@@ -288,7 +289,7 @@ function checkArchive() {
     form.addEventListener('submit', async e => {
         e.preventDefault();
         document.getElementById('gk_data_input').value = JSON.stringify(collectGkData());
-        err.style.display = 'none';
+        err.hidden = true;
         btn.disabled = true;
         btn.textContent = 'Формирование...';
         try {
@@ -305,17 +306,18 @@ function checkArchive() {
                 throw new Error(text);
             }
             const blob = await resp.blob();
+            const blobUrl = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
+            link.href = blobUrl;
             link.download = fileNameFrom(resp);
             document.body.appendChild(link);
             link.click();
             link.remove();
-            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
             setTimeout(() => { window.location.href = homeUrl; }, 500);
         } catch (ex) {
             err.textContent = ex.message + '. Нажмите «Назад» и загрузите архив заново.';
-            err.style.display = 'block';
+            err.hidden = false;
             btn.textContent = 'Сформировать отчёт';
         }
     });

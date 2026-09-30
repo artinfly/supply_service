@@ -6,13 +6,13 @@
 {% block content %}
     <div class="page-header">
         <h5>Заявки на платёж (ФЗД)</h5>
-        <form method="get" class="d-flex gap-2 align-items-center" id='options'>
-            <select class="form-select form-select-sm" name="year" onchange="this.form.submit()" style="width:auto">
+        <form method="get" class="d-flex gap-2 align-items-center">
+            <select class="form-select form-select-sm filter-select-auto" name="year" onchange="this.form.submit()">
                 {% for y in available_years %}
                 <option value="{{ y }}" {% if selected_year == y|stringformat:"s" %}selected{% endif %}>{{ y }}</option>
                 {% endfor %}
             </select>
-            <select class="form-select form-select-sm" name="igk" onchange="this.form.submit()" style="width:auto">
+            <select class="form-select form-select-sm filter-select-auto" name="igk" onchange="this.form.submit()">
                 {% for i in available_igk %}
                 <option value="{{ i }}" {% if selected_igk == i|stringformat:"s" %}selected{% endif %}>{{ i }}</option>
                 {% endfor %}
@@ -310,23 +310,23 @@
         {% endif %}
     </div>
 
-    <div class="table-container mt-4 mb-4" style="padding:18px 20px 22px">
-        <h6 style="margin:0 0 2px;font-size:14px;font-weight:700">Заявки по ЦФО</h6>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Стадии заявок в разрезе ЦФО — те же, что на карточках выше</div>
+    <div class="table-container chart-block mt-4 mb-4">
+        <h6 class="chart-block-title">Заявки по ЦФО</h6>
+        <div class="chart-block-hint">Стадии заявок в разрезе ЦФО — те же, что на карточках выше</div>
         <div class="chart-period">
             <div class="filter-group">
                 <label class="filter-label" for="chart-start">Дата заявки с</label>
-                <input type="date" id="chart-start" class="filter-input" style="width:160px" value="{{ chart_start }}">
+                <input type="date" id="chart-start" class="filter-input filter-input-date" value="{{ chart_start }}">
             </div>
             <div class="filter-group">
                 <label class="filter-label" for="chart-end">по</label>
-                <input type="date" id="chart-end" class="filter-input" style="width:160px" value="{{ chart_end }}">
+                <input type="date" id="chart-end" class="filter-input filter-input-date" value="{{ chart_end }}">
             </div>
             <button type="button" id="chart-apply" class="btn-orange">Применить</button>
             <button type="button" id="chart-reset" class="btn-ghost">Сбросить</button>
             <span class="chart-period-note" id="chart-period-note"></span>
         </div>
-        <div style="position:relative;height:300px">
+        <div class="chart-canvas-wrap">
             <canvas id="chart-znp"></canvas>
         </div>
     </div>
