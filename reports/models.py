@@ -509,7 +509,6 @@ class StagingSumExcel(models.Model):
     id = models.AutoField(primary_key=True)
     igk = models.CharField(max_length=50, verbose_name="ИГК (имя листа)")
     is_cycle = models.BooleanField(default=False, verbose_name="Длинноцикличный")
-    report_title = models.TextField(null=True, blank=True, verbose_name="Заголовок отчёта")
 
     dep = models.CharField(max_length=50, null=True, verbose_name="ЦФО")
     counteragent = models.TextField(null=True, verbose_name="Контрагент")
