@@ -215,7 +215,7 @@ def _write_table1(ws, igk, is_cycle):
     Заполняет первую таблицу (сводная по ЦФО).
     Возвращает номер итоговой строки первой таблицы.
     """
-    rows = _fetch_rows(_sql_table1(igk, is_cycle), [igk] * 10 + [igk])
+    rows = _fetch_rows(_sql_table1(igk, is_cycle), [igk] * 9)
     if not rows:
         return 5
 
@@ -438,11 +438,13 @@ def generate_sum_reports_zip(is_cycle=False):
         for igk in igks:
             try:
                 data = _generate_single_report(igk, is_cycle)
-            except Exception:
-                # Если по конкретному ИГК ошибка — пропускаем, чтобы не ронять весь архив
-                continue
+            except Exception as exc:
+                raise RuntimeError(f"Ошибка формирования отчёта ИГК {igk}: {exc}") from exc
             filename = f"{igk} {report_label} {today_str}_{username}.xlsx"
             zf.writestr(filename, data)
 
     zip_buffer.seek(0)
-    return xlsx_response(zip_buffer.getvalue(), f"Отчёты_{report_label}")
+    from django.http import HttpResponse
+    response = HttpResponse(zip_buffer.getvalue(), content_type="application/zip")
+    response["Content-Disposition"] = f'attachment; filename="reports.zip"'
+    return response
