@@ -220,7 +220,7 @@ def _write_table1(ws, igk, is_cycle):
     Заполняет первую таблицу (сводная по ЦФО).
     Возвращает номер итоговой строки первой таблицы.
     """
-    rows = _fetch_rows(_sql_table1(igk, is_cycle), [igk] * 10 + [igk])
+    rows = _fetch_rows(_sql_table1(igk, is_cycle), [igk] * 8 + [igk])
     if not rows:
         return 5
 
