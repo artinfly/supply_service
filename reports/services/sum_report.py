@@ -203,11 +203,25 @@ def _fetch_rows(sql, params):
 def _get_igk_list(is_cycle):
     """Список ИГК, для которых есть данные в staging."""
     with connection.cursor() as cur:
-        cur.execute(
-            "SELECT DISTINCT igk FROM staging_sum_excel WHERE is_cycle = %s ORDER BY igk",
-            [is_cycle],
-        )
+        sql = "SELECT DISTINCT igk FROM staging_sum_excel"
+        if is_cycle:
+            sql += " WHERE is_cycle = TRUE"
+        sql += " ORDER BY igk"
+        cur.execute(sql)
         return [row[0] for row in cur.fetchall()]
+
+
+def _get_report_title(igk, is_cycle):
+    """Возвращает исходное значение B1 для листа ИГК."""
+    cycle_sql = " AND is_cycle = TRUE" if is_cycle else ""
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT report_title FROM staging_sum_excel "
+            "WHERE igk = %s" + cycle_sql + " ORDER BY id LIMIT 1",
+            [igk],
+        )
+        row = cur.fetchone()
+    return (row[0] if row else None) or igk
 
 
 def _write_table1(ws, igk, is_cycle):
@@ -215,7 +229,7 @@ def _write_table1(ws, igk, is_cycle):
     Заполняет первую таблицу (сводная по ЦФО).
     Возвращает номер итоговой строки первой таблицы.
     """
-    rows = _fetch_rows(_sql_table1(igk, is_cycle), [igk] * 10 + [igk])
+    rows = _fetch_rows(_sql_table1(igk, is_cycle), [igk] * 9)
     if not rows:
         return 5
 
@@ -361,7 +375,7 @@ def _generate_single_report(igk, is_cycle):
 
     # Заголовок: в оригинале брали значение из исходного файла [1,2],
     # у нас имя листа = ИГК, поэтому пишем ИГК.
-    ws["A2"] = igk
+    ws["A2"] = _get_report_title(igk, is_cycle)
     # Дата отчёта в [1,11]
     ws.cell(row=1, column=11).value = timezone.localdate().strftime("%d.%m.%Y")
 
@@ -438,11 +452,15 @@ def generate_sum_reports_zip(is_cycle=False):
         for igk in igks:
             try:
                 data = _generate_single_report(igk, is_cycle)
-            except Exception:
-                # Если по конкретному ИГК ошибка — пропускаем, чтобы не ронять весь архив
-                continue
+            except Exception as exc:
+                raise RuntimeError(f"Ошибка формирования отчёта ИГК {igk}: {exc}") from exc
             filename = f"{igk} {report_label} {today_str}_{username}.xlsx"
             zf.writestr(filename, data)
 
     zip_buffer.seek(0)
-    return xlsx_response(zip_buffer.getvalue(), f"Отчёты_{report_label}")
+    from django.http import HttpResponse
+    response = HttpResponse(zip_buffer.getvalue(), content_type="application/zip")
+    response["Content-Disposition"] = (
+        f'attachment; filename="reports_{"cycle" if is_cycle else "normal"}_{today_str}.zip"'
+    )
+    return response
