@@ -304,7 +304,7 @@ def import_sum_report(filepath):
     """
     Импортирует файл Краткой справки в staging_sum_excel.
     Читает все листы. Имя листа = ИГК. Данные парсятся по позициям колонок.
-    Флаг is_cycle определяется по значению в 7-й колонке (Да/Нет).
+    Флаг is_cycle определяется по значению 7-й колонки, если в источнике она содержит булев признак.
     """
     wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
 
@@ -338,7 +338,7 @@ def import_sum_report(filepath):
     data = []
     try:
         for sheet_name in wb.sheetnames:
-            if not sheet_name.strip():
+            if not sheet_name.strip() or sheet_name.strip().casefold() == "свод (2)":
                 continue
 
             ws = wb[sheet_name]
@@ -386,8 +386,14 @@ def import_sum_report(filepath):
                 condition = str(cell(6) or "").strip()
                 stage_val = str(cell(7) or "").strip()
 
-                # Определяем is_cycle по значению в 7-й колонке (Да/Нет)
-                is_cycle = stage_val.lower() in ("да", "1", "true", "yes", "д")
+                # В исходной SumReportWCycle 7-я колонка содержит отдельный булев признак.
+                # В текущей Краткой справке 7-я колонка — «Этап графика», поэтому обычные
+                # значения этапов не должны ошибочно превращать строки в длинноцикловые.
+                raw_cycle = cell(7)
+                if isinstance(raw_cycle, bool):
+                    is_cycle = raw_cycle
+                else:
+                    is_cycle = str(raw_cycle or "").strip().casefold() in ("да", "1", "true", "yes", "д")
 
                 record = {
                     "igk": sheet_name,
