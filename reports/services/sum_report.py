@@ -210,6 +210,19 @@ def _get_igk_list(is_cycle):
         return [row[0] for row in cur.fetchall()]
 
 
+def _get_report_title(igk, is_cycle):
+    """Возвращает исходное значение B1 для листа ИГК."""
+    cycle_sql = " AND is_cycle = TRUE" if is_cycle else ""
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT report_title FROM staging_sum_excel "
+            "WHERE igk = %s" + cycle_sql + " ORDER BY id LIMIT 1",
+            [igk],
+        )
+        row = cur.fetchone()
+    return (row[0] if row else None) or igk
+
+
 def _write_table1(ws, igk, is_cycle):
     """
     Заполняет первую таблицу (сводная по ЦФО).
@@ -361,7 +374,7 @@ def _generate_single_report(igk, is_cycle):
 
     # Заголовок: в оригинале брали значение из исходного файла [1,2],
     # у нас имя листа = ИГК, поэтому пишем ИГК.
-    ws["A2"] = igk
+    ws["A2"] = _get_report_title(igk, is_cycle)
     # Дата отчёта в [1,11]
     ws.cell(row=1, column=11).value = timezone.localdate().strftime("%d.%m.%Y")
 
@@ -446,5 +459,7 @@ def generate_sum_reports_zip(is_cycle=False):
     zip_buffer.seek(0)
     from django.http import HttpResponse
     response = HttpResponse(zip_buffer.getvalue(), content_type="application/zip")
-    response["Content-Disposition"] = f'attachment; filename="reports.zip"'
+    response["Content-Disposition"] = (
+        f'attachment; filename="reports_{"cycle" if is_cycle else "normal"}_{today_str}.zip"'
+    )
     return response
