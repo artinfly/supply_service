@@ -336,7 +336,7 @@ def api_znp_sap_list(request):
     elif raw_statuses:
         qs = qs.none()
     elif date_ok:
-        qs = qs.filter(stage_e=date_filter)
+        qs = qs.filter(created_date=date_filter)
 
     data = list(
         qs.annotate(status_key=sap_status_expr())
