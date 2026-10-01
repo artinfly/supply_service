@@ -105,6 +105,17 @@ def make_wb(sheet_name, headers, col_widths, rows_data, kinds=None, formats=None
     return buf.getvalue()
 
 
+def zip_response(data, filename_ru):
+    """HTTP-ответ для ZIP-архива."""
+    today = timezone.localdate().strftime("%d_%m_%Y")
+    fname_ascii = f"{filename_ru.translate(_TRANSLIT)}_{today}.zip"
+    fname_utf8 = quote(f"{filename_ru}_{today}.zip")
+    response = HttpResponse(data, content_type="application/zip")
+    response["Content-Disposition"] = (
+        f"attachment; filename=\"{fname_ascii}\"; filename*=UTF-8''{fname_utf8}"
+    )
+    return response
+
 def xlsx_response(data, filename_ru):
     """
     Формирует HTTP-ответ для скачивания xlsx-файла.
