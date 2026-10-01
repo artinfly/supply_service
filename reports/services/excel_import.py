@@ -246,7 +246,6 @@ def import_znp_sap(filepath):
 
 SUM_REPORT_FIELDS = [
     "igk",
-    "sheet_title",
     "is_cycle",
     "dep",
     "counteragent",
@@ -519,7 +518,6 @@ def import_sum_report(filepath):
 
                 record = {
                     "igk": str(sheet_name).strip(),
-                    "sheet_title": sheet_title or str(sheet_name).strip(),
                     "is_cycle": _bool_value(
                         row[cycle_position] if cycle_position is not None and cycle_position < len(row) else None
                     ),
