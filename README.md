@@ -202,6 +202,7 @@ supply_service/
 python manage.py load_contracts путь\к\файлу.xlsx
 python manage.py load_znp путь\к\файлу.xlsx
 python manage.py load_znp_sap путь\к\файлу.xlsx
+python manage.py load_sum_report путь\\к\\файлу.xlsx
 ```
 
 Каждая команда сама импортирует файл в staging и нормализует данные в одной транзакции. После загрузки время записывается в `system_events` и показывается на сводках как «Актуально на …».
@@ -321,9 +322,9 @@ pip install -r requirements.txt
 Создать `.env` в корне проекта:
 
 ```
-DJANGO_SECRET_KEY=любая-длинная-случайная-строка-минимум-50-символов
-DJANGO_DEBUG=True
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+SECRET_KEY=любая-длинная-случайная-строка-минимум-50-символов
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
 DB_NAME=supply_service
 DB_USER=postgres
 DB_PASSWORD=пароль_от_postgresql
@@ -346,7 +347,7 @@ python manage.py runserver
 
 ### Продакшн
 
-При `DJANGO_DEBUG=False` статика отдаётся через WhiteNoise, перед запуском её нужно собрать:
+При `DEBUG=False` статика отдаётся через WhiteNoise, перед запуском её нужно собрать:
 
 ```
 python manage.py collectstatic
