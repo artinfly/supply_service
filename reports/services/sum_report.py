@@ -19,7 +19,7 @@ from decimal import Decimal
 
 from django.db import connection
 from django.utils import timezone
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.styles import PatternFill
 
 from .excel import xlsx_response
@@ -358,11 +358,15 @@ def _write_detail_table(ws, curr_row, rows, is_table4=False):
 def _generate_single_report(igk, is_cycle):
     """Генерирует один отчёт для одного ИГК. Возвращает bytes xlsx."""
     template = _template_path()
-    if not os.path.exists(template):
-        raise FileNotFoundError(f"Шаблон {template} не найден")
-
-    wb = load_workbook(template)
-    ws = wb.active
+    if os.path.exists(template):
+        wb = load_workbook(template)
+        ws = wb.active
+    else:
+        # templateSum.xlsx отсутствует в репозитории. Создаём минимальный
+        # совместимый лист, а расчётные строки заполняются тем же кодом ниже.
+        wb = Workbook()
+        ws = wb.active
+        ws.title = igk[:31]
 
     # Заголовок: в оригинале брали значение из исходного файла [1,2],
     # у нас имя листа = ИГК, поэтому пишем ИГК.
@@ -449,4 +453,4 @@ def generate_sum_reports_zip(is_cycle=False):
             zf.writestr(filename, data)
 
     zip_buffer.seek(0)
-    return xlsx_response(zip_buffer.getvalue(), f"Отчёты_{report_label}")
+    return zip_response(zip_buffer.getvalue(), f"Отчёты_{report_label}")
