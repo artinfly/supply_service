@@ -141,7 +141,7 @@ def _sql_table2(igk, is_cycle):
             td.note AS note 
         FROM staging_sum_excel td 
         WHERE td.igk = %s {cycle_cond} 
-          AND LOWER(td.status) IN ('знп оформлена', 'заключен', ' заключен') 
+          AND LOWER(TRIM(td.status)) IN ('знп оформлена', 'заключен') 
           AND td.remains_pay NOT BETWEEN -1 AND 1 
           AND td.sum_avans NOT BETWEEN -1 AND 1 
         ORDER BY td.dep ASC; 
@@ -164,7 +164,7 @@ def _sql_table3(igk, is_cycle):
             td.note AS note 
         FROM staging_sum_excel td 
         WHERE td.igk = %s {cycle_cond} 
-          AND LOWER(td.status) IN ('знп на оформлении', 'заключен', ' заключен', 'заключен ', ' заключен ') 
+          AND LOWER(TRIM(td.status)) IN ('знп на оформлении', 'заключен') 
           AND td.remains_pay NOT BETWEEN -1 AND 1 
           AND ROUND(td.sum_issued_znp::numeric, 2) NOT BETWEEN -1 AND 1 
         ORDER BY td.dep ASC; 
@@ -187,7 +187,7 @@ def _sql_table4(igk, is_cycle):
             td.note AS note 
         FROM staging_sum_excel td 
         WHERE td.igk = %s {cycle_cond} 
-          AND LOWER(td.status) IN ('не заключен', ' не заключен', 'не заключен ', ' не заключен ') 
+          AND LOWER(TRIM(td.status)) = 'не заключен' 
         ORDER BY td.dep ASC; 
     """
 
@@ -201,12 +201,17 @@ def _fetch_rows(sql, params):
 
 
 def _get_igk_list(is_cycle):
-    """Список ИГК, для которых есть данные в staging."""
+    """Список ИГК: обычный отчёт — все, WCycle — только is_cycle=TRUE."""
     with connection.cursor() as cur:
-        cur.execute(
-            "SELECT DISTINCT igk FROM staging_sum_excel WHERE is_cycle = %s ORDER BY igk",
-            [is_cycle],
-        )
+        if is_cycle:
+            cur.execute(
+                "SELECT DISTINCT igk FROM staging_sum_excel "
+                "WHERE is_cycle = TRUE ORDER BY igk"
+            )
+        else:
+            cur.execute(
+                "SELECT DISTINCT igk FROM staging_sum_excel ORDER BY igk"
+            )
         return [row[0] for row in cur.fetchall()]
 
 
@@ -438,9 +443,8 @@ def generate_sum_reports_zip(is_cycle=False):
         for igk in igks:
             try:
                 data = _generate_single_report(igk, is_cycle)
-            except Exception:
-                # Если по конкретному ИГК ошибка — пропускаем, чтобы не ронять весь архив
-                continue
+            except Exception as exc:
+                raise RuntimeError(f"Ошибка формирования отчёта ИГК {igk}: {exc}") from exc
             filename = f"{igk} {report_label} {today_str}_{username}.xlsx"
             zf.writestr(filename, data)
 
