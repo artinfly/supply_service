@@ -66,8 +66,8 @@ def _to_float(v):
 
 def _sql_table1(igk, is_cycle):
     """Первая таблица: сводная по ЦФО."""
-    cycle_cond = "AND is_cycle = TRUE" if is_cycle else "AND is_cycle = FALSE"
-    cycle_sub = "AND td2.is_cycle = TRUE" if is_cycle else "AND td2.is_cycle = FALSE"
+    cycle_cond = "AND is_cycle = TRUE" if is_cycle else ""
+    cycle_sub = "AND td2.is_cycle = TRUE" if is_cycle else ""
     return f""" 
         SELECT 
             td.dep, 
@@ -127,7 +127,7 @@ def _sql_table1(igk, is_cycle):
 
 def _sql_table2(igk, is_cycle):
     """Вторая таблица: ЗнП оформлена / Заключён."""
-    cycle_cond = "AND td.is_cycle = TRUE" if is_cycle else "AND td.is_cycle = FALSE"
+    cycle_cond = "AND td.is_cycle = TRUE" if is_cycle else ""
     return f""" 
         SELECT 
             td.counteragent AS counteragent, 
@@ -203,10 +203,11 @@ def _fetch_rows(sql, params):
 def _get_igk_list(is_cycle):
     """Список ИГК, для которых есть данные в staging."""
     with connection.cursor() as cur:
-        cur.execute(
-            "SELECT DISTINCT igk FROM staging_sum_excel WHERE is_cycle = %s ORDER BY igk",
-            [is_cycle],
-        )
+        sql = "SELECT DISTINCT igk FROM staging_sum_excel"
+        if is_cycle:
+            sql += " WHERE is_cycle = TRUE"
+        sql += " ORDER BY igk"
+        cur.execute(sql)
         return [row[0] for row in cur.fetchall()]
 
 
