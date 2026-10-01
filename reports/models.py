@@ -272,6 +272,7 @@ class ZnpDataSAP(models.Model):
     normalize_doc_num = models.CharField(
         max_length=255, null=True, verbose_name="Нормализованный номер"
     )
+    created_date = models.DateField(null=True, verbose_name="Дата создания заявки")
 
     class Meta:
         db_table = "znp_data_sap"
@@ -308,6 +309,7 @@ class StagingZnpSAPExcel(models.Model):
     normalize_doc_num = models.CharField(
         max_length=255, null=True, verbose_name="Нормализованный номер"
     )
+    created_date = models.DateField(null=True, verbose_name="Дата создания заявки")
 
     class Meta:
         db_table = "staging_znp_sap_excel"

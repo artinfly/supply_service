@@ -289,7 +289,7 @@ def sap_aggregates(date=None):
     Условия статусов те же, что в списке заявок. При date считаются заявки
     с этой датой (для каждого статуса по своему полю даты).
     """
-    total_filter = Q(stage_e=date) if date else None
+    total_filter = Q(created_date=date) if date else None
     aggregates = {
         "total": Count("id", filter=total_filter),
         "total_sum": Sum("vv_sum", filter=total_filter),
