@@ -128,7 +128,7 @@ def clean_header(text):
     if not text:
         return ""
     text = str(text)
-    text = re.sub(r"[^a-zA-Zа-яА-ЯёЁ0-9\s/*()«»\'\-\_]", "", text)
+    text = re.sub(r"[^a-zA-Zа-яА-ЯёЁ0-9\s/%*()«»\'\-\_]", "", text)
     text = re.sub(r"\s+", "", text).strip()
     return text.casefold()
 
@@ -244,13 +244,94 @@ def import_znp_sap(filepath):
 
 # --- Конвертация значений для Краткой справки ---
 
+SUM_REPORT_FIELDS = [
+    "igk",
+    "sheet_title",
+    "is_cycle",
+    "dep",
+    "counteragent",
+    "inn",
+    "contract",
+    "status",
+    "stage",
+    "item",
+    "order_doc",
+    "contract_sum",
+    "plan_avans",
+    "percent_doc",
+    "fact_paid",
+    "note",
+    "completed_sum",
+    "znp_count",
+    "sum_80",
+    "paid_from_znp",
+    "remains_pay",
+    "sum_avans",
+    "sum_issued_znp",
+    "period_reg_date",
+    "plan_date_contract",
+]
+
+# Названия полей Краткой справки намеренно привязаны к смыслу заголовка,
+# а не к номеру колонки. В исходных файлах несколько заголовков отличаются
+# незначительными деталями ("80%" / "90%", переносы строк и т.п.).
+SUM_REPORT_COLUMN_ALIASES = {
+    "dep": ("ЦФО",),
+    "counteragent": ("Контрагент",),
+    "inn": ("ИНН",),
+    "contract": ("Договор",),
+    "status": ("Состояние",),
+    "stage": ("Этап графика",),
+    "item": ("Предмет",),
+    "order_doc": ("Заказ",),
+    "contract_sum": ("СУММА договора", "Сумма договора"),
+    "plan_avans": (
+        "ПЛАН аванса по договору (по условию)",
+        "ПЛАН аванса по договору",
+    ),
+    "percent_doc": ("%", "Процент"),
+    "fact_paid": (
+        "ФАКТ ОПЛАТЫ АВАНСА",
+        "ФАКТ ОПЛАТЫ АВАНС",
+        "ФАКТ ОПЛАТЫ АВАНСЫ",
+    ),
+    "note": ("Примечание",),
+    "completed_sum": ("Сумма оформленных ЗНП",),
+    "znp_count": ("Кол-во сданных ЗНП",),
+    "sum_80": (
+        "сумма 90% по договору",
+        "сумма 80% по договору",
+        "сумма 80/90% по договору",
+        "сумма аванса по договору 80%",
+    ),
+    "paid_from_znp": ("Оплачено из сданных ЗНП",),
+    "remains_pay": ("Осталось доплатить авансов",),
+    "sum_avans": ("Сумма оформленных и не оформленных ЗнП",),
+    "sum_issued_znp": ("Сумма оформленных/не оформленных ЗнП",),
+    "period_reg_date": ("Срок оформления ЗнП на аванс",),
+    "plan_date_contract": (
+        "Планируемая дата заключения договора",
+        "Дата заключения договора",
+    ),
+}
+
+SUM_REPORT_CYCLE_ALIASES = (
+    "Цикл",
+    "Длинный цикл",
+    "Длинноцикличный",
+    "is_cycle",
+    "cycle",
+)
+
+SUM_REPORT_REQUIRED_FIELDS = set(SUM_REPORT_COLUMN_ALIASES)
+
 
 def _sum_to_decimal(val):
-    """Конвертирует значение суммы в Decimal. Пустое/ошибка -> None."""
-    if val is None:
+    """Конвертирует денежное значение в Decimal. Пустое/ошибка -> None."""
+    if val is None or isinstance(val, bool):
         return None
     try:
-        s = str(val).replace(" ", "").replace(",", ".").replace("\xa0", "")
+        s = str(val).replace("\xa0", "").replace(" ", "").replace(",", ".")
         if s in ("", "-", "None"):
             return None
         return Decimal(s)
@@ -259,14 +340,21 @@ def _sum_to_decimal(val):
 
 
 def _percent_to_decimal(val):
-    """Конвертирует процент в Decimal (убирает % и пробелы)."""
-    if val is None:
+    """
+    Конвертирует процент в долю от 1.
+    80% -> 0.80, 80 -> 0.80, 0.8 -> 0.80, 1 -> 1.00.
+    """
+    if val is None or isinstance(val, bool):
         return None
     try:
-        s = str(val).replace("%", "").replace(" ", "").replace(",", ".")
+        s = str(val).replace("%", "").replace("\xa0", "").replace(" ", "")
+        s = s.replace(",", ".")
         if s in ("", "-", "None"):
             return None
-        return Decimal(s)
+        result = Decimal(s)
+        if abs(result) > Decimal("1"):
+            result /= Decimal("100")
+        return result
     except (InvalidOperation, ValueError):
         return None
 
@@ -282,7 +370,7 @@ def _date_to_date(val):
     s = str(val).strip()
     if not s:
         return None
-    for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%d.%m.%y"):
+    for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%d.%m.%y", "%d/%m/%Y"):
         try:
             return datetime.strptime(s, fmt).date()
         except ValueError:
@@ -294,131 +382,173 @@ def _int_or_zero(val):
     """Конвертирует значение в int. Пустое/ошибка -> 0."""
     if val is None:
         return 0
+    if isinstance(val, bool):
+        return int(val)
     try:
-        return int(float(val))
+        return int(float(str(val).replace(",", ".")))
     except (ValueError, TypeError):
         return 0
+
+
+def _bool_value(val):
+    """Приводит явный признак цикла к bool."""
+    if isinstance(val, bool):
+        return val
+    if val is None:
+        return False
+    if isinstance(val, (int, float, Decimal)):
+        return bool(val)
+    normalized = str(val).strip().casefold()
+    return normalized in {
+        "да",
+        "д",
+        "yes",
+        "y",
+        "true",
+        "1",
+        "цикл",
+        "длинный цикл",
+        "длинноцикл",
+        "длинноцикличный",
+    }
+
+
+def _sum_report_header(ws):
+    """
+    Возвращает (строка шапки, mapping field -> zero-based column,
+    zero-based cycle column or None).
+
+    На текущем файле это строка 2. Поиск сделан динамическим, чтобы перенос
+    строк/перестановка колонок не ломали импорт.
+    """
+    max_scan_row = min(ws.max_row, 40)
+    alias_lookup = {}
+    for field, aliases in SUM_REPORT_COLUMN_ALIASES.items():
+        for alias in aliases:
+            alias_lookup[clean_header(alias)] = field
+
+    cycle_keys = {clean_header(v) for v in SUM_REPORT_CYCLE_ALIASES}
+
+    for row_idx, row in enumerate(
+        ws.iter_rows(min_row=1, max_row=max_scan_row, values_only=True), start=1
+    ):
+        field_positions = {}
+        cycle_position = None
+
+        for col_idx, value in enumerate(row):
+            key = clean_header(value)
+            if not key:
+                continue
+            if key in alias_lookup:
+                field_positions.setdefault(alias_lookup[key], col_idx)
+            if key in cycle_keys and cycle_position is None:
+                cycle_position = col_idx
+
+        if SUM_REPORT_REQUIRED_FIELDS.issubset(field_positions):
+            return row_idx, field_positions, cycle_position
+
+    return None, None, None
+
+
+def _is_sum_report_summary_sheet(sheet_name):
+    """Определяет служебные листы, такие как «СВОД (2)»."""
+    normalized = clean_header(sheet_name)
+    return normalized.startswith("свод") or normalized.startswith("итог")
+
+
+def _is_sum_report_control_row(row):
+    """Проверки переноса из Pascal для управляющих/итоговых строк."""
+    first = str(row[0] or "").strip().casefold() if len(row) > 0 else ""
+    second = str(row[1] or "").strip().casefold() if len(row) > 1 else ""
+
+    first_two = (first, second)
+    if any("общий итог" in value or "всего" in value for value in first_two):
+        return "break"
+
+    if any("итого: 42" in value or "в том числе" in value for value in first_two):
+        return "skip"
+
+    return "data"
 
 
 def import_sum_report(filepath):
     """
     Импортирует файл Краткой справки в staging_sum_excel.
-    Читает все листы. Имя листа = ИГК. Данные парсятся по позициям колонок.
-    Флаг is_cycle определяется по значению в 7-й колонке (Да/Нет).
+
+    Отличия от первоначального переноса Pascal:
+    - служебный лист «СВОД» не загружается;
+    - шапка и нужные колонки ищутся по названию;
+    - колонка «Этап графика» никогда не интерпретируется как is_cycle;
+    - признак длинного цикла читается только из явной колонки цикла, если она
+      присутствует в исходном файле;
+    - расчётные формулы читаются через data_only=True, т.е. берутся их
+      сохранённые Excel-значения.
     """
     wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
-
-    fields = [
-        "igk",
-        "is_cycle",
-        "dep",
-        "counteragent",
-        "inn",
-        "contract",
-        "status",
-        "stage",
-        "item",
-        "order_doc",
-        "contract_sum",
-        "plan_avans",
-        "percent_doc",
-        "fact_paid",
-        "note",
-        "completed_sum",
-        "znp_count",
-        "sum_80",
-        "paid_from_znp",
-        "remains_pay",
-        "sum_avans",
-        "sum_issued_znp",
-        "period_reg_date",
-        "plan_date_contract",
-    ]
 
     data = []
     try:
         for sheet_name in wb.sheetnames:
-            if not sheet_name.strip():
+            if not str(sheet_name).strip():
+                continue
+            if _is_sum_report_summary_sheet(sheet_name):
                 continue
 
             ws = wb[sheet_name]
-            curr_row_orig = 3
+            header_row, positions, cycle_position = _sum_report_header(ws)
+            if header_row is None:
+                raise CommandError(
+                    f"{BAD_FORMAT}: лист «{sheet_name}» не содержит шапку Краткой справки"
+                )
 
-            # Читаем все строки листа в список для доступа по индексам
-            all_rows = list(ws.iter_rows(min_row=1, values_only=True))
+            sheet_title = str(ws.cell(row=1, column=2).value or sheet_name).strip()
 
-            while curr_row_orig <= len(all_rows):
-                row = all_rows[curr_row_orig - 1]  # 1-based -> 0-based
+            for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
                 if not row or not any(row):
-                    curr_row_orig += 1
                     continue
 
-                first_col_val = str(row[0] or "").strip()
-                counteragent_val = str(row[1] or "").strip()
-
-                # Проверка выхода: "Общий итог" или "Всего" в 1-й или 2-й колонке
-                lower_first = first_col_val.lower()
-                lower_second = counteragent_val.lower()
-                if (
-                    "общий итог" in lower_first
-                    or "общий итог" in lower_second
-                    or "всего" in lower_first
-                    or "всего" in lower_second
-                ):
+                control = _is_sum_report_control_row(row)
+                if control == "break":
                     break
-
-                # Проверка пропуска: "итого: 42" или "в том числе"
-                if (
-                    "итого: 42" in lower_first
-                    or "итого: 42" in lower_second
-                    or "в том числе" in lower_first
-                    or "в том числе" in lower_second
-                ):
-                    curr_row_orig += 1
+                if control == "skip":
                     continue
 
-                # Извлекаем значения по позициям (1-based -> 0-based)
-                def cell(idx):
-                    """Возвращает значение ячейки по 1-базовому индексу колонки."""
-                    return row[idx - 1] if idx <= len(row) else None
-
-                dep = str(cell(4) or "").strip()
-                condition = str(cell(6) or "").strip()
-                stage_val = str(cell(7) or "").strip()
-
-                # Определяем is_cycle по значению в 7-й колонке (Да/Нет)
-                is_cycle = stage_val.lower() in ("да", "1", "true", "yes", "д")
+                def cell(field):
+                    idx = positions[field]
+                    return row[idx] if idx < len(row) else None
 
                 record = {
-                    "igk": sheet_name,
-                    "is_cycle": is_cycle,
-                    "dep": dep,
-                    "counteragent": str(cell(2) or "").strip(),
-                    "inn": str(cell(3) or "").strip(),
-                    "contract": str(cell(5) or "").strip(),
-                    "status": condition,
-                    "stage": stage_val,
-                    "item": str(cell(8) or "").strip(),
-                    "order_doc": str(cell(9) or "").strip(),
-                    "contract_sum": _sum_to_decimal(cell(10)),
-                    "plan_avans": _sum_to_decimal(cell(11)),
-                    "percent_doc": _percent_to_decimal(cell(12)),
-                    "fact_paid": _sum_to_decimal(cell(14)),
-                    "note": str(cell(20) or "").replace("\n", " ").strip(),
-                    "completed_sum": _sum_to_decimal(cell(26)),
-                    "znp_count": _int_or_zero(cell(27)),
-                    "sum_80": _sum_to_decimal(cell(28)),
-                    "paid_from_znp": _sum_to_decimal(cell(29)),
-                    "remains_pay": _sum_to_decimal(cell(24)),
-                    "sum_avans": _sum_to_decimal(cell(33)),
-                    "sum_issued_znp": _sum_to_decimal(cell(32)),
-                    "period_reg_date": _date_to_date(cell(18)),
-                    "plan_date_contract": _date_to_date(cell(21)),
+                    "igk": str(sheet_name).strip(),
+                    "sheet_title": sheet_title or str(sheet_name).strip(),
+                    "is_cycle": _bool_value(
+                        row[cycle_position] if cycle_position is not None and cycle_position < len(row) else None
+                    ),
+                    "dep": str(cell("dep") or "").strip(),
+                    "counteragent": str(cell("counteragent") or "").strip(),
+                    "inn": str(cell("inn") or "").strip(),
+                    "contract": str(cell("contract") or "").strip(),
+                    "status": str(cell("status") or "").strip(),
+                    "stage": str(cell("stage") or "").strip(),
+                    "item": str(cell("item") or "").strip(),
+                    "order_doc": str(cell("order_doc") or "").strip(),
+                    "contract_sum": _sum_to_decimal(cell("contract_sum")),
+                    "plan_avans": _sum_to_decimal(cell("plan_avans")),
+                    "percent_doc": _percent_to_decimal(cell("percent_doc")),
+                    "fact_paid": _sum_to_decimal(cell("fact_paid")),
+                    "note": str(cell("note") or "").replace("\n", " ").strip(),
+                    "completed_sum": _sum_to_decimal(cell("completed_sum")),
+                    "znp_count": _int_or_zero(cell("znp_count")),
+                    "sum_80": _sum_to_decimal(cell("sum_80")),
+                    "paid_from_znp": _sum_to_decimal(cell("paid_from_znp")),
+                    "remains_pay": _sum_to_decimal(cell("remains_pay")),
+                    "sum_avans": _sum_to_decimal(cell("sum_avans")),
+                    "sum_issued_znp": _sum_to_decimal(cell("sum_issued_znp")),
+                    "period_reg_date": _date_to_date(cell("period_reg_date")),
+                    "plan_date_contract": _date_to_date(cell("plan_date_contract")),
                 }
-                data.append(tuple(record[f] for f in fields))
-                curr_row_orig += 1
+                data.append(tuple(record[f] for f in SUM_REPORT_FIELDS))
     finally:
         wb.close()
 
-    _replace_table("staging_sum_excel", fields, data)
+    _replace_table("staging_sum_excel", SUM_REPORT_FIELDS, data)
     return len(data)
