@@ -1,4 +1,5 @@
 !reports/static/files/templateIGK.xlsx
+!reports/static/files/templateSum.xlsx
 *.log
 *.pyc
 *.xls

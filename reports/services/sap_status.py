@@ -42,7 +42,12 @@ def sap_status_conditions():
     """Условия карточек сводки и фильтров реестра. Карточки независимы."""
     today = timezone.localdate()
     return {
-        "waiting_agreement": Q(stage_e__isnull=True, stage_f__isnull=True),
+        "waiting_agreement": Q(
+            stage_c__isnull=True,
+            stage_e__isnull=True,
+            stage_f__isnull=True,
+            normalize_doc_num__isnull=True,
+        ),
         "agreed_registry": Q(stage_c__isnull=False),
         "sent_18": Q(stage_e__isnull=False),
         "confirmed_18": Q(stage_f__isnull=False, normalize_doc_num__isnull=True),
@@ -53,7 +58,11 @@ def sap_status_conditions():
 
 def sap_date_field(status):
     """Поле даты, по которому статус фильтруется при выбранной дате."""
-    return "stage_c" if status == "agreed_registry" else "stage_e"
+    if status == "agreed_registry":
+        return "stage_c"
+    if status == "waiting_agreement":
+        return "created_date"
+    return "stage_e"
 
 
 def sap_status_expr():

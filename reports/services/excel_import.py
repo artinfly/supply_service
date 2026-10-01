@@ -75,6 +75,7 @@ ZNP_SAP_COLUMNS = {
     "payment_possible": 31,
     "c_type": 8,
     "normalize_doc_num": 10,
+    "created_date": 33,
 }
 
 BAD_FORMAT = "Документ не соответствует формату"
@@ -335,85 +336,89 @@ def import_sum_report(filepath):
     ]
 
     data = []
-    for sheet_name in wb.sheetnames:
-        if not sheet_name.strip():
-            continue
-
-        ws = wb[sheet_name]
-        curr_row_orig = 3
-
-        # Читаем все строки листа в список для доступа по индексам
-        all_rows = list(ws.iter_rows(min_row=1, values_only=True))
-
-        while curr_row_orig <= len(all_rows):
-            row = all_rows[curr_row_orig - 1]  # 1-based -> 0-based
-            if not row or not any(row):
-                curr_row_orig += 1
+    try:
+        for sheet_name in wb.sheetnames:
+            if not sheet_name.strip():
                 continue
 
-            first_col_val = str(row[0] or "").strip()
-            counteragent_val = str(row[1] or "").strip()
+            ws = wb[sheet_name]
+            curr_row_orig = 3
 
-            # Проверка выхода: "Общий итог" или "Всего" в 1-й или 2-й колонке
-            lower_first = first_col_val.lower()
-            lower_second = counteragent_val.lower()
-            if (
-                "общий итог" in lower_first
-                or "общий итог" in lower_second
-                or "всего" in lower_first
-                or "всего" in lower_second
-            ):
-                break
+            # Читаем все строки листа в список для доступа по индексам
+            all_rows = list(ws.iter_rows(min_row=1, values_only=True))
 
-            # Проверка пропуска: "итого: 42" или "в том числе"
-            if (
-                "итого: 42" in lower_first
-                or "итого: 42" in lower_second
-                or "в том числе" in lower_first
-                or "в том числе" in lower_second
-            ):
+            while curr_row_orig <= len(all_rows):
+                row = all_rows[curr_row_orig - 1]  # 1-based -> 0-based
+                if not row or not any(row):
+                    curr_row_orig += 1
+                    continue
+
+                first_col_val = str(row[0] or "").strip()
+                counteragent_val = str(row[1] or "").strip()
+
+                # Проверка выхода: "Общий итог" или "Всего" в 1-й или 2-й колонке
+                lower_first = first_col_val.lower()
+                lower_second = counteragent_val.lower()
+                if (
+                    "общий итог" in lower_first
+                    or "общий итог" in lower_second
+                    or "всего" in lower_first
+                    or "всего" in lower_second
+                ):
+                    break
+
+                # Проверка пропуска: "итого: 42" или "в том числе"
+                if (
+                    "итого: 42" in lower_first
+                    or "итого: 42" in lower_second
+                    or "в том числе" in lower_first
+                    or "в том числе" in lower_second
+                ):
+                    curr_row_orig += 1
+                    continue
+
+                # Извлекаем значения по позициям (1-based -> 0-based)
+                def cell(idx):
+                    """Возвращает значение ячейки по 1-базовому индексу колонки."""
+                    return row[idx - 1] if idx <= len(row) else None
+
+                dep = str(cell(4) or "").strip()
+                condition = str(cell(6) or "").strip()
+                stage_val = str(cell(7) or "").strip()
+
+                # Определяем is_cycle по значению в 7-й колонке (Да/Нет)
+                is_cycle = stage_val.lower() in ("да", "1", "true", "yes", "д")
+
+                record = {
+                    "igk": sheet_name,
+                    "is_cycle": is_cycle,
+                    "dep": dep,
+                    "counteragent": str(cell(2) or "").strip(),
+                    "inn": str(cell(3) or "").strip(),
+                    "contract": str(cell(5) or "").strip(),
+                    "status": condition,
+                    "stage": stage_val,
+                    "item": str(cell(8) or "").strip(),
+                    "order_doc": str(cell(9) or "").strip(),
+                    "contract_sum": _sum_to_decimal(cell(10)),
+                    "plan_avans": _sum_to_decimal(cell(11)),
+                    "percent_doc": _percent_to_decimal(cell(12)),
+                    "fact_paid": _sum_to_decimal(cell(14)),
+                    "note": str(cell(20) or "").replace("\n", " ").strip(),
+                    "completed_sum": _sum_to_decimal(cell(26)),
+                    "znp_count": _int_or_zero(cell(27)),
+                    "sum_80": _sum_to_decimal(cell(28)),
+                    "paid_from_znp": _sum_to_decimal(cell(29)),
+                    "remains_pay": _sum_to_decimal(cell(24)),
+                    "sum_avans": _sum_to_decimal(cell(33)),
+                    "sum_issued_znp": _sum_to_decimal(cell(32)),
+                    "period_reg_date": _date_to_date(cell(18)),
+                    "plan_date_contract": _date_to_date(cell(21)),
+                }
+                data.append(tuple(record[f] for f in fields))
                 curr_row_orig += 1
-                continue
+    finally:
+        wb.close()
 
-            # Извлекаем значения по позициям (1-based -> 0-based)
-            def cell(idx):
-                """Возвращает значение ячейки по 1-базовому индексу колонки."""
-                return row[idx - 1] if idx <= len(row) else None
-
-            dep = str(cell(4) or "").strip()
-            condition = str(cell(6) or "").strip()
-            stage_val = str(cell(7) or "").strip()
-
-            # Определяем is_cycle по значению в 7-й колонке (Да/Нет)
-            is_cycle = stage_val.lower() in ("да", "1", "true", "yes", "д")
-
-            record = {
-                "igk": sheet_name,
-                "is_cycle": is_cycle,
-                "dep": dep,
-                "counteragent": str(cell(2) or "").strip(),
-                "inn": str(cell(3) or "").strip(),
-                "contract": str(cell(5) or "").strip(),
-                "status": condition,
-                "stage": stage_val,
-                "item": str(cell(8) or "").strip(),
-                "order_doc": str(cell(9) or "").strip(),
-                "contract_sum": _sum_to_decimal(cell(10)),
-                "plan_avans": _sum_to_decimal(cell(11)),
-                "percent_doc": _percent_to_decimal(cell(12)),
-                "fact_paid": _sum_to_decimal(cell(14)),
-                "note": str(cell(20) or "").replace("\n", " ").strip(),
-                "completed_sum": _sum_to_decimal(cell(26)),
-                "znp_count": _int_or_zero(cell(27)),
-                "sum_80": _sum_to_decimal(cell(28)),
-                "paid_from_znp": _sum_to_decimal(cell(29)),
-                "remains_pay": _sum_to_decimal(cell(24)),
-                "sum_avans": _sum_to_decimal(cell(33)),
-                "sum_issued_znp": _sum_to_decimal(cell(32)),
-                "period_reg_date": _date_to_date(cell(18)),
-                "plan_date_contract": _date_to_date(cell(21)),
-            }
-            data.append(tuple(record[f] for f in fields))
-            curr_row_orig += 1
     _replace_table("staging_sum_excel", fields, data)
     return len(data)
