@@ -518,9 +518,11 @@ def import_sum_report(filepath):
 
                 record = {
                     "igk": str(sheet_name).strip(),
-                    "is_cycle": _bool_value(
-                        row[cycle_position] if cycle_position is not None and cycle_position < len(row) else None
-                    ),
+                    "is_cycle": (
+                    _bool_value(row[cycle_position])
+                    if cycle_position is not None and cycle_position < len(row)
+                    else True
+                ),
                     "dep": str(cell("dep") or "").strip(),
                     "counteragent": str(cell("counteragent") or "").strip(),
                     "inn": str(cell("inn") or "").strip(),
