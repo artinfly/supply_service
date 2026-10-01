@@ -311,6 +311,7 @@ def import_sum_report(filepath):
     fields = [
         "igk",
         "is_cycle",
+        "report_title",
         "dep",
         "counteragent",
         "inn",
@@ -398,6 +399,7 @@ def import_sum_report(filepath):
                 record = {
                     "igk": sheet_name,
                     "is_cycle": is_cycle,
+                    "report_title": str(ws.cell(1, 2).value or "").strip(),
                     "dep": dep,
                     "counteragent": str(cell(2) or "").strip(),
                     "inn": str(cell(3) or "").strip(),
