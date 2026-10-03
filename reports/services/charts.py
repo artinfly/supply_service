@@ -1,5 +1,3 @@
-"""SQL-запросы для графиков (Chart.js)."""
-
 from .queries import (
     ADVANCE,
     CONCLUDED,
@@ -10,8 +8,6 @@ from .queries import (
     needs_znp,
 )
 from .sap_status import SAP_STAGE_LABELS, SAP_STAGES_OVERLAPPING, sap_status_sql
-
-# --- Константы для графиков ---
 
 CONTRACT_AGE = (
     ("overdue_12", "Просрочено более года"),
@@ -34,11 +30,7 @@ SAP_STAGES = tuple(
 )
 
 
-# --- SQL-запросы ---
-
-
 def contracts_by_cfo(year_col, igk):
-    """SQL для графика договоров по ЦФО (просрочка по срокам)."""
     not_concl = ", ".join(["%s"] * len(NOT_CONCL))
     sql = f"""
         SELECT cfo,
@@ -65,7 +57,6 @@ def contracts_by_cfo(year_col, igk):
 
 
 def znp_by_cfo(year_col, igk, start=None, end=None):
-    """SQL для графика заявок ФЗД по ЦФО и статусам."""
     concluded = ", ".join(["%s"] * len(CONCLUDED))
     params = [igk, *CONCLUDED]
     period = ""
@@ -100,7 +91,6 @@ def znp_by_cfo(year_col, igk, start=None, end=None):
 
 
 def znp_sap_by_cfo(igk):
-    """SQL для графика заявок SAP по ЦФО и статусам."""
     cfo_ph = ", ".join(["%s"] * len(SAP_CFO))
     igk_filter = "AND igk = %s" if igk else ""
     params = list(SAP_CFO)

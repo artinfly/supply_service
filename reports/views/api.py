@@ -1,10 +1,3 @@
-"""
-JSON API для таблиц и графиков.
-
-Страницы отдают только каркас, данные подгружаются запросами к этим эндпоинтам.
-Все данные берутся через сырой SQL из services/queries.py и services/charts.py.
-"""
-
 from collections import defaultdict
 from decimal import Decimal
 
@@ -54,11 +47,8 @@ from ..services.sap_status import (
     sap_status_expr,
 )
 
-# --- Вспомогательные функции ---
-
 
 def _to_json_types(rows):
-    """Конвертирует Decimal в int/float для сериализации в JSON."""
     for row in rows:
         for k, v in row.items():
             if isinstance(v, Decimal):
@@ -67,13 +57,11 @@ def _to_json_types(rows):
 
 
 def _json_rows(cur):
-    """Преобразует результат курсора в список словарей."""
     cols = [c[0] for c in cur.description]
     return _to_json_types([dict(zip(cols, r)) for r in cur.fetchall()])
 
 
 def _json_response(sql, params=None):
-    """Выполняет SQL и возвращает JSON со списком строк."""
     with connection.cursor() as cur:
         cur.execute(sql, params or [])
         return JsonResponse(
@@ -82,7 +70,6 @@ def _json_response(sql, params=None):
 
 
 def _igk_response(year, statuses):
-    """Ответ для страниц ИГК: детальные строки + итоговая строка."""
     yc = YEAR_COL.get(year)
     if not yc:
         return JsonResponse({"error": "недопустимый год"}, status=400)
@@ -95,7 +82,6 @@ def _igk_response(year, statuses):
 
 
 def _get_filters(request):
-    """Читает общие параметры фильтров из GET-запроса."""
     return {
         "agent": request.GET.get("agent", "").strip(),
         "igk": request.GET.get("igk", "").strip(),
@@ -106,12 +92,8 @@ def _get_filters(request):
     }
 
 
-# --- Реестры по годам: КДР и ИГК ---
-
-
 @login_required
 def api_kdr(request, year):
-    """Данные для таблицы «Контроль договорной работы» за год."""
     if year not in YEAR_COL:
         return JsonResponse({"error": "недопустимый год"}, status=400)
     return _json_response(kdr(year))
@@ -119,49 +101,36 @@ def api_kdr(request, year):
 
 @login_required
 def api_igk_concluded(request, year):
-    """Данные для таблицы «Заключённые по ИГК» за год."""
     return _igk_response(year, CONCLUDED)
 
 
 @login_required
 def api_igk_not_concluded(request, year):
-    """Данные для таблицы «Незаключённые по ИГК» за год."""
     return _igk_response(year, NOT_CONCL)
 
 
 @login_required
 def api_igk_terminated(request, year):
-    """Данные для таблицы «Расторгнутые по ИГК» за год."""
     return _igk_response(year, TERMINATED)
-
-
-# --- История изменений ---
 
 
 @login_required
 def api_history_status(request):
-    """Данные для таблицы «История изменений статуса»."""
     return _json_response(history_status())
 
 
 @login_required
 def api_history_plan(request):
-    """Данные для таблицы «История изменений плана»."""
     return _json_response(history_plan())
 
 
 @login_required
 def api_history_fact(request):
-    """Данные для таблицы «История изменений факта»."""
     return _json_response(history_fact())
-
-
-# --- Дубликаты договоров ---
 
 
 @login_required
 def api_contract_dupes(request):
-    """Данные для таблицы «Дубликаты договоров» (полные повторы строк)."""
     f = _get_filters(request)
     sql, params = contract_dupes(f["cfo"], f["year"])
     return _json_response(sql, params)
@@ -169,18 +138,13 @@ def api_contract_dupes(request):
 
 @login_required
 def api_contract_dupes_by_order(request):
-    """Данные для таблицы «Дубликаты по заказу» (по ИГК, предмету, заказу)."""
     f = _get_filters(request)
     sql, params = contract_dupes_by_order(f["cfo"], f["year"])
     return _json_response(sql, params)
 
 
-# --- Детализация по ИГК ---
-
-
 @login_required
 def api_igk_detail(request, year, igk):
-    """Детальная страница по одному ИГК за год."""
     yc = YEAR_COL.get(year)
     if not yc:
         return JsonResponse({"error": "недопустимый год"}, status=400)
@@ -191,12 +155,8 @@ def api_igk_detail(request, year, igk):
     return _json_response(igk_detail(year, igk, statuses), [f"%{escape_like(igk)}"])
 
 
-# --- Реестр всех договоров ---
-
-
 @login_required
 def api_all_contracts(request):
-    """Реестр всех договоров с фильтрами."""
     f = _get_filters(request)
 
     conditions = ["payment_type IS NOT NULL AND TRIM(payment_type) != ''"]
@@ -248,10 +208,6 @@ def api_all_contracts(request):
     )
 
 
-# --- Реестр заявок ФЗД ---
-
-# Условия фильтров по статусам заявок ФЗД.
-# ВАЖНО: при изменении статусов синхронизировать с services/dashboards.py
 ZNP_STATUS_CONDITIONS = {
     "not_issued": f"(z.id IS NULL AND {needs_znp()})",
     "in_progress": f"(z.id IS NOT NULL AND z.znp_status IS DISTINCT FROM '{ZNP_APPROVED}')",
@@ -266,7 +222,6 @@ ZNP_STATUS_CONDITIONS = {
 
 @login_required
 def api_znp_list(request):
-    """Реестр заявок ФЗД с фильтрами."""
     f = _get_filters(request)
 
     conditions = [f"i.status IN ({','.join(['%s'] * len(CONCLUDED))})"]
@@ -299,12 +254,8 @@ def api_znp_list(request):
     return _json_response(znp_list(where), params)
 
 
-# --- Реестр заявок SAP ---
-
-
 @login_required
 def api_znp_sap_list(request):
-    """Реестр заявок SAP с фильтрами (данные через ORM)."""
     agent = request.GET.get("agent", "").strip()
     igk_filter = request.GET.get("igk", "").strip()
     cfo_filter = request.GET.get("cfo", "").strip()
@@ -362,17 +313,12 @@ def api_znp_sap_list(request):
         row["sap_status"] = SAP_STAGE_LABELS[row.pop("status_key")]
         if row.get("igk"):
             row["igk"] = str(row["igk"])[-4:]
-        # payment_possible показываем только для оплаченных заявок
         if not row.get("normalize_doc_num"):
             row["payment_possible"] = None
     return JsonResponse(data, safe=False, json_dumps_params={"ensure_ascii": False})
 
 
-# --- Графики для сводок ---
-
-
 def _chart_response(labels, datasets, extra=None):
-    """Формирует ответ для Chart.js."""
     payload = {"labels": labels, "datasets": datasets}
     if extra:
         payload.update(extra)
@@ -380,10 +326,6 @@ def _chart_response(labels, datasets, extra=None):
 
 
 def _stacked_by_cfo(sql, params, stages):
-    """
-    Универсальный сборщик стековых графиков по ЦФО.
-    Ось X — ЦФО (по убыванию суммы), сегменты стека — стадии.
-    """
     with connection.cursor() as cur:
         cur.execute(sql, params)
         rows = cur.fetchall()
@@ -423,7 +365,6 @@ def _stacked_by_cfo(sql, params, stages):
 
 @login_required
 def api_chart_contracts(request):
-    """График «Незаключённые по ЦФО и давности срока» для dashboard."""
     year = valid_year(request.GET.get("year"))
     igk = request.GET.get("igk", "").strip()
     if not igk:
@@ -434,7 +375,6 @@ def api_chart_contracts(request):
 
 @login_required
 def api_chart_znp(request):
-    """График «Заявки по ЦФО и стадиям» для сводки заявок ФЗД."""
     year = valid_year(request.GET.get("year"))
     igk = request.GET.get("igk", "").strip()
     start = request.GET.get("start", "").strip()
@@ -449,7 +389,6 @@ def api_chart_znp(request):
 
 @login_required
 def api_chart_znp_sap(request):
-    """График «Заявки SAP по ЦФО и этапам» для сводки заявок SAP."""
     igk = request.GET.get("igk", "").strip()
     if not igk:
         return _chart_response([], [])

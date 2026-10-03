@@ -1,23 +1,7 @@
-"""
-Статусы заявок на платёж SAP.
-
-Карточки сводки и фильтры реестра считаются независимо: одна заявка
-может попасть сразу в несколько карточек. Условия заданы в одном месте —
-sap_status_conditions(), поле даты для фильтра — в sap_date_field().
-
-Подпись «Этап» в реестре и стек графика показывают ОДИН статус на заявку
-(sap_status_expr() и sap_status_sql()), поэтому их числа могут отличаться
-от карточек.
-
-ВАЖНО: sap_status_expr() и sap_status_sql() должны совпадать между собой.
-"""
-
 from datetime import timedelta
 
 from django.db.models import Case, CharField, Q, Value, When
 from django.utils import timezone
-
-# --- Константы ---
 
 SAP_STAGE_LABELS = {
     "waiting_agreement": "На согласовании",
@@ -30,16 +14,10 @@ SAP_STAGE_LABELS = {
 
 SAP_STAGE_NAMES = list(SAP_STAGE_LABELS.values())
 SAP_STAGE_PARAMS = list(SAP_STAGE_LABELS.keys())
-
-# Карточки, которых нет в стеке графика (пересекаются с остальными)
 SAP_STAGES_OVERLAPPING = ("agreed_registry",)
 
 
-# --- Условия для ORM-запросов ---
-
-
 def sap_status_conditions():
-    """Условия карточек сводки и фильтров реестра. Карточки независимы."""
     today = timezone.localdate()
     return {
         "waiting_agreement": Q(
@@ -57,7 +35,6 @@ def sap_status_conditions():
 
 
 def sap_date_field(status):
-    """Поле даты, по которому статус фильтруется при выбранной дате."""
     if status == "agreed_registry":
         return "stage_c"
     if status == "waiting_agreement":
@@ -66,7 +43,6 @@ def sap_date_field(status):
 
 
 def sap_status_expr():
-    """Аннотация с одним статусом на заявку (для подписи в списке)."""
     today = timezone.localdate()
     return Case(
         When(normalize_doc_num__isnull=False, then=Value("paid")),
@@ -78,11 +54,7 @@ def sap_status_expr():
     )
 
 
-# --- SQL для запросов ---
-
-
 def sap_status_sql():
-    """Тот же статус, что и в sap_status_expr(), для сырого SQL."""
     return """
             CASE
                 WHEN normalize_doc_num IS NOT NULL THEN 'paid'
@@ -93,14 +65,7 @@ def sap_status_sql():
             END"""
 
 
-# --- Вспомогательные функции ---
-
-
 def sap_second_date(first_date):
-    """
-    Вычисляет вторую дату карточек SAP от первой даты (из фильтра).
-    Смещение зависит от дня недели первой даты.
-    """
     weekday = first_date.weekday()
     if weekday == 0:
         offset = 3

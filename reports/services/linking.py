@@ -1,35 +1,15 @@
-"""
-Модуль привязки заявок к позициям договоров.
-
-Использует хеш от ключевых полей позиции для связи
-заявок (ЗнП) с позициями договоров без прямых внешних ключей.
-"""
-
 from zlib import crc32
 
 from django.db import connection
 
 
 def contract_hash(igk, c_agent, contract, stage):
-    """
-    Вычисляет хеш позиции договора для привязки заявок.
-
-    Хеш строится из четырёх ключевых полей: ИГК, контрагент, договор, этап.
-    Значения None приводятся к пустой строке для детерминированности.
-    """
     parts = [str(v) if v is not None else "" for v in (igk, c_agent, contract, stage)]
     return crc32("".join(parts).encode())
 
 
 def relink_znp_parents():
-    """
-    Привязывает заявки к позициям договоров по хешу.
-
-    Для каждого хеша выбирается позиция с минимальным pp_id.
-    Заявки без совпадающего хеша получают parent_id = NULL.
-    """
     with connection.cursor() as cur:
-        # Привязка заявок к позициям по совпадающему хешу
         cur.execute("""
             UPDATE znp_data z
             SET parent_id = matched.pp_id
@@ -40,7 +20,6 @@ def relink_znp_parents():
             ) matched
             WHERE z.crc32_hash = matched.crc32_hash
         """)
-        # Обнуление привязки для заявок без совпадений
         cur.execute("""
             UPDATE znp_data z
             SET parent_id = NULL

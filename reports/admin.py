@@ -1,12 +1,3 @@
-"""
-Административная панель приложения reports.
-
-Содержит:
-- Регистрацию моделей данных (справочники, договоры, заявки, история).
-- Кастомную админку пользователей с правами доступа к разделам.
-- Интеграцию с внешним HR-сервисом (синхронизация данных сотрудников).
-"""
-
 import requests
 from django import forms
 from django.conf import settings
@@ -36,21 +27,14 @@ API_PATH = settings.HR_SERVICE_API_URL
 BULK_SYNC_LIMIT = 100
 
 
-# --- Справочники и основные таблицы ---
-
-
 @admin.register(NsiIgk)
 class NsiIgkAdmin(admin.ModelAdmin):
-    """Справочник ИГК."""
-
     list_display = ("igk",)
     search_fields = ("igk",)
 
 
 @admin.register(GozContractVat)
 class GozContractVatAdmin(admin.ModelAdmin):
-    """Справочник ГК: ставки НДС для анализа ЕИС ГОЗ."""
-
     list_display = ("igk", "vat_rate")
     search_fields = ("igk",)
     ordering = ("igk",)
@@ -58,8 +42,6 @@ class GozContractVatAdmin(admin.ModelAdmin):
 
 @admin.register(IgkStatData)
 class IgkStatDataAdmin(admin.ModelAdmin):
-    """Позиции договоров."""
-
     list_display = ("igk", "c_agent", "cfo", "contract", "status", "y25", "y26", "y27")
     list_filter = ("status", "payment_type", "y25", "y26", "y27")
     search_fields = ("igk", "c_agent", "contract")
@@ -67,45 +49,29 @@ class IgkStatDataAdmin(admin.ModelAdmin):
 
 @admin.register(ContractsHistory)
 class ContractsHistoryAdmin(admin.ModelAdmin):
-    """История изменений договоров."""
-
     list_display = ("id", "old_status", "new_status", "update_date", "upload_date")
     list_filter = ("update_date", "upload_date")
 
 
-# --- Staging таблицы (импорт) ---
-
-
 @admin.register(StagingExcel)
 class StagingExcelAdmin(admin.ModelAdmin):
-    """Временные данные импорта договоров."""
-
     list_display = ("id", "igk", "dogovor", "sostoyanie")
 
 
 @admin.register(StagingZnpExcel)
 class StagingZnpExcelAdmin(admin.ModelAdmin):
-    """Временные данные импорта заявок ФЗД."""
-
     list_display = ("id", "igk", "c_agent", "contract", "plan_doc")
     search_fields = ("igk", "c_agent", "contract", "plan_doc")
 
 
 @admin.register(StagingZnpSAPExcel)
 class StagingZnpSAPExcelAdmin(admin.ModelAdmin):
-    """Временные данные импорта заявок SAP."""
-
     list_display = ("id", "reg_num", "igk", "cfo", "c_agent")
     search_fields = ("reg_num", "igk", "c_agent")
 
 
-# --- Рабочие таблицы заявок ---
-
-
 @admin.register(ZnpData)
 class ZnpDataAdmin(admin.ModelAdmin):
-    """Заявки на платёж ФЗД."""
-
     list_display = (
         "id",
         "plan_doc",
@@ -119,8 +85,6 @@ class ZnpDataAdmin(admin.ModelAdmin):
 
 @admin.register(ZnpDataSAP)
 class ZnpDataSAPAdmin(admin.ModelAdmin):
-    """Заявки на платёж SAP."""
-
     list_display = ("id", "reg_num", "igk", "cfo", "c_agent", "vv_sum")
     list_filter = ("cfo", "stage_e", "stage_f")
     search_fields = ("reg_num", "igk", "c_agent")
@@ -128,25 +92,16 @@ class ZnpDataSAPAdmin(admin.ModelAdmin):
 
 @admin.register(ContractCountsSnapshot)
 class ContractCountsSnapshotAdmin(admin.ModelAdmin):
-    """Снимки количества договоров по датам."""
-
     list_display = ("upload_date", "igk", "cfo", "year_col", "concluded_count")
     list_filter = ("upload_date", "year_col")
 
 
-# --- Кастомная админка пользователей с правами доступа ---
-
-
 class SectionChoiceField(forms.ModelMultipleChoiceField):
-    """Поле выбора прав доступа к разделам без префикса 'Раздел: '."""
-
     def label_from_instance(self, obj):
         return obj.name.replace("Раздел: ", "")
 
 
 class CustomUserCreationForm(UserCreationForm):
-    """Форма создания пользователя с полями профиля."""
-
     patronymic = forms.CharField(label="Отчество", max_length=255, required=False)
     api_key = forms.CharField(label="API-ключ", max_length=64, required=False)
     is_fired = forms.BooleanField(
@@ -159,8 +114,6 @@ class CustomUserCreationForm(UserCreationForm):
 
 
 class AccessUserForm(UserChangeForm):
-    """Форма редактирования пользователя с правами доступа к разделам."""
-
     patronymic = forms.CharField(label="Отчество", max_length=255, required=False)
     api_key = forms.CharField(label="API-ключ", max_length=64, required=False)
     is_fired = forms.BooleanField(
@@ -196,8 +149,6 @@ admin.site.unregister(User)
 
 @admin.register(User)
 class UserWithSectionsAdmin(UserAdmin):
-    """Админка пользователей с правами доступа к разделам и синхронизацией с HR."""
-
     add_form = CustomUserCreationForm
     form = AccessUserForm
     add_form_template = "admin/auth/user/change_form.html"
@@ -279,7 +230,6 @@ class UserWithSectionsAdmin(UserAdmin):
     get_last_synced_at.admin_order_field = "profile__last_synced_at"
 
     def save_related(self, request, form, formsets, change):
-        """Сохраняет права пользователя, не затрагивая права из групп."""
         super().save_related(request, form, formsets, change)
         user = form.instance
         keep = list(user.user_permissions.exclude(codename__startswith="access_"))
@@ -307,7 +257,6 @@ class UserWithSectionsAdmin(UserAdmin):
         return custom_urls + super().get_urls()
 
     def fetch_external_data(self, request, tab_number):
-        """Запрашивает данные сотрудника из внешнего HR-сервиса."""
         api_key = getattr(getattr(request.user, "profile", None), "api_key", None)
         if not api_key:
             return JsonResponse(
@@ -343,7 +292,6 @@ class UserWithSectionsAdmin(UserAdmin):
         )
 
     def sync_with_external_api(self, request, queryset):
-        """Массовая синхронизация пользователей с внешним HR-сервисом."""
         queryset = queryset.select_related("profile").order_by(
             "profile__last_synced_at"
         )

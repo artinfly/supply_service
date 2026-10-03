@@ -16,7 +16,6 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# --- Core Settings ---
 SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-fallback")
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 
@@ -29,7 +28,6 @@ ALLOWED_HOSTS = [
     host.strip() for host in os.getenv("ALLOWED_HOSTS", "").split(",") if host.strip()
 ]
 
-# --- Applications ---
 INSTALLED_APPS = [
     "reports",
     "django.contrib.admin",
@@ -40,7 +38,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
 ]
 
-# --- Middleware ---
 MIDDLEWARE = [
     "django.middleware.gzip.GZipMiddleware",
     "django.middleware.security.SecurityMiddleware",
@@ -74,7 +71,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "supply_service.wsgi.application"
 
-# --- Database ---
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -96,13 +92,11 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# --- Internationalization ---
 LANGUAGE_CODE = "ru-ru"
 TIME_ZONE = "Asia/Yekaterinburg"
 USE_I18N = True
 USE_TZ = True
 
-# --- Static Files ---
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "reports" / "static"]
@@ -122,10 +116,8 @@ WHITENOISE_AUTOREFRESH = DEBUG
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# --- Authentication ---
 LOGIN_URL = "/reports/login/"
 LOGIN_REDIRECT_URL = "/reports/"
 LOGOUT_REDIRECT_URL = "/reports/login/"
 
-# --- External APIs ---
 HR_SERVICE_API_URL = os.getenv("HR_SERVICE_API_URL", "")
