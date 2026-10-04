@@ -1,5 +1,3 @@
-"""Конфигурация приложения reports."""
-
 from django.apps import AppConfig
 
 
@@ -8,5 +6,4 @@ class ReportsConfig(AppConfig):
     name = "reports"
 
     def ready(self):
-        """Подключение сигналов при запуске приложения."""
         import reports.signals

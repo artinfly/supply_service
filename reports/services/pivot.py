@@ -1,19 +1,9 @@
-"""
-Генерация Excel-файла авансов по шаблону.
-
-Модуль создаёт xlsx-файл с данными авансов на основе шаблона,
-модифицируя XML-структуру файла напрямую для сохранения форматирования
-и сводных таблиц (pivot tables).
-"""
-
 import io
 import os
 import re
 import zipfile
 
 from .excel import xlsx_response
-
-# --- Константы для форматирования ---
 
 COLUMNS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"]
 HEADER_STYLES = ["27", "1", "1", "1", "1", "1", "1", "1", "1", "4", "4"]
@@ -30,12 +20,11 @@ TEXT_FIELDS = [
 ]
 
 
-def escape_xml(s):
-    """Экранирует специальные символы для XML."""
-    if s is None:
+def escape_xml(value):
+    if value is None:
         return ""
     return (
-        str(s)
+        str(value)
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
@@ -44,20 +33,6 @@ def escape_xml(s):
 
 
 def build_advances_xlsx(rows, year):
-    """
-    Генерирует Excel-файл авансов на основе шаблона.
-
-    Читает шаблон templateIGK.xlsx, заменяет данные в sheet2.xml и
-    sharedStrings.xml, обновляет ссылки в pivot-таблицах и возвращает
-    HTTP-ответ с файлом.
-
-    Args:
-        rows: список словарей с данными авансов
-        year: год для отчёта (строка)
-
-    Returns:
-        HttpResponse с xlsx-файлом
-    """
     template_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "static",
@@ -71,12 +46,12 @@ def build_advances_xlsx(rows, year):
 
     cols_xml = re.search(r"<cols>.*?</cols>", orig_s2, re.DOTALL).group()
     orig_ss = orig_ss.replace("2025", year)
+
     tmpl_sis = re.findall(r"<si>.*?</si>", orig_ss, re.DOTALL)
     tmpl_strs = re.findall(r"<t[^>]*>(.*?)</t>", orig_ss)
     tmpl_count = len(tmpl_strs)
     total_rows = len(rows) + 1
 
-    # --- Подготовка shared strings ---
     ss_list = []
     ss_map = {}
 
@@ -103,7 +78,6 @@ def build_advances_xlsx(rows, year):
         for row in rows
     ]
 
-    # --- Генерация нового sharedStrings.xml ---
     new_ss = "\n".join(
         [
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -118,7 +92,6 @@ def build_advances_xlsx(rows, year):
         ]
     ).encode("utf-8")
 
-    # --- Генерация нового sheet2.xml ---
     xml_lines = [
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
@@ -159,13 +132,11 @@ def build_advances_xlsx(rows, year):
     ]
     new_s2 = "\n".join(xml_lines).encode("utf-8")
 
-    # --- Пустые записи pivot-кэша ---
     empty_records = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="0"/>'
     ).encode("utf-8")
 
-    # --- Сборка нового xlsx ---
     buf = io.BytesIO()
     with zipfile.ZipFile(template_path, "r") as z_src:
         content_types = z_src.read("[Content_Types].xml").decode("utf-8")
@@ -194,7 +165,6 @@ def build_advances_xlsx(rows, year):
 
 
 def _update_sheet1(z_src, z_out, item):
-    """Удаляет скрытые строки из sheet1.xml."""
     s1 = z_src.read(item.filename).decode("utf-8")
     s1 = re.sub(
         r'<row r="(?:[1-9]|1[0-9]|2[01])"[^>]*hidden="1"[^>]*>.*?</row>',
@@ -206,7 +176,6 @@ def _update_sheet1(z_src, z_out, item):
 
 
 def _update_styles(z_src, z_out, item):
-    """Обновляет стиль 28 в styles.xml (изменяет fillId)."""
     sxml = z_src.read(item.filename).decode("utf-8")
     inner = (
         re.search(r"<cellXfs[^>]*>(.*?)</cellXfs>", sxml, re.DOTALL).group(1).strip()
@@ -222,7 +191,6 @@ def _update_styles(z_src, z_out, item):
 
 
 def _update_pivot_cache_definition(z_src, z_out, item, total_rows, year):
-    """Обновляет pivotCacheDefinition1.xml (диапазон данных и год)."""
     pcd = z_src.read(item.filename).decode("utf-8")
     pcd = re.sub(r'(?<!\w:)ref="[^"]*"', f'ref="A1:K{total_rows}"', pcd, count=1)
     pcd = re.sub(r'recordCount="\d+"', 'recordCount="0"', pcd)
@@ -238,7 +206,6 @@ def _update_pivot_cache_definition(z_src, z_out, item, total_rows, year):
 
 
 def _update_pivot_table(z_src, z_out, item, total_rows, year):
-    """Обновляет pivotTable1.xml (диапазон и год)."""
     pt_xml = z_src.read(item.filename).decode("utf-8")
     pt_xml = re.sub(r'(?<!\w:)ref="[^"]*"', f'ref="A1:L{total_rows}"', pt_xml, count=1)
     pt_xml = pt_xml.replace("2025", year)
