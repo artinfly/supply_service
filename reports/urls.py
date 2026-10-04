@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import api, exports, pages
+from .views import sum_report as sum_report_views
 
 urlpatterns = [
     path("", pages.index, name="root"),
@@ -103,6 +104,12 @@ urlpatterns = [
         "export/appeared-not-concluded/",
         exports.export_appeared_not_concluded,
         name="export_appeared_not_concluded",
+    ),
+    path("sum-report/", sum_report_views.sum_report_page, name="sum_report_page"),
+    path(
+        "sum-report/upload/",
+        sum_report_views.sum_report_upload,
+        name="sum_report_upload",
     ),
     path("api/kdr/<str:year>/", api.api_kdr, name="api_kdr"),
     path(
