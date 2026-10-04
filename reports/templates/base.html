@@ -70,6 +70,9 @@
     {% if perms.reports.access_export %}
     <a href="{% url 'export_page' %}" class="nav-sub-link">Отчёты в Excel</a>
     {% endif %}
+    {% if perms.reports.access_export %}
+    <a href="{% url 'sum_report_page' %}" class="nav-sub-link">Краткая справка</a>
+    {% endif %}
     {% if perms.reports.access_upload %}
     <a href="{% url 'upload_excel' %}" class="nav-sub-link">Загрузка данных</a>
     {% endif %}

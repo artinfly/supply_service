@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}Краткая справка (SumReport){% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h5>Краткая справка (SumReport)</h5>
+</div>
+
+<div class="upload-layout">
+    <div class="upload-card upload-card-form">
+        <div class="format-note">
+            <div class="format-note-ext">XLSX</div>
+            <div class="format-note-text">
+                Загрузите исходный файл <b>Свод Отчет по ИГК</b> (.xlsx).<br>
+                Файл обрабатывается в памяти, без записи в базу данных.
+            </div>
+        </div>
+
+        <form id="sum-report-form" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label class="filter-label">Excel файл (.xlsx)</label>
+                <input type="file" name="excel_file" accept=".xlsx"
+                       class="form-control upload-file-input mt-1" required>
+            </div>
+            <div class="mb-3">
+                <label class="filter-label">Тип отчёта</label>
+                <select name="report_type" class="form-control upload-file-input mt-1">
+                    <option value="normal">Обычная</option>
+                    <option value="cycle">Длинноцикловая</option>
+                </select>
+            </div>
+            <div class="d-flex align-items-center">
+                <button type="submit" class="btn-orange" id="submit-btn">Сформировать отчёт</button>
+            </div>
+            <div id="file-error" class="upload-error" hidden></div>
+        </form>
+    </div>
+
+    <div class="upload-card upload-card-cols">
+        <div class="filter-label mb-2">Как это работает</div>
+        <div class="upload-cols-note">Файл обрабатывается напрямую в памяти сервера</div>
+        <ul class="upload-cols-list">
+            <li>Каждый лист файла = отдельный ИГК</li>
+            <li>На выходе — ZIP-архив с отчётами по каждому ИГК</li>
+            <li>Обычная: все строки</li>
+            <li>Длинноцикловая: только строки с признаком «Да» в колонке «Длинноцикловые»</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('sum-report-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const btn = document.getElementById('submit-btn');
+    const errDiv = document.getElementById('file-error');
+    const formData = new FormData(this);
+
+    errDiv.hidden = true;
+    btn.disabled = true;
+    btn.textContent = 'Обработка...';
+
+    try {
+        const resp = await fetch('{% url "sum_report_upload" %}', {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-CSRFToken': formData.get('csrfmiddlewaretoken') }
+        });
+
+        if (!resp.ok) {
+            const data = await resp.json();
+            throw new Error(data.error || 'Ошибка обработки');
+        }
+
+        const blob = await resp.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'sum_report.zip';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+        errDiv.textContent = err.message;
+        errDiv.hidden = false;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Сформировать отчёт';
+    }
+});
+</script>
+{% endblock %}

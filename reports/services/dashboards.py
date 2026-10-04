@@ -1,5 +1,3 @@
-"""Сервисы для расчёта сводок и dashboard."""
-
 from decimal import Decimal
 
 from django.db.models import Count, Q, Sum
@@ -7,11 +5,8 @@ from django.db.models import Count, Q, Sum
 from .queries import ADVANCE, POSTPAYMENT, ZNP_APPROVED
 from .sap_status import SAP_STAGE_PARAMS, sap_date_field, sap_status_conditions
 
-# --- Вспомогательные функции ---
-
 
 def to_decimal(value):
-    """Безопасно приводит значение к Decimal (None -> 0)."""
     if value is None:
         return Decimal("0")
     if isinstance(value, Decimal):
@@ -20,18 +15,13 @@ def to_decimal(value):
 
 
 def to_mln(value):
-    """Переводит сумму в миллионы рублей."""
     return to_decimal(value) / Decimal("1000000")
 
 
 def percent(part, whole):
-    """Вычисляет процент part от whole."""
     part = to_decimal(part)
     whole = to_decimal(whole)
     return (part / whole * 100) if whole else Decimal("0")
-
-
-# --- Dashboard: сводка по ЦФО ---
 
 
 def filter_by_year(queryset, year, field_prefix=""):
@@ -101,14 +91,10 @@ def with_cfo_percents(row):
 
 
 def cfo_totals_row(rows):
-    """Итоговая строка по всем ЦФО."""
     totals = {"cfo": "ИТОГО"}
     for key in CFO_SUMMED:
         totals[key] = sum((to_decimal(r[key]) for r in rows), Decimal("0"))
     return with_cfo_percents(totals)
-
-
-# --- Сводка заявок ФЗД ---
 
 
 ZNP_STAGE_LABELS = {
@@ -213,7 +199,6 @@ EMPTY_ZNP = {
 
 
 def breakdown_from_stats(ni, zs, st):
-    """Формирует структуру карточек для сводки заявок ФЗД."""
     not_issued_count = ni["count"] or 0
     not_issued_sum = to_mln(ni["plan_sum"])
     not_issued_advance_count = ni["advance_count"] or 0
@@ -280,15 +265,7 @@ def breakdown_from_stats(ni, zs, st):
     }
 
 
-# --- Сводка заявок SAP ---
-
-
 def sap_aggregates(date=None):
-    """
-    Агрегаты сводки SAP: всего и по каждому статусу.
-    Условия статусов те же, что в списке заявок. При date считаются заявки
-    с этой датой (для каждого статуса по своему полю даты).
-    """
     total_filter = Q(created_date=date) if date else None
     aggregates = {
         "total": Count("id", filter=total_filter),
@@ -311,7 +288,6 @@ EMPTY_SAP = {
 
 
 def sap_cards(stats):
-    """Формирует структуру карточек для сводки заявок SAP."""
     total = stats["total"] or 0
     cards = {
         "total_count": total,

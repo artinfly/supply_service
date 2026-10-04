@@ -1,11 +1,3 @@
-"""
-Модуль нормализации данных из staging-таблиц в рабочие таблицы.
-
-Конвертирует сырые данные, вычисляет производные поля,
-записывает историю изменений и привязывает заявки к договорам.
-Все операции выполняются в одной транзакции.
-"""
-
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -22,64 +14,9 @@ from reports.services.queries import (
     YEARS,
 )
 
-# --- Вспомогательные функции конвертации ---
-
-
-def to_decimal(val):
-    """
-    Конвертирует строковое значение в Decimal.
-    Удаляет пробелы, заменяет запятые на точки.
-    Возвращает None для пустых и некорректных значений.
-    """
-    if val is None or str(val).strip() in ("", "-", "None"):
-        return None
-    try:
-        cleaned = str(val).replace("\xa0", "").replace(" ", "").replace(",", ".")
-        return Decimal(cleaned)
-    except (InvalidOperation, ValueError):
-        return None
-
-
-def year_flags(god_igk):
-    """Определяет флаги годов (y25, y26, y27) из колонки «ГодИГК»."""
-    try:
-        y = int(str(god_igk).strip()[:4])
-    except (ValueError, TypeError):
-        y = None
-    return tuple(y == year for year in YEARS)
-
-
-def norm(val):
-    """Нормализует строковое значение: убирает пробелы, None остаётся None."""
-    return str(val).strip() if val is not None else None
-
-
-def plan_month(val):
-    """Извлекает «ГГГГ.ММ» из плановой даты формата «ГГГГ.ММ» или «ММ.ГГГГ»."""
-    text = norm(val)
-    if not text:
-        return None
-    parts = text.split(".")
-    if len(parts) == 3 and len(parts[2]) == 4:
-        return f"{parts[2]}.{parts[1].zfill(2)}"
-    if len(parts) == 2 and len(parts[0]) == 4:
-        return f"{parts[0]}.{parts[1].zfill(2)}"
-    return None
-
-
-def values_equal(a, b):
-    """Сравнивает два числовых значения с точностью до 2 знаков."""
-    if a is None and b is None:
-        return True
-    if a is None or b is None:
-        return False
-    return round(Decimal(str(a)), 2) == round(Decimal(str(b)), 2)
-
-
-# --- Константы и маппинги ---
-
-CONCLUDED_SQL = ", ".join(f"'{s}'" for s in CONCLUDED)
-YEAR_MAP = [(f"y{str(y)[2:]}", y) for y in YEARS]
+TWO_PLACES = Decimal("0.01")
+YEAR_COLS = [f"y{str(y)[2:]}" for y in YEARS]
+STATUS_PLACEHOLDERS = ", ".join(["%s"] * len(CONCLUDED))
 
 MONTH_MAP = {
     "января": 1,
@@ -97,72 +34,141 @@ MONTH_MAP = {
 }
 
 
+def to_decimal(value):
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if text in {"", "-", "None"}:
+        return None
+
+    try:
+        cleaned = text.replace("\xa0", "").replace(" ", "").replace(",", ".")
+        return Decimal(cleaned)
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def year_flags(god_igk):
+    try:
+        year = int(str(god_igk).strip()[:4])
+    except (ValueError, TypeError):
+        year = None
+
+    return tuple(year == y for y in YEARS)
+
+
+def norm(value):
+    return str(value).strip() if value is not None else None
+
+
+def plan_month(value):
+    text = norm(value)
+    if not text:
+        return None
+
+    parts = text.split(".")
+
+    if len(parts) == 3 and len(parts[2]) == 4:
+        return f"{parts[2]}.{parts[1].zfill(2)}"
+
+    if len(parts) == 2 and len(parts[0]) == 4:
+        return f"{parts[0]}.{parts[1].zfill(2)}"
+
+    return None
+
+
+def values_equal(a, b):
+    left = to_decimal(a)
+    right = to_decimal(b)
+
+    if left is None and right is None:
+        return True
+
+    if left is None or right is None:
+        return False
+
+    return left.quantize(TWO_PLACES) == right.quantize(TWO_PLACES)
+
+
 def status_group(status):
-    """Определяет группу статуса: 'concluded', 'not_concluded' или None."""
     if status in CONCLUDED:
         return "concluded"
+
     if status in NOT_CONCL:
         return "not_concluded"
+
     return None
 
 
 def _indexed_lookup(rows, key_fn, value_fn):
-    """
-    Строит индексированный словарь для поиска строк по составному ключу.
-    Дубликаты по ключу получают дополнительный индекс (0, 1, 2...).
-    """
     counts = defaultdict(int)
     result = {}
-    for r in rows:
-        base_key = key_fn(r)
-        idx = counts[base_key]
+
+    for row in rows:
+        base_key = key_fn(row)
+        index = counts[base_key]
         counts[base_key] += 1
-        result[base_key + (idx,)] = value_fn(r)
+        result[base_key + (index,)] = value_fn(row)
+
     return result
 
 
-# --- Функции парсинга дат ---
-
-
-def text_ru_date_to_date(val):
-    """Парсит дату «ДД месяц ГГГГ» (например, «15 сентября 2026»)."""
-    if val is None:
+def text_ru_date_to_date(value):
+    text = norm(value)
+    if not text:
         return None
-    parts = val.split()
-    if len(parts) != 3:
+
+    parts = text.split()
+    if len(parts) < 3:
         return None
-    day_str, month_str, year_str = parts
-    month = MONTH_MAP.get(month_str)
+
+    day_str, month_str, year_str = parts[:3]
+    month = MONTH_MAP.get(month_str.rstrip("."))
+
     if month is None:
         return None
+
+    day_digits = "".join(ch for ch in day_str if ch.isdigit())
+    year_digits = "".join(ch for ch in year_str if ch.isdigit())
+
+    if not day_digits or len(year_digits) < 4:
+        return None
+
     try:
-        return date(int(year_str), month, int(day_str))
+        return date(int(year_digits[:4]), month, int(day_digits))
     except ValueError:
         return None
 
 
-def dot_date_to_date(val):
-    """Парсит дату «ДД.ММ.ГГГГ» или «ГГГГ-ММ-ДД»."""
-    if val is None:
+def dot_date_to_date(value):
+    text = norm(value)
+    if not text:
         return None
-    parts = str(val).strip().split()
+
+    parts = text.split()
     if not parts:
         return None
+
     for fmt in ("%d.%m.%Y", "%Y-%m-%d"):
         try:
             return datetime.strptime(parts[0], fmt).date()
         except ValueError:
             continue
+
     return None
 
 
-# --- Нормализация договоров ---
+def parse_date(value):
+    result = dot_date_to_date(value)
+    if result:
+        return result
+
+    return text_ru_date_to_date(value)
 
 
 def normalize_contracts():
-    """Нормализует данные договоров из staging_excel в igk_stat_data."""
     with transaction.atomic(), connection.cursor() as cur:
-        # Обновление справочника ИГК
         cur.execute("""
             INSERT INTO nsi_igk (igk)
             SELECT DISTINCT TRIM(igk) FROM staging_excel
@@ -170,7 +176,6 @@ def normalize_contracts():
             ON CONFLICT DO NOTHING
         """)
 
-        # Чтение и конвертация данных из staging
         cur.execute(
             """
             SELECT igk, kontragent, cfo, dogovor, sostoyanie,
@@ -185,34 +190,35 @@ def normalize_contracts():
         staging_rows = cur.fetchall()
 
         new_data = []
+
         for r in staging_rows:
             y25, y26, y27 = year_flags(r[14])
+
             new_data.append(
                 (
-                    norm(r[0]),  # igk
-                    norm(r[1]),  # c_agent
-                    norm(r[2]),  # cfo
-                    norm(r[3]),  # contract
-                    norm(r[4]),  # status
-                    norm(r[5]) or None,  # payment_type
-                    norm(r[6]),  # item
-                    norm(r[7]),  # order
-                    to_decimal(r[8]),  # plan
-                    to_decimal(r[9]),  # fact
-                    to_decimal(r[10]),  # tolerance
-                    norm(r[11]),  # stage
+                    norm(r[0]),
+                    norm(r[1]),
+                    norm(r[2]),
+                    norm(r[3]),
+                    norm(r[4]),
+                    norm(r[5]) or None,
+                    norm(r[6]),
+                    norm(r[7]),
+                    to_decimal(r[8]),
+                    to_decimal(r[9]),
+                    to_decimal(r[10]),
+                    norm(r[11]),
                     y25,
                     y26,
-                    y27,  # флаги годов
-                    plan_month(r[12]),  # plan_date
-                    norm(r[14]),  # c_date
-                    to_decimal(r[13]),  # contract_sum
+                    y27,
+                    plan_month(r[12]),
+                    norm(r[14]),
+                    to_decimal(r[13]),
                     contract_hash(norm(r[0]), norm(r[1]), norm(r[3]), norm(r[11])),
-                    to_decimal(r[15]),  # remainder
+                    to_decimal(r[15]),
                 )
             )
 
-        # Загрузка предыдущих данных для сравнения
         cur.execute("""
             SELECT igk, c_agent, contract, item, "order", stage, plan_date,
                    status, plan, fact, contract_sum
@@ -242,26 +248,30 @@ def normalize_contracts():
                 r[6] or "",
                 r[7] or "",
                 r[11] or "",
-                r[15] or "",  # plan_date
+                r[15] or "",
             ),
             value_fn=lambda r: r,
         )
 
-        # Выявление и запись появившихся договоров
         today = timezone.localdate()
         appeared = []
+
         if old_lookup:
             for key, row in new_lookup.items():
                 kind = status_group(row[4])
+
                 if kind is None:
                     continue
+
                 old_row = old_lookup.get(key)
+
                 if old_row is None:
                     reason = "новая позиция"
                 elif status_group(old_row[0]) == kind:
                     continue
                 else:
                     reason = "смена статуса"
+
                 appeared.append(
                     (
                         today,
@@ -280,6 +290,7 @@ def normalize_contracts():
                         row[17],
                     )
                 )
+
         if appeared:
             cur.executemany(
                 """
@@ -291,15 +302,13 @@ def normalize_contracts():
                 appeared,
             )
 
-        # Выявление и запись истории изменений
-        # ВАЖНО: хеш включает все 7 полей ключа (включая plan_date),
-        # чтобы совпадать с JOIN в queries.py
         history = []
+
         for key, new_row in new_lookup.items():
             if key not in old_lookup:
                 continue
-            old_vals = old_lookup[key]
-            old_status, old_plan, old_fact, old_sum = old_vals
+
+            old_status, old_plan, old_fact, old_sum = old_lookup[key]
             new_status, new_plan = new_row[4], new_row[8]
             new_fact, new_sum = new_row[9], new_row[17]
 
@@ -313,7 +322,7 @@ def normalize_contracts():
 
             history.append(
                 (
-                    "".join(key[:-1]),  # конкатенация ключевых полей (без индекса)
+                    "".join(key[:-1]),
                     old_status if status_changed else None,
                     new_status if status_changed else None,
                     today if status_changed else None,
@@ -345,7 +354,6 @@ def normalize_contracts():
                 history,
             )
 
-        # Полная перезапись igk_stat_data
         cur.execute("TRUNCATE igk_stat_data RESTART IDENTITY")
         cur.executemany(
             """
@@ -359,11 +367,12 @@ def normalize_contracts():
             new_data,
         )
 
-        # Создание снимков для графиков динамики
         cur.execute(
-            "DELETE FROM contract_counts_snapshot WHERE upload_date = %s", [today]
+            "DELETE FROM contract_counts_snapshot WHERE upload_date = %s",
+            [today],
         )
-        for year_col, year_val in YEAR_MAP:
+
+        for year_col in YEAR_COLS:
             cur.execute(
                 f"""
                 INSERT INTO contract_counts_snapshot
@@ -371,26 +380,21 @@ def normalize_contracts():
                 SELECT %s, RIGHT(igk, 4), cfo, %s, COUNT(DISTINCT contract)
                 FROM igk_stat_data
                 WHERE {year_col}=TRUE
-                  AND status IN ({CONCLUDED_SQL})
+                  AND status IN ({STATUS_PLACEHOLDERS})
                   AND contract IS NOT NULL AND TRIM(contract) != ''
                   AND igk IS NOT NULL AND TRIM(igk) != ''
                   AND cfo IS NOT NULL AND TRIM(cfo) != ''
                 GROUP BY RIGHT(igk, 4), cfo
                 """,
-                [today, year_col],
+                [today, year_col, *CONCLUDED],
             )
 
-        # Привязка заявок ФЗД к позициям договоров
         relink_znp_parents()
 
     return f"обработано строк: {len(new_data)}, изменений записано: {len(history)}"
 
 
-# --- Нормализация заявок ФЗД ---
-
-
 def normalize_znp():
-    """Нормализует данные заявок ФЗД из staging_znp_excel в znp_data."""
     with transaction.atomic(), connection.cursor() as cur:
         cur.execute("""
             SELECT crc32_hash, plan_doc, payment_purpose,
@@ -402,22 +406,23 @@ def normalize_znp():
         staging_rows = cur.fetchall()
 
         new_data = []
+
         for r in staging_rows:
             new_data.append(
                 (
-                    None,  # parent_id (NULL, привязка позже)
-                    norm(r[1]),  # plan_doc
-                    norm(r[2]),  # payment_purpose
-                    text_ru_date_to_date(norm(r[3])),  # plan_payment_date
-                    text_ru_date_to_date(norm(r[4])),  # fact_payment_date
-                    to_decimal(r[5]),  # plan_sum
-                    to_decimal(r[6]),  # fact_sum
-                    r[0],  # crc32_hash
-                    norm(r[7]),  # stage
-                    norm(r[8]),  # znp_igk
-                    norm(r[9]),  # znp_payment_type
-                    norm(r[10]),  # znp_status
-                    dot_date_to_date(r[11]),  # znp_date
+                    None,
+                    norm(r[1]),
+                    norm(r[2]),
+                    parse_date(r[3]),
+                    parse_date(r[4]),
+                    to_decimal(r[5]),
+                    to_decimal(r[6]),
+                    r[0],
+                    norm(r[7]),
+                    norm(r[8]),
+                    norm(r[9]),
+                    norm(r[10]),
+                    parse_date(r[11]),
                 )
             )
 
@@ -439,14 +444,13 @@ def normalize_znp():
         cur.execute("SELECT COUNT(*) FROM znp_data WHERE parent_id IS NULL")
         unmatched_count = cur.fetchone()[0]
 
-    return f"обработано заявок: {len(new_data)}, без совпадения с договором: {unmatched_count}"
-
-
-# --- Нормализация заявок SAP ---
+    return (
+        f"обработано заявок: {len(new_data)}, "
+        f"без совпадения с договором: {unmatched_count}"
+    )
 
 
 def normalize_znp_sap():
-    """Нормализует данные заявок SAP из staging_znp_sap_excel в znp_data_sap."""
     with transaction.atomic(), connection.cursor() as cur:
         cur.execute("""
             SELECT igk, cfo, c_agent, reg_num, items, vv_sum,
@@ -459,6 +463,7 @@ def normalize_znp_sap():
 
         new_data = []
         no_igk_count = 0
+
         for r in staging_rows:
             if r[0] is None:
                 no_igk_count += 1

@@ -1,63 +1,62 @@
-document.addEventListener('DOMContentLoaded', function () {
-    var btn = document.getElementById('fetch-external-data-btn');
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('fetch-external-data-btn');
     if (!btn) return;
 
-    btn.addEventListener('click', function () {
-        var usernameField = document.getElementById('id_username');
-        var status = document.getElementById('fetch-external-data-status');
+    const fillField = (id, value) => {
+        const el = document.getElementById(id);
+        if (el && value !== undefined) {
+            el.value = value;
+        }
+    };
+
+    btn.addEventListener('click', async () => {
+        const usernameField = document.getElementById('id_username');
+        const status = document.getElementById('fetch-external-data-status');
 
         if (!usernameField) {
             status.textContent = 'Не найдено поле username';
             return;
         }
 
-        var empNumber = usernameField.value.trim();
+        const empNumber = usernameField.value.trim();
 
         if (!empNumber) {
             status.textContent = 'Сначала заполните username';
             return;
         }
 
-        var url = btn.dataset.urlTemplate.replace('EMP_PLACEHOLDER', encodeURIComponent(empNumber));
+        const url = btn.dataset.urlTemplate.replace('EMP_PLACEHOLDER', encodeURIComponent(empNumber));
 
         status.textContent = 'Загрузка...';
 
-        fetch(url, {
-            method: 'GET',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin'
-        })
-        .then(function (response) {
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            });
+
             if (!response.ok) {
-                return response.json().then(function (data) {
-                    throw new Error(data.error || 'Ошибка запроса');
-                });
+                const data = await response.json();
+                throw new Error(data.error || 'Ошибка запроса');
             }
-            return response.json();
-        })
-        .then(function (data) {
+
+            const data = await response.json();
+
             fillField('id_first_name', data.name);
             fillField('id_last_name', data.surname);
             fillField('id_email', data.email);
             fillField('id_patronymic', data.patronymic);
             fillField('id_api_key', data.api_key);
 
-            var isFiredField = document.getElementById('id_is_fired');
+            const isFiredField = document.getElementById('id_is_fired');
             if (isFiredField) {
                 isFiredField.checked = Boolean(data.is_fired);
             }
 
             status.textContent = 'Готово';
-        })
-        .catch(function (err) {
+        } catch (err) {
             status.textContent = 'Ошибка: ' + err.message;
-        });
-    });
-
-    function fillField(id, value) {
-        var el = document.getElementById(id);
-        if (el && value !== undefined) {
-            el.value = value;
         }
-    }
+    });
 });
