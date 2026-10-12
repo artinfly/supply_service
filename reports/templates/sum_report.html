@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
-{% block title %}Краткая справка (SumReport){% endblock %}
+{% block title %}Краткая справка {% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h5>Краткая справка (SumReport)</h5>
+    <h5>Краткая справка</h5>
 </div>
 
 <div class="upload-layout">
@@ -39,12 +39,9 @@
 
     <div class="upload-card upload-card-cols">
         <div class="filter-label mb-2">Как это работает</div>
-        <div class="upload-cols-note">Файл обрабатывается напрямую в памяти сервера</div>
         <ul class="upload-cols-list">
             <li>Каждый лист файла = отдельный ИГК</li>
             <li>На выходе — ZIP-архив с отчётами по каждому ИГК</li>
-            <li>Обычная: все строки</li>
-            <li>Длинноцикловая: только строки с признаком «Да» в колонке «Длинноцикловые»</li>
         </ul>
     </div>
 </div>
