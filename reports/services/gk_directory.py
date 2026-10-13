@@ -1,30 +1,19 @@
 from decimal import Decimal
 
 from ..models import GozContractVat
-from .gk_key import gk_base, gk_key, parse_gk_key
+from .gk_key import gk_key, key_from_contract
 
 DEFAULT_VAT_RATE = Decimal("22.0")
 
 
 def directory_index():
-    """(по ключу, по первым 4 цифрам только для старых записей без «/сб»)."""
-    by_key, legacy = {}, {}
-    for rec in GozContractVat.objects.all():
-        by_key[rec.igk] = rec
-        if "/" not in rec.igk:
-            legacy.setdefault(gk_base(rec.igk), []).append(rec)
-    return by_key, legacy
+    """{ключ ГК: запись}. «1234» и «1234/34сб» — разные ГК."""
+    return {rec.igk: rec for rec in GozContractVat.objects.all()}
 
 
 def find_gk(label, index):
-    """Запись справочника для ГК из архива/файла или None."""
-    by_key, legacy = index
-    key = gk_key(label)
-    rec = by_key.get(key)
-    if rec:
-        return rec
-    candidates = legacy.get(gk_base(key), [])
-    return candidates[0] if len(candidates) == 1 else None
+    """Запись справочника для ГК из архива/файла (только точное совпадение ключа) или None."""
+    return index.get(gk_key(label))
 
 
 def _cell(value):
@@ -44,11 +33,10 @@ def import_extended_rows(rows):
     """Файл: № | Предприятие | Заказ | Договор/Дата.
 
     ГК берётся из договора («…6066/162сб/137 от …» -> «6066/162сб»).
-    Старая запись без сб (только «6066») переименовывается в новый ключ,
-    если по этим 4 цифрам она единственная.
+    ГК «6066» и «6066/162сб» считаются разными записями.
     Возвращает (добавлено, обновлено, ошибки).
     """
-    by_key, legacy = directory_index()
+    by_key = directory_index()
     added = updated = 0
     errors = []
 
@@ -60,9 +48,9 @@ def import_extended_rows(rows):
         if not any(cells[1:]) or _is_header(cells):
             continue
 
-        key = parse_gk_key(contract)
+        key = key_from_contract(contract)
         if not key:
-            errors.append(f"строка {n}: в «{contract[:40]}» не найден ГК вида игк/111сб")
+            errors.append(f"строка {n}: в «{contract[:40]}» не найден номер ГК")
             continue
 
         fields = {
@@ -72,14 +60,6 @@ def import_extended_rows(rows):
         }
 
         rec = by_key.get(key)
-        if rec is None:
-            candidates = legacy.get(gk_base(key), [])
-            if len(candidates) == 1:
-                rec = candidates[0]
-                legacy[gk_base(key)] = []
-                by_key.pop(rec.igk, None)
-                rec.igk = key
-                by_key[key] = rec
 
         try:
             if rec:

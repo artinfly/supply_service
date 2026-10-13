@@ -123,6 +123,7 @@ _LEGEND_ITEMS = [
 
 _IGK_RE = re.compile(r"ИГК\s*(\d+)", re.IGNORECASE)
 _NUM_RE = re.compile(r"№\s*(\d+)(?:_([^.]*))?")
+_PAGE_RE = re.compile(r"[_\s-]*Стр\.?\s*(\d+)", re.IGNORECASE)
 
 
 def _contract_label(filename):
@@ -169,14 +170,33 @@ def _read_contract_file(igk, content):
     return igk, plan, fact
 
 
+def _zip_name(info):
+    """Имя файла в архиве; кириллица из Windows-архивов (cp866) без флага UTF-8."""
+    name = info.filename
+    if not info.flag_bits & 0x800:
+        try:
+            fixed = name.encode("cp437").decode("cp866")
+            if re.search("[А-Яа-яЁё]", fixed):
+                return fixed
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    return name
+
+
 def read_archive(archive_file):
+    """Читает .xls из архива. Файлы «Стр. N» с нечётным N пропускаются."""
     contracts = []
     with zipfile.ZipFile(archive_file) as zf:
-        for name in zf.namelist():
+        for info in zf.infolist():
+            name = _zip_name(info)
             if name.endswith("/") or not name.lower().endswith(".xls"):
                 continue
-            igk = _contract_label(name.rsplit("/", 1)[-1])
-            with zf.open(name) as fh:
+            filename = name.rsplit("/", 1)[-1]
+            page = _PAGE_RE.search(filename)
+            if page and int(page.group(1)) % 2 == 1:
+                continue
+            igk = _contract_label(_PAGE_RE.sub("", filename))
+            with zf.open(info) as fh:
                 contracts.append(_read_contract_file(igk, fh.read()))
 
     if not contracts:

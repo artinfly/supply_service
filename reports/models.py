@@ -18,7 +18,7 @@ class NsiIgk(models.Model):
 
 
 class GozContractVat(models.Model):
-    igk = models.CharField(max_length=20, unique=True, verbose_name="ГК (игк/111сб)")
+    igk = models.CharField(max_length=255, unique=True, verbose_name="ГК (игк/111сб)")
     enterprise = models.CharField(
         max_length=255, blank=True, null=True, verbose_name="Предприятие"
     )

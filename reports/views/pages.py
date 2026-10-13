@@ -15,7 +15,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.management import call_command
-from django.db import connection
+from django.db import IntegrityError, connection
 from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.db.models.expressions import RawSQL
 from django.http import JsonResponse
@@ -54,7 +54,7 @@ from ..services.dashboards import (
 )
 from ..services.excel import xlsx_response
 from ..services.gk_directory import directory_index, find_gk, import_extended_rows
-from ..services.gk_key import gk_key
+from ..services.gk_key import gk_key, parse_gk_key
 from ..services.excel_import import CONTRACT_COLUMNS, ZNP_COLUMNS, ZNP_SAP_COLUMNS
 from ..services.queries import (
     ADVANCE,
@@ -401,13 +401,12 @@ def _save_gk_to_directory(gk_data):
         try:
             rec = find_gk(key, index)
             if rec:
-                rec.igk = key
                 for name, value in defaults.items():
                     setattr(rec, name, value)
                 rec.save()
             else:
                 rec = GozContractVat.objects.create(igk=key, **defaults)
-            index[0][key] = rec
+            index[key] = rec
         except Exception as e:
             errors.append(f"{key}: {e}")
 
@@ -554,9 +553,11 @@ def _sheet_rows(file, ext):
 
 def _is_extended_directory(rows):
     """Файл с колонками № | Предприятие | Заказ | Договор/Дата."""
-    for row in rows[:5]:
+    for row in rows[:10]:
         text = " ".join(str(c).lower() for c in row if c is not None)
-        if "предприятие" in text or "договор" in text:
+        if "предприятие" in text or "договор" in text or "догово/" in text:
+            return True
+        if len(row) >= 4 and parse_gk_key(row[3]):
             return True
     return False
 
@@ -652,6 +653,7 @@ def upload_gk_directory(request):
 
 
 @login_required
+@superuser_required
 def gk_directory_save(request):
     if request.method == "POST":
         record_id = request.POST.get("record_id", "").strip()
@@ -695,6 +697,8 @@ def gk_directory_save(request):
                     vat_rate=vat_rate,
                 )
                 messages.success(request, f"ГК «{igk}» добавлен в справочник.")
+        except IntegrityError:
+            messages.error(request, f"ГК «{igk}» уже есть в справочнике.")
         except Exception as e:
             messages.error(request, f"Ошибка сохранения: {e}")
 
@@ -702,6 +706,7 @@ def gk_directory_save(request):
 
 
 @login_required
+@superuser_required
 def gk_directory_delete(request):
     if request.method == "POST":
         record_id = request.POST.get("record_id", "").strip()
