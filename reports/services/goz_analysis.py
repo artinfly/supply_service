@@ -7,6 +7,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
+from .gk_key import gk_key
+
 SHEET_NAME = "Лист_1"
 _PLAN_COL = 3
 _FACT_COL = 6
@@ -32,6 +34,8 @@ _FACT_ONLY_ROWS = {
 HEADERS = [
     "№ п/п",
     "ГК",
+    "Контрагент",
+    "Заказ",
     "Наименование",
     "",
     "Отгрузка (п.3)",
@@ -57,13 +61,19 @@ HEADERS = [
 TOTAL_COLS = len(HEADERS)
 
 _COL_WIDTHS = (
-    [6, 14, 18, 12] + [19, 19, 19, 19, 19, 19, 19, 19, 10, 10] + [19] * 7 + [30, 30]
+    [6, 14, 30, 14, 18, 12]
+    + [19, 19, 19, 19, 19, 19, 19, 19, 10, 10]
+    + [19] * 7
+    + [30, 30]
 )
 
-_MERGE_COLS = [1, 2, 3, 22, 23]
+_LEAD_COLS = 6  # №, ГК, Контрагент, Заказ, Наименование, строка («Целевые»/«Факт»…)
+_CENTER_COLS = (1, 2, 4)
+_TEXT_COLS = (3, 5, TOTAL_COLS - 1, TOTAL_COLS)
+_MERGE_COLS = [1, 2, 3, 4, 5, TOTAL_COLS - 1, TOTAL_COLS]
 
-_K_COL, _L_COL, _M_COL, _N_COL = 11, 12, 13, 14
-_Q_COL, _R_COL = 17, 18
+_K_COL, _L_COL, _M_COL, _N_COL = 13, 14, 15, 16
+_Q_COL, _R_COL = 19, 20
 _PERCENT_COLS = {_M_COL, _N_COL}
 
 _RENT_THRESHOLD = 0.075
@@ -84,23 +94,36 @@ _CENTER = Alignment(horizontal="center", vertical="center")
 _LEFT_WRAP = Alignment(horizontal="left", vertical="center", wrap_text=True)
 _RIGHT = Alignment(horizontal="right")
 
+_K, _L, _M, _N, _Q, _R = (
+    get_column_letter(c) for c in (_K_COL, _L_COL, _M_COL, _N_COL, _Q_COL, _R_COL)
+)
+
 _LEGEND_ITEMS = [
-    (_RENT_FILL, _RED_FONT, "Рентабельность к себестоимости (столбцы M, N) выше 7,5%"),
-    (_NEGATIVE_FILL, _FONT, "«+/- ресурсов ГК» (столбец Q) — отрицательное значение"),
+    (
+        _RENT_FILL,
+        _RED_FONT,
+        f"Рентабельность к себестоимости (столбцы {_M}, {_N}) выше 7,5%",
+    ),
+    (
+        _NEGATIVE_FILL,
+        _FONT,
+        f"«+/- ресурсов ГК» (столбец {_Q}) — отрицательное значение",
+    ),
     (
         _PROFIT_MISMATCH_FILL,
         _FONT,
-        "Прибыль в отчёте (K) не совпадает с расчётной прибылью (L)",
+        f"Прибыль в отчёте ({_K}) не совпадает с расчётной прибылью ({_L})",
     ),
     (
         _RESOURCE_MISMATCH_FILL,
         _FONT,
-        "«+/- ресурсов ГК»: расчёт (Q) не совпадает со значением из формы (R)",
+        f"«+/- ресурсов ГК»: расчёт ({_Q}) не совпадает со значением из формы ({_R})",
     ),
 ]
 
 _IGK_RE = re.compile(r"ИГК\s*(\d+)", re.IGNORECASE)
 _NUM_RE = re.compile(r"№\s*(\d+)(?:_([^.]*))?")
+_PAGE_RE = re.compile(r"[_\s-]*Стр\.?\s*(\d+)", re.IGNORECASE)
 
 
 def _contract_label(filename):
@@ -110,18 +133,18 @@ def _contract_label(filename):
         suffix = (num_match.group(2) or "").strip()
         if suffix:
             label += f" {suffix}"
-        return label
+        return gk_key(label)
 
     igk_match = _IGK_RE.search(filename)
     if igk_match:
-        return igk_match.group(1)[-4:]
+        return gk_key(igk_match.group(1)[-4:])
 
-    return filename[:-4]
+    return gk_key(filename[:-4])
 
 
 def igk_key(label):
-    m = re.match(r"\d{4}(?= |$)", label)
-    return m.group(0) if m else label.strip()
+    """Оставлено для совместимости: ключ ГК вида «6066/162сб»."""
+    return gk_key(label)
 
 
 def _cell_number(sheet, row, col):
@@ -147,14 +170,33 @@ def _read_contract_file(igk, content):
     return igk, plan, fact
 
 
+def _zip_name(info):
+    """Имя файла в архиве; кириллица из Windows-архивов (cp866) без флага UTF-8."""
+    name = info.filename
+    if not info.flag_bits & 0x800:
+        try:
+            fixed = name.encode("cp437").decode("cp866")
+            if re.search("[А-Яа-яЁё]", fixed):
+                return fixed
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    return name
+
+
 def read_archive(archive_file):
+    """Читает .xls из архива. Файлы «Стр. N» с нечётным N пропускаются."""
     contracts = []
     with zipfile.ZipFile(archive_file) as zf:
-        for name in zf.namelist():
+        for info in zf.infolist():
+            name = _zip_name(info)
             if name.endswith("/") or not name.lower().endswith(".xls"):
                 continue
-            igk = _contract_label(name.rsplit("/", 1)[-1])
-            with zf.open(name) as fh:
+            filename = name.rsplit("/", 1)[-1]
+            page = _PAGE_RE.search(filename)
+            if page and int(page.group(1)) % 2 == 1:
+                continue
+            igk = _contract_label(_PAGE_RE.sub("", filename))
+            with zf.open(info) as fh:
                 contracts.append(_read_contract_file(igk, fh.read()))
 
     if not contracts:
@@ -204,7 +246,7 @@ def _deviation(fact_m, plan_m):
     return abs_dev, rel_dev
 
 
-def _block_rows(igk, num, plan, fact, vat_rate, product=""):
+def _block_rows(igk, num, plan, fact, vat_rate, product="", agent="", order=""):
     plan_m = _line_metrics(plan, vat_rate)
     fact_m = _line_metrics(fact, vat_rate)
     fact_extra = [
@@ -221,10 +263,20 @@ def _block_rows(igk, num, plan, fact, vat_rate, product=""):
     pad_notes = [None, None]
 
     return [
-        [num, igk, product or "", "Целевые", *plan_m, *pad_extra, *pad_notes],
-        [None, None, None, "Факт", *fact_m, *fact_extra, *pad_notes],
-        [None, None, None, "откл.абсол.", *abs_dev, *pad_extra, *pad_notes],
-        [None, None, None, "откл.отн.%", *rel_dev, *pad_extra, *pad_notes],
+        [
+            num,
+            igk,
+            agent or "",
+            order or "",
+            product or "",
+            "Целевые",
+            *plan_m,
+            *pad_extra,
+            *pad_notes,
+        ],
+        [*[None] * 5, "Факт", *fact_m, *fact_extra, *pad_notes],
+        [*[None] * 5, "откл.абсол.", *abs_dev, *pad_extra, *pad_notes],
+        [*[None] * 5, "откл.отн.%", *rel_dev, *pad_extra, *pad_notes],
     ]
 
 
@@ -235,11 +287,11 @@ def _write_row(ws, row_idx, values, force_percent=False):
         cell.font = _FONT
 
         is_num = isinstance(val, (int, float)) and not isinstance(val, bool)
-        if ci in (1, 2):
+        if ci in _CENTER_COLS:
             cell.alignment = _CENTER
-        elif ci in (3, 22, 23):
+        elif ci in _TEXT_COLS:
             cell.alignment = _LEFT_WRAP
-        elif is_num and ci >= 5:
+        elif is_num and ci > _LEAD_COLS:
             is_percent = force_percent or ci in _PERCENT_COLS
             cell.number_format = "0.0%" if is_percent else "#,##0.00"
             cell.alignment = _RIGHT
@@ -301,9 +353,11 @@ def _to_rate(value, default=22.0):
         return default
 
 
-def build_report(contracts, vat_rates, products=None):
+def build_report(contracts, vat_rates, products=None, extras=None):
+    """extras: {ключ ГК: {"agent": предприятие, "order": заказ}} из справочника."""
     vat_rates_dict = {k: _to_rate(v) for k, v in vat_rates.items()}
     products = products or {}
+    extras = extras or {}
 
     wb = Workbook()
     ws = wb.active
@@ -330,7 +384,17 @@ def build_report(contracts, vat_rates, products=None):
     row_i = 3
     for num, (igk, plan, fact) in enumerate(contracts, 1):
         rate = vat_rates_dict.get(igk, 22.0)
-        block = _block_rows(igk, num, plan, fact, rate, products.get(igk, ""))
+        extra = extras.get(igk, {})
+        block = _block_rows(
+            igk,
+            num,
+            plan,
+            fact,
+            rate,
+            products.get(igk, ""),
+            extra.get("agent", ""),
+            extra.get("order", ""),
+        )
 
         _write_row(ws, row_i, block[0])
         plan_m = _line_metrics(plan, rate)
@@ -339,7 +403,7 @@ def build_report(contracts, vat_rates, products=None):
 
         _write_row(ws, row_i, block[1])
         fact_m = _line_metrics(fact, rate)
-        fact_extra = block[1][4 + 10 : 4 + 10 + 7]
+        fact_extra = block[1][_LEAD_COLS + 10 : _LEAD_COLS + 10 + 7]
         _apply_report_checks(ws, row_i, fact_m)
         _apply_fact_checks(ws, row_i, fact_extra)
         row_i += 1

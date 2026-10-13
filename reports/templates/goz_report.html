@@ -32,8 +32,10 @@
         <div class="goz-card goz-card-narrow">
             <h6 class="goz-card-title">Загрузка справочника ГК из Word или Excel</h6>
             <p class="goz-hint">
-                В таблице файла первый столбец — порядковый номер, второй — код ГК.
-                Год и изделие можно указать позже в справочнике. Ставка НДС по умолчанию — 22%.
+                Excel с 4 столбцами: № · Предприятие · Заказ · Договор/Дата. ГК берётся из договора
+                в формате игк/111сб (например, …6066/162сб/137 от 16.03.2021г. → 6066/162сб).
+                Word или Excel с 2 столбцами: № и код ГК. Год и изделие можно указать позже в справочнике.
+                Ставка НДС по умолчанию — 22%.
             </p>
             <form method="post" action="{% url 'upload_gk_directory' %}" enctype="multipart/form-data" id="gk-upload-form">
                 {% csrf_token %}
@@ -55,7 +57,7 @@
                         <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>
                     </svg>
                     <input type="text" id="gk-search" class="filter-input field-fill"
-                           placeholder="Поиск по ГК, году, изделию" autocomplete="off">
+                           placeholder="Поиск по ГК, предприятию, заказу, договору, изделию" autocomplete="off">
                 </div>
                 <span class="row-count-label" id="gk-count"></span>
                 <button type="button" class="btn-orange btn-fixed" id="gk-add-btn">Добавить</button>
@@ -70,7 +72,19 @@
                     <div class="gk-editor-grid">
                         <div class="filter-group">
                             <label class="filter-label" for="form-igk">ГК</label>
-                            <input type="text" name="igk" id="form-igk" class="filter-input field-fill" autocomplete="off" required>
+                            <input type="text" name="igk" id="form-igk" class="filter-input field-fill" placeholder="6066/162сб" autocomplete="off" required>
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label" for="form-enterprise">Предприятие</label>
+                            <input type="text" name="enterprise" id="form-enterprise" class="filter-input field-fill" autocomplete="off">
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label" for="form-order">Заказ</label>
+                            <input type="text" name="order" id="form-order" class="filter-input field-fill" autocomplete="off">
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label" for="form-contract">Договор/Дата</label>
+                            <input type="text" name="contract_date" id="form-contract" class="filter-input field-fill" autocomplete="off">
                         </div>
                         <div class="filter-group">
                             <label class="filter-label" for="form-year">Год</label>
@@ -103,6 +117,9 @@
                     <thead>
                         <tr>
                             <th>ГК</th>
+                            <th>Предприятие</th>
+                            <th>Заказ</th>
+                            <th>Договор/Дата</th>
                             <th style="width: 90px;">Год</th>
                             <th>Изделие</th>
                             <th class="text-center" style="width: 100px;">НДС, %</th>
@@ -113,21 +130,27 @@
                         <tr class="gk-row" tabindex="0"
                             data-id="{{ item.id }}"
                             data-igk="{{ item.igk }}"
+                            data-enterprise="{{ item.enterprise|default_if_none:'' }}"
+                            data-order="{{ item.order|default_if_none:'' }}"
+                            data-contract="{{ item.contract_date|default_if_none:'' }}"
                             data-year="{{ item.year|default_if_none:'' }}"
                             data-product="{{ item.product|default_if_none:'' }}"
                             data-vat="{{ item.vat_rate|stringformat:'g' }}">
                             <td>{{ item.igk }}</td>
+                            <td class="wrap">{{ item.enterprise|default:"—" }}</td>
+                            <td>{{ item.order|default:"—" }}</td>
+                            <td class="wrap">{{ item.contract_date|default:"—" }}</td>
                             <td>{{ item.year|default:"—" }}</td>
                             <td class="wrap">{{ item.product|default:"—" }}</td>
                             <td class="text-center">{{ item.vat_rate|floatformat:"-1" }}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4" class="cell-empty">Справочник пуст. Нажмите «Добавить», чтобы создать первую запись.</td>
+                            <td colspan="7" class="cell-empty">Справочник пуст. Нажмите «Добавить», чтобы создать первую запись.</td>
                         </tr>
                         {% endfor %}
                         <tr id="gk-nothing" hidden>
-                            <td colspan="4" class="cell-empty">Ничего не найдено</td>
+                            <td colspan="7" class="cell-empty">Ничего не найдено</td>
                         </tr>
                     </tbody>
                 </table>
@@ -152,6 +175,8 @@
                     <tr>
                         <th style="width: 50px;">№</th>
                         <th>ГК</th>
+                        <th>Предприятие</th>
+                        <th style="width: 110px;">Заказ</th>
                         <th style="width: 110px;">Год</th>
                         <th>Изделие</th>
                         <th style="width: 110px;">НДС, %</th>
@@ -163,6 +188,8 @@
                     <tr>
                         <td>{{ forloop.counter }}</td>
                         <td>{{ gk.igk }}</td>
+                        <td class="wrap">{{ gk.enterprise|default:"—" }}</td>
+                        <td>{{ gk.order|default:"—" }}</td>
                         <td class="cell-input">
                             <input type="text" class="filter-input field-fill year-input" data-igk="{{ gk.igk }}" value="{{ gk.year }}">
                         </td>
@@ -341,6 +368,9 @@ function checkArchive() {
     const fields = {
         id: $('record_id'),
         igk: $('form-igk'),
+        enterprise: $('form-enterprise'),
+        order: $('form-order'),
+        contract: $('form-contract'),
         year: $('form-year'),
         product: $('form-product'),
         vat: $('form-vat'),
@@ -352,7 +382,7 @@ function checkArchive() {
     const norm = s => s.toLowerCase().replace(/[^0-9a-zа-яё]/g, '');
 
     rows.forEach(row => {
-        row._fields = [row.dataset.igk, row.dataset.year, row.dataset.product].map(s => s.toLowerCase());
+        row._fields = [row.dataset.igk, row.dataset.enterprise, row.dataset.order, row.dataset.contract, row.dataset.year, row.dataset.product].map(s => s.toLowerCase());
         row._norm = row._fields.map(norm);
     });
 
@@ -380,6 +410,9 @@ function checkArchive() {
             row.classList.add('is-selected');
             fields.id.value = row.dataset.id;
             fields.igk.value = row.dataset.igk;
+            fields.enterprise.value = row.dataset.enterprise;
+            fields.order.value = row.dataset.order;
+            fields.contract.value = row.dataset.contract;
             fields.year.value = row.dataset.year;
             fields.product.value = row.dataset.product;
             fields.vat.value = row.dataset.vat;

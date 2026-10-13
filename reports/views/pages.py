@@ -15,7 +15,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.management import call_command
-from django.db import connection
+from django.db import IntegrityError, connection
 from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.db.models.expressions import RawSQL
 from django.http import JsonResponse
@@ -53,6 +53,8 @@ from ..services.dashboards import (
     znp_aggregates,
 )
 from ..services.excel import xlsx_response
+from ..services.gk_directory import directory_index, find_gk, import_extended_rows
+from ..services.gk_key import gk_key, parse_gk_key
 from ..services.excel_import import CONTRACT_COLUMNS, ZNP_COLUMNS, ZNP_SAP_COLUMNS
 from ..services.queries import (
     ADVANCE,
@@ -373,16 +375,6 @@ def upload_excel(request):
     return render(request, "upload.html", ctx)
 
 
-def _vats_by_igk():
-    mapping = {}
-    for v in GozContractVat.objects.all():
-        key = normalize_igk(v.igk)
-        current = mapping.get(key)
-        if current is None or (v.year or "") > (current.year or ""):
-            mapping[key] = v
-    return mapping
-
-
 def _to_vat(value):
     try:
         return Decimal(str(value).replace(",", "."))
@@ -392,9 +384,10 @@ def _to_vat(value):
 
 def _save_gk_to_directory(gk_data):
     errors = []
+    index = directory_index()
 
     for label, item in gk_data.items():
-        base = goz_analysis.igk_key(label)
+        key = gk_key(label)
         defaults = {"vat_rate": _to_vat(item.get("vat"))}
 
         year = str(item.get("year") or "").strip()
@@ -406,9 +399,16 @@ def _save_gk_to_directory(gk_data):
             defaults["product"] = product
 
         try:
-            GozContractVat.objects.update_or_create(igk=base, defaults=defaults)
+            rec = find_gk(key, index)
+            if rec:
+                for name, value in defaults.items():
+                    setattr(rec, name, value)
+                rec.save()
+            else:
+                rec = GozContractVat.objects.create(igk=key, **defaults)
+            index[key] = rec
         except Exception as e:
-            errors.append(f"{base}: {e}")
+            errors.append(f"{key}: {e}")
 
     return errors
 
@@ -439,14 +439,18 @@ def goz_report(request):
                     for err in _save_gk_to_directory(gk_data):
                         messages.warning(request, f"Не сохранено в справочник: {err}")
 
-                vats = _vats_by_igk()
+                index = directory_index()
                 normalized_contracts = []
+                extras = {}
 
                 for zip_igk, plan, fact in goz_analysis.read_archive(temp_zip_path):
-                    base = goz_analysis.igk_key(zip_igk)
-                    db_vat = vats.get(normalize_igk(base))
-                    db_igk = db_vat.igk + zip_igk[len(base) :] if db_vat else zip_igk
-                    normalized_contracts.append((db_igk, plan, fact))
+                    normalized_contracts.append((zip_igk, plan, fact))
+                    rec = find_gk(zip_igk, index)
+                    if rec:
+                        extras[zip_igk] = {
+                            "agent": rec.enterprise or "",
+                            "order": rec.order or "",
+                        }
 
                 vat_rates = {k: v.get("vat") for k, v in gk_data.items()}
                 products = {
@@ -454,7 +458,7 @@ def goz_report(request):
                 }
 
                 data = goz_analysis.build_report(
-                    normalized_contracts, vat_rates, products
+                    normalized_contracts, vat_rates, products, extras
                 )
                 os.unlink(temp_zip_path)
                 return xlsx_response(data, "Анализ_ГОЗ")
@@ -478,18 +482,18 @@ def goz_report(request):
                         tmp.write(chunk)
                     tmp_path = tmp.name
 
-                vats = _vats_by_igk()
+                index = directory_index()
                 gk_list = []
 
                 for zip_igk, _plan, _fact in goz_analysis.read_archive(tmp_path):
-                    base = goz_analysis.igk_key(zip_igk)
-                    suffix = zip_igk[len(base) :]
-                    db_vat = vats.get(normalize_igk(base))
+                    db_vat = find_gk(zip_igk, index)
 
                     if db_vat:
                         gk_list.append(
                             {
-                                "igk": db_vat.igk + suffix,
+                                "igk": zip_igk,
+                                "enterprise": db_vat.enterprise or "",
+                                "order": db_vat.order or "",
                                 "year": db_vat.year or "",
                                 "product": db_vat.product or "",
                                 "vat_rate": float(db_vat.vat_rate),
@@ -500,6 +504,8 @@ def goz_report(request):
                         gk_list.append(
                             {
                                 "igk": zip_igk,
+                                "enterprise": "",
+                                "order": "",
                                 "year": "",
                                 "product": "",
                                 "vat_rate": float(DEFAULT_VAT_RATE),
@@ -525,6 +531,7 @@ def goz_report(request):
 
 
 def _upsert_gk(igk):
+    igk = gk_key(igk)
     try:
         _, created = GozContractVat.objects.update_or_create(
             igk=igk,
@@ -533,6 +540,26 @@ def _upsert_gk(igk):
         return created
     except Exception:
         return None
+
+
+def _sheet_rows(file, ext):
+    if ext == ".xlsx":
+        wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+        return [tuple(r) for r in wb.active.iter_rows(min_row=1, values_only=True)]
+
+    ws = xlrd.open_workbook(file_contents=file.read()).sheet_by_index(0)
+    return [tuple(ws.row_values(rx)) for rx in range(ws.nrows)]
+
+
+def _is_extended_directory(rows):
+    """Файл с колонками № | Предприятие | Заказ | Договор/Дата."""
+    for row in rows[:10]:
+        text = " ".join(str(c).lower() for c in row if c is not None)
+        if "предприятие" in text or "договор" in text or "догово/" in text:
+            return True
+        if len(row) >= 4 and parse_gk_key(row[3]):
+            return True
+    return False
 
 
 @login_required
@@ -580,47 +607,32 @@ def upload_gk_directory(request):
                     else:
                         updated_count += 1
 
-        elif ext == ".xlsx":
-            wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
-            ws = wb.active
+        elif ext in (".xlsx", ".xls"):
+            rows = _sheet_rows(file, ext)
 
-            for row in ws.iter_rows(min_row=1, values_only=True):
-                if len(row) < 2:
-                    continue
+            if _is_extended_directory(rows):
+                added_count, updated_count, errors = import_extended_rows(rows)
+                for err in errors[:5]:
+                    messages.warning(request, f"Пропущено: {err}")
+                if len(errors) > 5:
+                    messages.warning(request, f"…и ещё ошибок: {len(errors) - 5}")
+            else:
+                for row in rows:
+                    if len(row) < 2:
+                        continue
 
-                igk = str(row[1]).strip() if row[1] is not None else ""
-                if not igk or igk.lower() in {"nan", "гк", "номер", "none"}:
-                    continue
+                    igk = str(row[1]).strip() if row[1] is not None else ""
+                    if not igk or igk.lower() in {"nan", "гк", "номер", "none"}:
+                        continue
 
-                created = _upsert_gk(igk)
-                if created is None:
-                    continue
+                    created = _upsert_gk(igk)
+                    if created is None:
+                        continue
 
-                if created:
-                    added_count += 1
-                else:
-                    updated_count += 1
-
-        elif ext == ".xls":
-            book = xlrd.open_workbook(file_contents=file.read())
-            ws = book.sheet_by_index(0)
-
-            for rx in range(ws.nrows):
-                if ws.ncols < 2:
-                    continue
-
-                igk = str(ws.cell_value(rx, 1)).strip()
-                if not igk or igk.lower() in {"nan", "гк", "номер", "none"}:
-                    continue
-
-                created = _upsert_gk(igk)
-                if created is None:
-                    continue
-
-                if created:
-                    added_count += 1
-                else:
-                    updated_count += 1
+                    if created:
+                        added_count += 1
+                    else:
+                        updated_count += 1
 
         else:
             messages.error(
@@ -641,10 +653,14 @@ def upload_gk_directory(request):
 
 
 @login_required
+@superuser_required
 def gk_directory_save(request):
     if request.method == "POST":
         record_id = request.POST.get("record_id", "").strip()
-        igk = request.POST.get("igk", "").strip()
+        igk = gk_key(request.POST.get("igk", ""))
+        enterprise = request.POST.get("enterprise", "").strip()
+        order = request.POST.get("order", "").strip()
+        contract_date = request.POST.get("contract_date", "").strip()
         year = request.POST.get("year", "").strip()
         product = request.POST.get("product", "").strip()
         vat_rate_raw = request.POST.get("vat_rate", "22.0").strip()
@@ -662,6 +678,9 @@ def gk_directory_save(request):
             if record_id:
                 obj = GozContractVat.objects.get(id=record_id)
                 obj.igk = igk
+                obj.enterprise = enterprise or None
+                obj.order = order or None
+                obj.contract_date = contract_date or None
                 obj.year = year or None
                 obj.product = product or None
                 obj.vat_rate = vat_rate
@@ -670,11 +689,16 @@ def gk_directory_save(request):
             else:
                 GozContractVat.objects.create(
                     igk=igk,
+                    enterprise=enterprise or None,
+                    order=order or None,
+                    contract_date=contract_date or None,
                     year=year or None,
                     product=product or None,
                     vat_rate=vat_rate,
                 )
                 messages.success(request, f"ГК «{igk}» добавлен в справочник.")
+        except IntegrityError:
+            messages.error(request, f"ГК «{igk}» уже есть в справочнике.")
         except Exception as e:
             messages.error(request, f"Ошибка сохранения: {e}")
 
@@ -682,6 +706,7 @@ def gk_directory_save(request):
 
 
 @login_required
+@superuser_required
 def gk_directory_delete(request):
     if request.method == "POST":
         record_id = request.POST.get("record_id", "").strip()
