@@ -35,8 +35,8 @@ class NsiIgkAdmin(admin.ModelAdmin):
 
 @admin.register(GozContractVat)
 class GozContractVatAdmin(admin.ModelAdmin):
-    list_display = ("igk", "vat_rate")
-    search_fields = ("igk",)
+    list_display = ("igk", "enterprise", "order", "contract_date", "vat_rate")
+    search_fields = ("igk", "enterprise", "order", "contract_date")
     ordering = ("igk",)
 
 
