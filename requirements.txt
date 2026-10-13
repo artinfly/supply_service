@@ -1,16 +1,11 @@
-asgiref>=3.11.1
-certifi==2026.7.22
-charset_normalizer==3.5.1
-Django>=6.0.2
-et_xmlfile==2.0.0
-idna==3.19
-openpyxl==3.1.5
-psycopg2-binary>=2.9.11
-python-dotenv==1.2.2
-requests==2.34.2
-sqlparse==0.5.5
-tzdata>=2025.3
-urllib3==2.7.0
-whitenoise==6.12.0
-xlrd==2.0.2
-python-docx
+# --- Каркас и окружение ---
+django==6.0.2                  # веб-фреймворк
+psycopg2-binary==2.9.11        # драйвер PostgreSQL
+whitenoise==6.12.0             # раздача статики в продакшне
+python-dotenv==1.2.2           # чтение .env
+requests==2.34.2               # синхронизация с HR-сервисом
+
+# --- Документы: чтение и формирование ---
+openpyxl==3.1.5                # .xlsx (договоры, ЗнП, выгрузки)
+xlrd==2.0.2                    # .xls (отчёты ЕИС ГОЗ)
+python-docx==1.2.0             # .docx (справочник ГК)
