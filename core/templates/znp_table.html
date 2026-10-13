@@ -1,9 +1,14 @@
+{# Шаблон страницы "Заявки на платёж (ФЗД)". #}
+{# Содержит: фильтры по году и ИГК, карточки статусов (всего и за год), #}
+{# таблицу по ЦФО с кликабельными ячейками и график с фильтрами по периоду. #}
+
 {% extends 'base.html' %}
 {% load static %}
 {% load custom_filters %}
 {% block title %}Заявки на платёж (ФЗД){% endblock %}
 
 {% block content %}
+    {# --- Заголовок и фильтры --- #}
     <div class="page-header">
         <h5>Заявки на платёж (ФЗД)</h5>
         <form method="get" class="d-flex gap-2 align-items-center">
@@ -17,18 +22,22 @@
                 <option value="{{ i }}" {% if selected_igk == i|stringformat:"s" %}selected{% endif %}>{{ i }}</option>
                 {% endfor %}
             </select>
+            {# Скрытые поля для сохранения периода графика при смене фильтров #}
             <input type="hidden" name="start" id="opt-start" value="{{ chart_start }}">
             <input type="hidden" name="end" id="opt-end" value="{{ chart_end }}">
         </form>
     </div>
 
+    {# --- Состояние "Нет данных" --- #}
     {% if not has_data %}
         {% include "_no_data.html" %}
     {% else %}
 
+    {# --- Карточки: Всего по всем годам --- #}
     <div class="row g-3 mb-4">
         <div class="block-title">Всего по всем годам</div>
         <div class="card-block">
+            {# Строка 1: Общие итоги #}
             <div class="dash-row">
                 <a href="{% url 'znp_list_table' %}?year=all&statuses=not_issued,in_progress,advance,postpayment" class="text-decoration-none">
                     <div class="dash-card stage-total">
@@ -61,6 +70,8 @@
                     </div>
                 </a>
             </div>
+            
+            {# Строка 2: Детализация по типам платежа #}
             <div class="dash-row">
                 <a href="{% url 'znp_list_table' %}?year=all&statuses=advance" class="text-decoration-none">
                     <div class="dash-card stage-ready">
@@ -103,6 +114,8 @@
                     </div>
                 </a>
             </div>
+            
+            {# Строка 3: Оплаченные #}
             <div class="dash-row">
                 <a href="{% url 'znp_list_table' %}?year=all&statuses=advance_paid" class="text-decoration-none">
                     <div class="dash-card stage-done">
@@ -129,8 +142,10 @@
             </div>
         </div>
 
+        {# --- Карточки: За выбранный год --- #}
         <div class="block-title">За {{ selected_year }} год</div>
         <div class="card-block">
+            {# Строка 1: Общие итоги за год #}
             <div class="dash-row">
                 <a href="{% url 'znp_list_table' %}?year={{ selected_year }}&statuses=not_issued,in_progress,advance,postpayment" class="text-decoration-none">
                     <div class="dash-card stage-total">
@@ -163,6 +178,8 @@
                     </div>
                 </a>
             </div>
+            
+            {# Строка 2: Детализация по типам платежа за год #}
             <div class="dash-row">
                 <a href="{% url 'znp_list_table' %}?year={{ selected_year }}&statuses=advance" class="text-decoration-none">
                     <div class="dash-card stage-ready">
@@ -205,6 +222,8 @@
                     </div>
                 </a>
             </div>
+            
+            {# Строка 3: Оплаченные за год #}
             <div class="dash-row">
                 <a href="{% url 'znp_list_table' %}?year={{ selected_year }}&statuses=advance_paid" class="text-decoration-none">
                     <div class="dash-card stage-done">
@@ -232,9 +251,11 @@
         </div>
     </div>
 
+    {# --- Таблица по ЦФО с кликабельными ячейками --- #}
     <div class="igk-stat-card">
         <table class="report-table">
             <thead>
+                {# Заголовок с группировкой по этапам #}
                 <tr>
                     <th rowspan="2">ЦФО</th>
                     <th rowspan="2">Всего ЗнП, шт.</th>
@@ -251,6 +272,7 @@
                 </tr>
             </thead>
             <tbody>
+                {# Строки по ЦФО #}
                 {% for row in cfo_table %}
                 <tr>
                     <td class="clickable-cell">
@@ -265,6 +287,7 @@
                         <div class="cell-content">{{ row.total_sum|floatformat:2|intspace }}</div>
                         <a href="{% url 'znp_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&cfo={{ row.cfo }}&statuses=not_issued,advance,postpayment"></a>
                     </td>
+                    {# Ячейки по этапам согласования #}
                     {% for cell in row.cells %}
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cell.count }}</div>
@@ -277,6 +300,8 @@
                     {% endfor %}
                 </tr>
                 {% endfor %}
+                
+                {# Итоговая строка #}
                 <tr class="row-total">
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cfo_total_row.cfo }}</div>
@@ -303,6 +328,8 @@
                 </tr>
             </tbody>
         </table>
+        
+        {# Сообщение, если по выбранному ИГК нет данных #}
         {% if not cfo_table %}
         <div class="p-4 text-muted text-center">
             Для выбранного ИГК нет ни одной позиции заключённого договора.
@@ -310,9 +337,12 @@
         {% endif %}
     </div>
 
+    {# --- График: Заявки по ЦФО с фильтрами по периоду --- #}
     <div class="table-container chart-block mt-4 mb-4">
         <h6 class="chart-block-title">Заявки по ЦФО</h6>
         <div class="chart-block-hint">Стадии заявок в разрезе ЦФО — те же, что на карточках выше</div>
+        
+        {# Фильтры периода для графика #}
         <div class="chart-period">
             <div class="filter-group">
                 <label class="filter-label" for="chart-start">Дата заявки с</label>
@@ -326,6 +356,7 @@
             <button type="button" id="chart-reset" class="btn-ghost">Сбросить</button>
             <span class="chart-period-note" id="chart-period-note"></span>
         </div>
+        
         <div class="chart-canvas-wrap">
             <canvas id="chart-znp"></canvas>
         </div>
@@ -338,47 +369,80 @@
 <script src="{% static 'vendor/chartjs-plugin-datalabels.min.js' %}"></script>
 <script src="{% static 'js/charts.js' %}"></script>
 <script>
-const chartUrl = '{% url "api_chart_znp" %}';
-const startEl  = document.getElementById('chart-start');
-const endEl    = document.getElementById('chart-end');
-const noteEl   = document.getElementById('chart-period-note');
+"use strict";
 
+// --- Конфигурация графика ---
+
+const chartUrl = '{% url "api_chart_znp" %}';
+const startEl = document.getElementById('chart-start');
+const endEl = document.getElementById('chart-end');
+const noteEl = document.getElementById('chart-period-note');
+
+// --- Логика графика ---
+
+/**
+ * Отрисовывает график с учётом выбранного периода дат.
+ * Обновляет скрытые поля формы и URL для сохранения состояния.
+ */
 function drawChart() {
     const start = startEl.value;
-    const end   = endEl.value;
+    const end = endEl.value;
+    
+    // Формируем параметры для API
     const params = new URLSearchParams({
-        igk:  '{{ selected_igk|escapejs }}',
+        igk: '{{ selected_igk|escapejs }}',
         year: '{{ selected_year|escapejs }}',
     });
+    
     if (start && end) {
         params.append('start', start);
         params.append('end', end);
     }
+    
+    // Обновляем скрытые поля формы (для сохранения при смене фильтров)
     document.getElementById('opt-start').value = start && end ? start : '';
-    document.getElementById('opt-end').value   = start && end ? end : '';
+    document.getElementById('opt-end').value = start && end ? end : '';
+    
+    // Показываем подсказку, если выбран период
     noteEl.textContent = start && end
         ? 'Не оформленные показаны целиком — у них нет даты заявки'
         : '';
+    
+    // Обновляем URL в адресной строке (без перезагрузки)
     const page = new URLSearchParams(window.location.search);
     page.set('start', start && end ? start : '');
-    page.set('end',   start && end ? end : '');
-    if (!start || !end) { page.delete('start'); page.delete('end'); }
+    page.set('end', start && end ? end : '');
+    if (!start || !end) { 
+        page.delete('start'); 
+        page.delete('end'); 
+    }
     history.replaceState(null, '', page.toString() ? '?' + page : window.location.pathname);
+    
+    // Загружаем график
     loadChart('chart-znp', chartUrl + '?' + params);
 }
 
-document.getElementById('chart-apply').addEventListener('click', () => {
-    if (Boolean(startEl.value) !== Boolean(endEl.value)) {
-        alert('Укажите обе даты периода');
-        return;
-    }
+// --- Инициализация и обработчики событий ---
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Кнопка "Применить" — проверяем, что указаны обе даты
+    document.getElementById('chart-apply').addEventListener('click', () => {
+        if (Boolean(startEl.value) !== Boolean(endEl.value)) {
+            alert('Укажите обе даты периода');
+            return;
+        }
+        drawChart();
+    });
+    
+    // Кнопка "Сбросить" — очищаем даты и перерисовываем
+    document.getElementById('chart-reset').addEventListener('click', () => {
+        startEl.value = '';
+        endEl.value = '';
+        drawChart();
+    });
+    
+    // Первоначальная отрисовка графика
     drawChart();
 });
-document.getElementById('chart-reset').addEventListener('click', () => {
-    startEl.value = '';
-    endEl.value = '';
-    drawChart();
-});
-drawChart();
 </script>
 {% endblock %}

@@ -1,3 +1,10 @@
+"""Генерация суммарных отчётов по ИГК из Excel-шаблона.
+
+Модуль читает входной Excel-файл с несколькими листами (по одному на ИГК),
+агрегирует данные по отделам и контрагентам, заполняет шаблон templateSum.xlsx
+и возвращает ZIP-архив с готовыми отчётами.
+"""
+
 import io
 import re
 import zipfile
@@ -13,10 +20,14 @@ from django.utils import timezone
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Border, PatternFill, Side
 
+# --- Константы шаблона ---
+
+
 TEMPLATE_PATH = (
     Path(__file__).resolve().parents[1] / "static" / "files" / "templateSum.xlsx"
 )
 
+# Номера колонок во входном файле (нумерация с 1)
 COL_IGK = 1
 COL_COUNTERAGENT = 2
 COL_INN = 3
@@ -42,9 +53,11 @@ COL_SUM_AVANS = 33
 
 MAX_INPUT_COLUMNS = 50
 
-SMALL_CONTRACT_LIMIT = 1_000_000.0
-ALLOWED_DIFFERENCE = 1.0
+# Пороги для фильтрации и проверок
+SMALL_CONTRACT_LIMIT = 1_000_000.0  # Договоры меньше этой суммы группируются в "Прочие"
+ALLOWED_DIFFERENCE = 1.0  # Допустимое расхождение для проверок согласованности
 
+# Стили отчёта
 REPORT_FONT_SIZE = 12
 REPORT_END_COLUMN = 11
 
@@ -58,8 +71,13 @@ THIN_BORDER = Border(
 )
 
 
+# --- Модель данных ---
+
+
 @dataclass
 class SumReportRow:
+    """Строка данных суммарного отчёта."""
+
     sheet_name: str = ""
     dep: str = ""
     igk: str = ""
@@ -88,7 +106,11 @@ class SumReportRow:
     igk_title: str = ""
 
 
+# --- Утилиты преобразования данных ---
+
+
 def _to_float(val) -> float:
+    """Преобразует значение в float. Возвращает 0.0 для None, пустых строк и некорректных значений."""
     if val is None or isinstance(val, bool):
         return 0.0
     if isinstance(val, (int, float)):
@@ -103,6 +125,7 @@ def _to_float(val) -> float:
 
 
 def _to_int(val) -> int:
+    """Преобразует значение в int. Возвращает 0 для None и некорректных значений."""
     if val is None or isinstance(val, bool):
         return 0
     if isinstance(val, (int, float)):
@@ -117,6 +140,7 @@ def _to_int(val) -> int:
 
 
 def _to_str(val) -> str:
+    """Преобразует значение в строку, схлопывая множественные пробелы."""
     if val is None:
         return ""
     if isinstance(val, float) and val.is_integer():
@@ -127,10 +151,11 @@ def _to_str(val) -> str:
 
 
 def _to_date_str(val) -> str:
+    """Преобразует значение в строку даты формата ДД.ММ.ГГГГ. Поддерживает несколько входных форматов."""
     if val is None:
         return ""
     if isinstance(val, datetime):
-        if val.year == 1900:
+        if val.year == 1900:  # Excel-артефакт для пустых дат
             return ""
         return val.strftime("%d.%m.%Y")
     text = str(val).strip()
@@ -148,6 +173,7 @@ def _to_date_str(val) -> str:
 
 
 def _normalize_condition(value: str) -> str:
+    """Нормализует статус договора для сравнения: приводит к нижнему регистру, убирает скобки и суффиксы."""
     if not value:
         return ""
     text = value.replace("\xa0", " ").strip().lower()
@@ -156,7 +182,11 @@ def _normalize_condition(value: str) -> str:
     return text.strip()
 
 
+# --- Парсинг входного файла ---
+
+
 def _classify_row(row_vals: list) -> str:
+    """Классифицирует строку входного файла: 'data', 'skip' (пропустить) или 'stop' (конец блока)."""
     first_three = [str(v).strip().lower() for v in row_vals[:3] if v is not None]
     text = " ".join(first_three)
     if re.search(r"(^|\s)(общий\s+итог|итого\s+по\s+гк|всего)\s*:?\s*$", text):
@@ -169,10 +199,16 @@ def _classify_row(row_vals: list) -> str:
 
 
 def _is_valid_sheet_name(name: str) -> bool:
+    """Проверяет, что имя листа — 4-значный номер ИГК."""
     return name.strip().isdigit() and len(name.strip()) == 4
 
 
 def parse_sum_report_file(file_stream) -> List[SumReportRow]:
+    """Парсит входной Excel-файл и возвращает список строк данных.
+
+    Обрабатывает только листы с 4-значными именами (ИГК).
+    Определяет формат «длинноцикловые» по заголовку колонки 7.
+    """
     wb = load_workbook(file_stream, data_only=True)
     all_rows: List[SumReportRow] = []
 
@@ -243,18 +279,24 @@ def parse_sum_report_file(file_stream) -> List[SumReportRow]:
     return all_rows
 
 
+# --- Утилиты работы с Excel ---
+
+
 def _safe_sheet_title(value):
+    """Очищает строку от недопустимых символов для имени листа Excel (макс. 31 символ)."""
     invalid_chars = set("[]:*?/\\")
     result = "".join(ch for ch in str(value) if ch not in invalid_chars).strip()
     return result[:31] or "Report"
 
 
 def _extract_year_from_title(title):
+    """Извлекает год (20XX) из заголовка отчёта. Если не найден — возвращает текущий год."""
     match = re.search(r"20\d{2}", title)
     return match.group(0) if match else str(timezone.localdate().year)
 
 
 def _find_row_by_marker(ws, marker, start_row=1, end_row=None, columns=(1, 2, 3)):
+    """Ищет строку, содержащую маркер, в указанных колонках. Возвращает номер строки или None."""
     end = end_row or ws.max_row
     marker_l = marker.lower()
     for r in range(start_row, end + 1):
@@ -266,12 +308,14 @@ def _find_row_by_marker(ws, marker, start_row=1, end_row=None, columns=(1, 2, 3)
 
 
 def _delete_rows(ws, start_row, end_row):
+    """Удаляет диапазон строк из листа."""
     if start_row > end_row:
         return
     ws.delete_rows(start_row, end_row - start_row + 1)
 
 
 def _prepare_data_area(ws, start_row=5):
+    """Очищает область данных: разукрупняет ячейки и удаляет размеры строк."""
     to_unmerge = [str(mr) for mr in ws.merged_cells.ranges if mr.min_row >= start_row]
     for rng in to_unmerge:
         ws.unmerge_cells(rng)
@@ -297,6 +341,7 @@ _HEADER_OR_TOTAL_KEYWORDS = (
 
 
 def _is_header_or_total_row(ws, r) -> bool:
+    """Проверяет, является ли строка заголовком или итоговой (по ключевым словам в первых 3 колонках)."""
     for c in (1, 2, 3):
         val = ws.cell(row=r, column=c).value
         if val is None:
@@ -309,6 +354,7 @@ def _is_header_or_total_row(ws, r) -> bool:
 
 
 def _find_first_data_row_table1(ws, total_row_idx):
+    """Находит первую строку данных таблицы 1, идя вверх от итоговой строки."""
     first_data_row = total_row_idx
     r = total_row_idx - 1
     while r > 1:
@@ -321,6 +367,7 @@ def _find_first_data_row_table1(ws, total_row_idx):
 
 
 def _find_first_data_row_detail(ws, total_row_idx):
+    """Находит первую строку данных детальной таблицы, идя вверх от итоговой строки."""
     first_data_row = total_row_idx
     r = total_row_idx - 1
     while r > 1:
@@ -333,6 +380,7 @@ def _find_first_data_row_detail(ws, total_row_idx):
 
 
 def _capture_styles(ws, row_idx, columns):
+    """Сохраняет стили ячеек указанной строки для последующего применения."""
     styles = []
     for c in columns:
         cell = ws.cell(row=row_idx, column=c)
@@ -350,6 +398,7 @@ def _capture_styles(ws, row_idx, columns):
 
 
 def _apply_style(cell, style):
+    """Применяет сохранённые стили к ячейке."""
     cell.font = copy(style["font"])
     cell.border = copy(style["border"])
     cell.fill = copy(style["fill"])
@@ -361,6 +410,7 @@ def _apply_style(cell, style):
 def _finalize_sheet(
     ws, start_row=3, end_col=REPORT_END_COLUMN, font_size=REPORT_FONT_SIZE
 ):
+    """Финальное форматирование листа: устанавливает размер шрифта и границы для всех строк с данными."""
     end_row = ws.max_row
     for r in range(start_row, end_row + 1):
         has_content = False
@@ -379,7 +429,11 @@ def _finalize_sheet(
             cell.border = THIN_BORDER
 
 
+# --- Агрегация и фильтрация данных ---
+
+
 def _aggregate_table1(rows):
+    """Агрегирует данные по отделам для таблицы 1 (сводка по ИГК)."""
     deps = defaultdict(
         lambda: {
             "contract_count": 0,
@@ -418,7 +472,44 @@ def _aggregate_table1(rows):
     return deps
 
 
+def _filter_table2(rows):
+    """Фильтрует строки для таблицы 2: ЗнП оформлена или заключен, с ненулевыми остатками."""
+    result = []
+    for r in rows:
+        status = _normalize_condition(r.condition)
+        if status in ("знп оформлена", "заключен"):
+            if not (-1 <= r.remains_pay <= 1) and not (-1 <= r.sum_avans <= 1):
+                result.append(r)
+    return result
+
+
+def _filter_table3(rows):
+    """Фильтрует строки для таблицы 3: ЗнП на оформлении или заключен, с ненулевыми суммами."""
+    result = []
+    for r in rows:
+        status = _normalize_condition(r.condition)
+        if status in ("знп на оформлении", "заключен"):
+            if not (-1 <= r.remains_pay <= 1) and not (
+                -1 <= round(r.sum_issued_znp, 2) <= 1
+            ):
+                result.append(r)
+    return result
+
+
+def _filter_table4(rows):
+    """Фильтрует строки для таблицы 4: только незаключённые договоры."""
+    result = []
+    for r in rows:
+        if _normalize_condition(r.condition) == "не заключен":
+            result.append(r)
+    return result
+
+
+# --- Запись таблиц в шаблон ---
+
+
 def _write_table1(ws, deps, total_row_idx):
+    """Записывает агрегированные данные по отделам в таблицу 1. Возвращает номер итоговой строки."""
     if not deps:
         return total_row_idx
 
@@ -493,40 +584,15 @@ def _write_table1(ws, deps, total_row_idx):
     return total_row
 
 
-def _filter_table2(rows):
-    result = []
-    for r in rows:
-        status = _normalize_condition(r.condition)
-        if status in ("знп оформлена", "заключен"):
-            if not (-1 <= r.remains_pay <= 1) and not (-1 <= r.sum_avans <= 1):
-                result.append(r)
-    return result
-
-
-def _filter_table3(rows):
-    result = []
-    for r in rows:
-        status = _normalize_condition(r.condition)
-        if status in ("знп на оформлении", "заключен"):
-            if not (-1 <= r.remains_pay <= 1) and not (
-                -1 <= round(r.sum_issued_znp, 2) <= 1
-            ):
-                result.append(r)
-    return result
-
-
-def _filter_table4(rows):
-    result = []
-    for r in rows:
-        if _normalize_condition(r.condition) == "не заключен":
-            result.append(r)
-    return result
-
-
 def _write_detail_table(ws, total_row_idx, rows, table_kind="table2"):
+    """Записывает детальную таблицу (2, 3 или 4) с группировкой малых договоров в «Прочие».
+
+    Возвращает (номер итоговой строки, сумма договоров, сумма авансов).
+    """
     if not rows:
         return total_row_idx, 0.0, 0.0
 
+    # Определяем функции получения значений в зависимости от типа таблицы
     if table_kind == "table4":
 
         def avans_getter(r):
@@ -627,6 +693,7 @@ def _write_detail_table(ws, total_row_idx, rows, table_kind="table2"):
 
 
 def _adjust_column_widths(ws):
+    """Устанавливает ширины колонок для детальных таблиц."""
     ws.column_dimensions["A"].width = 30
     ws.column_dimensions["B"].width = 35
     ws.column_dimensions["C"].width = 18
@@ -638,7 +705,20 @@ def _adjust_column_widths(ws):
     ws.column_dimensions["I"].width = 10
 
 
+# --- Генерация отчётов ---
+
+
 def generate_single_report(rows, igk_title, is_cycle=False):
+    """Генерирует отчёт по одному ИГК на основе шаблона.
+
+    Args:
+        rows: список строк данных для этого ИГК
+        igk_title: заголовок ИГК из исходного файла
+        is_cycle: флаг длинноциклового формата
+
+    Returns:
+        bytes: содержимое Excel-файла
+    """
     if not TEMPLATE_PATH.exists():
         raise FileNotFoundError(f"Шаблон {TEMPLATE_PATH} не найден")
 
@@ -651,10 +731,12 @@ def generate_single_report(rows, igk_title, is_cycle=False):
     ws["A2"] = igk_title.replace("__g", "").replace("__y", year).strip()
     ws.cell(row=1, column=11).value = timezone.localdate().strftime("%d.%m.%Y")
 
+    # Таблица 1: сводка по отделам
     t1_total = _find_row_by_marker(ws, "Всего", start_row=5, end_row=10) or 6
     deps = _aggregate_table1(rows)
     t1_total = _write_table1(ws, deps, t1_total)
 
+    # Таблица 2: ЗнП оформлена
     t2_total = _find_row_by_marker(
         ws, "ИТОГО:", start_row=t1_total + 1, end_row=t1_total + 15
     ) or (t1_total + 4)
@@ -663,6 +745,7 @@ def generate_single_report(rows, igk_title, is_cycle=False):
         ws, t2_total, rows2, table_kind="table2"
     )
 
+    # Таблица 3: ЗнП на оформлении
     t3_total = _find_row_by_marker(
         ws, "ИТОГО:", start_row=t2_total + 1, end_row=t2_total + 15
     ) or (t2_total + 3)
@@ -671,6 +754,7 @@ def generate_single_report(rows, igk_title, is_cycle=False):
     contract_sum_total = round(contract_sum_total + c3, 2)
     avans_sum_total = round(avans_sum_total + a3, 2)
 
+    # Таблица 4: не заключённые
     t4_total = _find_row_by_marker(
         ws, "ИТОГО:", start_row=t3_total + 1, end_row=t3_total + 15
     ) or (t3_total + 3)
@@ -679,6 +763,7 @@ def generate_single_report(rows, igk_title, is_cycle=False):
     contract_sum_total = round(contract_sum_total + c4, 2)
     avans_sum_total = round(avans_sum_total + a4, 2)
 
+    # Финальные итоги
     final_total_row = t4_total + 1
     ws.cell(row=final_total_row, column=3).value = contract_sum_total
     ws.cell(row=final_total_row, column=4).value = avans_sum_total
@@ -687,6 +772,7 @@ def generate_single_report(rows, igk_title, is_cycle=False):
     if isinstance(final_title_cell.value, str):
         final_title_cell.value = final_title_cell.value.replace("__g", igk_title)
 
+    # Проверки согласованности данных
     val10 = round(float(ws.cell(row=t1_total, column=10).value or 0), 2)
     val_sec4 = round(float(ws.cell(row=t2_total, column=4).value or 0), 2)
     if abs(val10 - val_sec4) > ALLOWED_DIFFERENCE:
@@ -707,6 +793,16 @@ def generate_single_report(rows, igk_title, is_cycle=False):
 
 
 def build_sum_reports_zip(file_stream, is_cycle=False, username="user"):
+    """Строит ZIP-архив с отчётами по всем ИГК из входного файла.
+
+    Args:
+        file_stream: поток входного Excel-файла
+        is_cycle: флаг длинноциклового формата
+        username: имя пользователя для имени файла
+
+    Returns:
+        bytes: содержимое ZIP-архива
+    """
     all_rows = parse_sum_report_file(file_stream)
     if not all_rows:
         raise ValueError("Нет данных для формирования отчёта.")
@@ -737,6 +833,16 @@ def build_sum_reports_zip(file_stream, is_cycle=False, username="user"):
 
 
 def generate_sum_reports_response(file_stream, is_cycle=False, username="user"):
+    """Формирует HttpResponse с ZIP-архивом отчётов для скачивания.
+
+    Args:
+        file_stream: поток входного Excel-файла
+        is_cycle: флаг длинноциклового формата
+        username: имя пользователя для имени файла
+
+    Returns:
+        HttpResponse: объект ответа с ZIP-архивом
+    """
     data = build_sum_reports_zip(file_stream, is_cycle, username)
     today = timezone.localdate().strftime("%d-%m-%Y")
     suffix = "cycle" if is_cycle else "normal"

@@ -1,3 +1,5 @@
+"""SQL-запросы для построения графиков по ЦФО."""
+
 from .queries import (
     ADVANCE,
     CONCLUDED,
@@ -8,6 +10,9 @@ from .queries import (
     needs_znp,
 )
 from .sap_status import SAP_STAGE_LABELS, SAP_STAGES_OVERLAPPING, sap_status_sql
+
+# --- Константы для графиков ---
+
 
 CONTRACT_AGE = (
     ("overdue_12", "Просрочено более года"),
@@ -23,6 +28,7 @@ ZNP_STAGES = (
     ("paid", "Оплачено"),
 )
 
+# Исключаем перекрывающиеся статусы SAP (например, "ready_18" входит в "sent_18")
 SAP_STAGES = tuple(
     (key, label)
     for key, label in SAP_STAGE_LABELS.items()
@@ -30,7 +36,14 @@ SAP_STAGES = tuple(
 )
 
 
+# --- SQL-запросы для графиков ---
+
+
 def contracts_by_cfo(year_col, igk):
+    """Возвращает SQL для графика контрактации по ЦФО (просроченность договоров).
+
+    Группирует незаключённые договоры по степени просроченности плановой даты.
+    """
     not_concl = ", ".join(["%s"] * len(NOT_CONCL))
     sql = f"""
         SELECT cfo,
@@ -57,6 +70,10 @@ def contracts_by_cfo(year_col, igk):
 
 
 def znp_by_cfo(year_col, igk, start=None, end=None):
+    """Возвращает SQL для графика заявок ФЗД по ЦФО (статусы оформления).
+
+    Опционально фильтрует по периоду дат заявок.
+    """
     concluded = ", ".join(["%s"] * len(CONCLUDED))
     params = [igk, *CONCLUDED]
     period = ""
@@ -91,6 +108,10 @@ def znp_by_cfo(year_col, igk, start=None, end=None):
 
 
 def znp_sap_by_cfo(igk):
+    """Возвращает SQL для графика заявок SAP по ЦФО (этапы согласования).
+
+    Если igk не указан, показывает данные по всем ИГК.
+    """
     cfo_ph = ", ".join(["%s"] * len(SAP_CFO))
     igk_filter = "AND igk = %s" if igk else ""
     params = list(SAP_CFO)

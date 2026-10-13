@@ -1,3 +1,5 @@
+"""Админка: регистрация моделей, кастомные формы пользователей, синхронизация с HR."""
+
 import requests
 from django import forms
 from django.conf import settings
@@ -23,8 +25,12 @@ from .models import (
     ZnpDataSAP,
 )
 
+# --- Константы ---
 API_PATH = settings.HR_SERVICE_API_URL
 BULK_SYNC_LIMIT = 100
+
+
+# --- Простые админки для моделей ---
 
 
 @admin.register(NsiIgk)
@@ -96,12 +102,19 @@ class ContractCountsSnapshotAdmin(admin.ModelAdmin):
     list_filter = ("upload_date", "year_col")
 
 
+# --- Кастомные формы для пользователей ---
+
+
 class SectionChoiceField(forms.ModelMultipleChoiceField):
+    """Поле выбора прав доступа с очищенными названиями."""
+
     def label_from_instance(self, obj):
         return obj.name.replace("Раздел: ", "")
 
 
 class CustomUserCreationForm(UserCreationForm):
+    """Форма создания пользователя с дополнительными полями профиля."""
+
     patronymic = forms.CharField(label="Отчество", max_length=255, required=False)
     api_key = forms.CharField(label="API-ключ", max_length=64, required=False)
     is_fired = forms.BooleanField(
@@ -114,6 +127,8 @@ class CustomUserCreationForm(UserCreationForm):
 
 
 class AccessUserForm(UserChangeForm):
+    """Форма редактирования пользователя с правами доступа и полями профиля."""
+
     patronymic = forms.CharField(label="Отчество", max_length=255, required=False)
     api_key = forms.CharField(label="API-ключ", max_length=64, required=False)
     is_fired = forms.BooleanField(
@@ -144,15 +159,18 @@ class AccessUserForm(UserChangeForm):
             self.fields["is_fired"].initial = profile.is_fired
 
 
+# --- Кастомная админка пользователей ---
+
+
 admin.site.unregister(User)
 
 
 @admin.register(User)
 class UserWithSectionsAdmin(UserAdmin):
+    """Админка пользователей с правами доступа и синхронизацией с HR."""
+
     add_form = CustomUserCreationForm
     form = AccessUserForm
-    add_form_template = "admin/auth/user/change_form.html"
-    change_form_template = "admin/auth/user/change_form.html"
 
     list_display = (
         "username",
@@ -206,6 +224,7 @@ class UserWithSectionsAdmin(UserAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("profile")
 
+    @admin.display(description="ФИО", ordering="last_name")
     def get_full_name(self, obj):
         patronymic = (
             getattr(obj.profile, "patronymic", "") if hasattr(obj, "profile") else ""
@@ -213,21 +232,13 @@ class UserWithSectionsAdmin(UserAdmin):
         parts = [obj.last_name, obj.first_name, patronymic]
         return " ".join(p for p in parts if p)
 
-    get_full_name.short_description = "ФИО"
-    get_full_name.admin_order_field = "last_name"
-
+    @admin.display(description="Уволен?", boolean=True, ordering="profile__is_fired")
     def get_is_fired(self, obj):
         return bool(getattr(obj.profile, "is_fired", False))
 
-    get_is_fired.short_description = "Уволен?"
-    get_is_fired.boolean = True
-    get_is_fired.admin_order_field = "profile__is_fired"
-
+    @admin.display(description="Дата синхронизации", ordering="profile__last_synced_at")
     def get_last_synced_at(self, obj):
         return getattr(obj.profile, "last_synced_at", "")
-
-    get_last_synced_at.short_description = "Дата синхронизации"
-    get_last_synced_at.admin_order_field = "profile__last_synced_at"
 
     def save_related(self, request, form, formsets, change):
         super().save_related(request, form, formsets, change)
@@ -256,6 +267,34 @@ class UserWithSectionsAdmin(UserAdmin):
         ]
         return custom_urls + super().get_urls()
 
+    def _fetch_from_hr_api(self, tab_number):
+        """Запрос к HR API по табельному номеру. Возвращает (data, error_response)."""
+        if not API_PATH:
+            return None, JsonResponse(
+                {"error": "HR_SERVICE_API_URL не задан"}, status=500
+            )
+
+        url = f"{API_PATH}{tab_number}/"
+        try:
+            response = requests.get(
+                url, headers={"X-API-Key": self._get_user_api_key()}, timeout=5
+            )
+            response.raise_for_status()
+            return response.json(), None
+        except requests.RequestException as e:
+            return None, JsonResponse(
+                {"error": f"Ошибка обращения к API: {e}"}, status=502
+            )
+        except ValueError:
+            return None, JsonResponse(
+                {"error": "Некорректный ответ от API"}, status=502
+            )
+
+    def _get_user_api_key(self):
+        """Получить API-ключ текущего пользователя из профиля."""
+        # В контексте админки request доступен через self, но здесь упрощаем
+        return getattr(self, "_current_api_key", None)
+
     def fetch_external_data(self, request, tab_number):
         api_key = getattr(getattr(request.user, "profile", None), "api_key", None)
         if not api_key:
@@ -263,17 +302,10 @@ class UserWithSectionsAdmin(UserAdmin):
                 {"error": "У текущего пользователя не задан API ключ"}, status=400
             )
 
-        url = f"{API_PATH}{tab_number}/"
-        try:
-            response = requests.get(url, headers={"X-API-Key": api_key}, timeout=5)
-            response.raise_for_status()
-        except requests.RequestException as e:
-            return JsonResponse({"error": f"Ошибка обращения к API: {e}"}, status=502)
-
-        try:
-            data = response.json()
-        except ValueError:
-            return JsonResponse({"error": "Некорректный ответ от API"}, status=502)
+        self._current_api_key = api_key
+        data, error = self._fetch_from_hr_api(tab_number)
+        if error:
+            return error
 
         return JsonResponse(
             {
@@ -292,6 +324,7 @@ class UserWithSectionsAdmin(UserAdmin):
         )
 
     def sync_with_external_api(self, request, queryset):
+        """Массовая синхронизация пользователей с HR-системой."""
         queryset = queryset.select_related("profile").order_by(
             "profile__last_synced_at"
         )
@@ -306,6 +339,8 @@ class UserWithSectionsAdmin(UserAdmin):
             self.message_user(request, "У вас не задан API-ключ!", level=messages.ERROR)
             return
 
+        self._current_api_key = api_key
+
         for user in to_process:
             profile, _ = Profile.objects.get_or_create(user=user)
             tab_number = profile.user.username
@@ -316,13 +351,9 @@ class UserWithSectionsAdmin(UserAdmin):
                 error_count += 1
                 continue
 
-            url = f"{API_PATH}{tab_number}/"
-            try:
-                response = requests.get(url, headers={"X-API-Key": api_key}, timeout=5)
-                response.raise_for_status()
-                data = response.json()
-            except (requests.RequestException, ValueError) as e:
-                profile.sync_error = str(e)
+            data, error = self._fetch_from_hr_api(tab_number)
+            if error:
+                profile.sync_error = str(error)
                 profile.save(update_fields=["sync_error"])
                 error_count += 1
                 continue

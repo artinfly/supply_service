@@ -1,9 +1,13 @@
+"""Проверка прав доступа к разделам по имени маршрута."""
+
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils.deprecation import MiddlewareMixin
 
 from .services.queries import YEARS
 
+# Порядок важен: специфичные префиксы идут раньше общих
+# (znp_sap до znp, export до dupes и dashboard).
 SECTIONS = (
     ("access_upload", ("upload",)),
     ("access_goz_report", ("goz",)),
@@ -19,13 +23,16 @@ SECTIONS = (
 
 
 def perm_for(url_name):
+    """Возвращает код права для маршрута или None, если раздел открытый."""
     for section, words in SECTIONS:
         if any(word in url_name for word in words):
-            return f"reports.{section}"
+            return f"core.{section}"
     return None
 
 
 class SectionAccessMiddleware(MiddlewareMixin):
+    """Закрывает разделы правами: 403 страницей для HTML и JSON для API."""
+
     def process_view(self, request, view_func, view_args, view_kwargs):
         match = request.resolver_match
 

@@ -1,3 +1,5 @@
+"""Нормализация данных из staging-таблиц в рабочие таблицы, отслеживание изменений."""
+
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -5,8 +7,8 @@ from decimal import Decimal, InvalidOperation
 from django.db import connection, transaction
 from django.utils import timezone
 
-from reports.services.linking import contract_hash, relink_znp_parents
-from reports.services.queries import (
+from core.services.linking import contract_hash, relink_znp_parents
+from core.services.queries import (
     ADVANCE,
     CONCLUDED,
     NOT_CONCL,
@@ -14,10 +16,14 @@ from reports.services.queries import (
     YEARS,
 )
 
+# --- Константы и маппинги ---
+
+
 TWO_PLACES = Decimal("0.01")
 YEAR_COLS = [f"y{str(y)[2:]}" for y in YEARS]
 STATUS_PLACEHOLDERS = ", ".join(["%s"] * len(CONCLUDED))
 
+# Маппинг русских названий месяцев для парсинга дат
 MONTH_MAP = {
     "января": 1,
     "февраля": 2,
@@ -34,7 +40,11 @@ MONTH_MAP = {
 }
 
 
+# --- Утилиты преобразования данных ---
+
+
 def to_decimal(value):
+    """Преобразует значение в Decimal. Возвращает None для пустых/некорректных значений."""
     if value is None:
         return None
 
@@ -50,6 +60,7 @@ def to_decimal(value):
 
 
 def year_flags(god_igk):
+    """Возвращает кортеж булевых флагов годов (y25, y26, y27) для значения ГодИГК."""
     try:
         year = int(str(god_igk).strip()[:4])
     except (ValueError, TypeError):
@@ -59,19 +70,23 @@ def year_flags(god_igk):
 
 
 def norm(value):
+    """Нормализует строку: убирает пробелы, возвращает None для пустых значений."""
     return str(value).strip() if value is not None else None
 
 
 def plan_month(value):
+    """Преобразует дату в формат «ГГГГ.ММ» из различных форматов (ДД.ММ.ГГГГ, ГГГГ.ММ.ДД)."""
     text = norm(value)
     if not text:
         return None
 
     parts = text.split(".")
 
+    # Формат ДД.ММ.ГГГГ
     if len(parts) == 3 and len(parts[2]) == 4:
         return f"{parts[2]}.{parts[1].zfill(2)}"
 
+    # Формат ГГГГ.ММ.ДД
     if len(parts) == 2 and len(parts[0]) == 4:
         return f"{parts[0]}.{parts[1].zfill(2)}"
 
@@ -79,6 +94,7 @@ def plan_month(value):
 
 
 def values_equal(a, b):
+    """Сравнивает два значения с точностью до 2 знаков после запятой."""
     left = to_decimal(a)
     right = to_decimal(b)
 
@@ -92,6 +108,7 @@ def values_equal(a, b):
 
 
 def status_group(status):
+    """Определяет группу статуса: concluded, not_concluded или None."""
     if status in CONCLUDED:
         return "concluded"
 
@@ -102,6 +119,10 @@ def status_group(status):
 
 
 def _indexed_lookup(rows, key_fn, value_fn):
+    """Создаёт словарь {ключ + индекс: значение} для обработки дубликатов.
+
+    Если ключ повторяется, добавляется числовой индекс (0, 1, 2, ...).
+    """
     counts = defaultdict(int)
     result = {}
 
@@ -115,6 +136,7 @@ def _indexed_lookup(rows, key_fn, value_fn):
 
 
 def text_ru_date_to_date(value):
+    """Парсит дату из формата «15 марта 2021» в date объект."""
     text = norm(value)
     if not text:
         return None
@@ -142,6 +164,7 @@ def text_ru_date_to_date(value):
 
 
 def dot_date_to_date(value):
+    """Парсит дату из форматов «15.03.2021» или «2021-03-15» в date объект."""
     text = norm(value)
     if not text:
         return None
@@ -160,6 +183,7 @@ def dot_date_to_date(value):
 
 
 def parse_date(value):
+    """Парсит дату из различных форматов (точка, дефис, русский текст)."""
     result = dot_date_to_date(value)
     if result:
         return result
@@ -167,8 +191,26 @@ def parse_date(value):
     return text_ru_date_to_date(value)
 
 
+# --- Нормализация договоров ---
+
+
 def normalize_contracts():
+    """Нормализует данные договоров из staging_excel в igk_stat_data.
+
+    Процесс:
+    1. Заполняет справочник ИГК (nsi_igk)
+    2. Читает staging-данные и преобразует их
+    3. Сравнивает с предыдущей версией, фиксирует изменения
+    4. Записывает историю изменений и появившиеся договоры
+    5. Очищает и заполняет рабочую таблицу
+    6. Обновляет снимки агрегатов
+    7. Перепривязывает заявки ФЗД
+
+    Returns:
+        str: отчёт о количестве обработанных строк и изменений
+    """
     with transaction.atomic(), connection.cursor() as cur:
+        # Шаг 1: Заполняем справочник ИГК
         cur.execute("""
             INSERT INTO nsi_igk (igk)
             SELECT DISTINCT TRIM(igk) FROM staging_excel
@@ -176,6 +218,7 @@ def normalize_contracts():
             ON CONFLICT DO NOTHING
         """)
 
+        # Шаг 2: Читаем staging-данные
         cur.execute(
             """
             SELECT igk, kontragent, cfo, dogovor, sostoyanie,
@@ -189,6 +232,7 @@ def normalize_contracts():
         )
         staging_rows = cur.fetchall()
 
+        # Шаг 3: Преобразуем данные в формат рабочей таблицы
         new_data = []
 
         for r in staging_rows:
@@ -196,29 +240,32 @@ def normalize_contracts():
 
             new_data.append(
                 (
-                    norm(r[0]),
-                    norm(r[1]),
-                    norm(r[2]),
-                    norm(r[3]),
-                    norm(r[4]),
-                    norm(r[5]) or None,
-                    norm(r[6]),
-                    norm(r[7]),
-                    to_decimal(r[8]),
-                    to_decimal(r[9]),
-                    to_decimal(r[10]),
-                    norm(r[11]),
-                    y25,
-                    y26,
-                    y27,
-                    plan_month(r[12]),
-                    norm(r[14]),
-                    to_decimal(r[13]),
-                    contract_hash(norm(r[0]), norm(r[1]), norm(r[3]), norm(r[11])),
-                    to_decimal(r[15]),
+                    norm(r[0]),  # igk
+                    norm(r[1]),  # c_agent
+                    norm(r[2]),  # cfo
+                    norm(r[3]),  # contract
+                    norm(r[4]),  # status
+                    norm(r[5]) or None,  # payment_type
+                    norm(r[6]),  # item
+                    norm(r[7]),  # order
+                    to_decimal(r[8]),  # plan
+                    to_decimal(r[9]),  # fact
+                    to_decimal(r[10]),  # tolerance
+                    norm(r[11]),  # stage
+                    y25,  # y25
+                    y26,  # y26
+                    y27,  # y27
+                    plan_month(r[12]),  # plan_date
+                    norm(r[14]),  # c_date
+                    to_decimal(r[13]),  # contract_sum
+                    contract_hash(
+                        norm(r[0]), norm(r[1]), norm(r[3]), norm(r[11])
+                    ),  # crc32_hash
+                    to_decimal(r[15]),  # remainder
                 )
             )
 
+        # Шаг 4: Читаем предыдущую версию для сравнения
         cur.execute("""
             SELECT igk, c_agent, contract, item, "order", stage, plan_date,
                    status, plan, fact, contract_sum
@@ -253,6 +300,7 @@ def normalize_contracts():
             value_fn=lambda r: r,
         )
 
+        # Шаг 5: Фиксируем появившиеся договоры
         today = timezone.localdate()
         appeared = []
 
@@ -302,6 +350,7 @@ def normalize_contracts():
                 appeared,
             )
 
+        # Шаг 6: Фиксируем историю изменений
         history = []
 
         for key, new_row in new_lookup.items():
@@ -354,6 +403,7 @@ def normalize_contracts():
                 history,
             )
 
+        # Шаг 7: Очищаем и заполняем рабочую таблицу
         cur.execute("TRUNCATE igk_stat_data RESTART IDENTITY")
         cur.executemany(
             """
@@ -367,6 +417,7 @@ def normalize_contracts():
             new_data,
         )
 
+        # Шаг 8: Обновляем снимки агрегатов
         cur.execute(
             "DELETE FROM contract_counts_snapshot WHERE upload_date = %s",
             [today],
@@ -389,12 +440,21 @@ def normalize_contracts():
                 [today, year_col, *CONCLUDED],
             )
 
+        # Шаг 9: Перепривязываем заявки ФЗД
         relink_znp_parents()
 
     return f"обработано строк: {len(new_data)}, изменений записано: {len(history)}"
 
 
+# --- Нормализация заявок ФЗД ---
+
+
 def normalize_znp():
+    """Нормализует данные заявок ФЗД из staging_znp_excel в znp_data.
+
+    Returns:
+        str: отчёт о количестве обработанных заявок и без совпадений
+    """
     with transaction.atomic(), connection.cursor() as cur:
         cur.execute("""
             SELECT crc32_hash, plan_doc, payment_purpose,
@@ -410,19 +470,19 @@ def normalize_znp():
         for r in staging_rows:
             new_data.append(
                 (
-                    None,
-                    norm(r[1]),
-                    norm(r[2]),
-                    parse_date(r[3]),
-                    parse_date(r[4]),
-                    to_decimal(r[5]),
-                    to_decimal(r[6]),
-                    r[0],
-                    norm(r[7]),
-                    norm(r[8]),
-                    norm(r[9]),
-                    norm(r[10]),
-                    parse_date(r[11]),
+                    None,  # parent_id (заполняется позже)
+                    norm(r[1]),  # plan_doc
+                    norm(r[2]),  # payment_purpose
+                    parse_date(r[3]),  # plan_payment_date
+                    parse_date(r[4]),  # fact_payment_date
+                    to_decimal(r[5]),  # plan_sum
+                    to_decimal(r[6]),  # fact_sum
+                    r[0],  # crc32_hash
+                    norm(r[7]),  # stage
+                    norm(r[8]),  # znp_igk
+                    norm(r[9]),  # znp_payment_type
+                    norm(r[10]),  # znp_status
+                    parse_date(r[11]),  # znp_date
                 )
             )
 
@@ -439,6 +499,7 @@ def normalize_znp():
             new_data,
         )
 
+        # Перепривязываем заявки к позициям договоров
         relink_znp_parents()
 
         cur.execute("SELECT COUNT(*) FROM znp_data WHERE parent_id IS NULL")
@@ -450,7 +511,15 @@ def normalize_znp():
     )
 
 
+# --- Нормализация заявок SAP ---
+
+
 def normalize_znp_sap():
+    """Нормализует данные заявок SAP из staging_znp_sap_excel в znp_data_sap.
+
+    Returns:
+        str: отчёт о количестве обработанных заявок и без ИГК
+    """
     with transaction.atomic(), connection.cursor() as cur:
         cur.execute("""
             SELECT igk, cfo, c_agent, reg_num, items, vv_sum,

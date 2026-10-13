@@ -1,5 +1,9 @@
+{# Шаблон страницы "Краткая справка". #}
+{# Форма загрузки Excel-файла для генерации ZIP-архива с отчётами по ИГК. #}
+{# Отправка через AJAX, скачивание результата как blob. #}
+
 {% extends 'base.html' %}
-{% block title %}Краткая справка {% endblock %}
+{% block title %}Краткая справка{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -7,6 +11,7 @@
 </div>
 
 <div class="upload-layout">
+    {# --- Форма загрузки файла --- #}
     <div class="upload-card upload-card-form">
         <div class="format-note">
             <div class="format-note-ext">XLSX</div>
@@ -18,25 +23,36 @@
 
         <form id="sum-report-form" enctype="multipart/form-data">
             {% csrf_token %}
+            
             <div class="mb-3">
-                <label class="filter-label">Excel файл (.xlsx)</label>
-                <input type="file" name="excel_file" accept=".xlsx"
-                       class="form-control upload-file-input mt-1" required>
+                <label for="excel-file" class="filter-label">Excel файл (.xlsx)</label>
+                <input type="file" 
+                       id="excel-file"
+                       name="excel_file" 
+                       accept=".xlsx"
+                       class="form-control upload-file-input mt-1" 
+                       required>
             </div>
+            
             <div class="mb-3">
-                <label class="filter-label">Тип отчёта</label>
-                <select name="report_type" class="form-control upload-file-input mt-1">
+                <label for="report-type" class="filter-label">Тип отчёта</label>
+                <select id="report-type"
+                        name="report_type" 
+                        class="form-control upload-file-input mt-1">
                     <option value="normal">Обычная</option>
                     <option value="cycle">Длинноцикловая</option>
                 </select>
             </div>
+            
             <div class="d-flex align-items-center">
                 <button type="submit" class="btn-orange" id="submit-btn">Сформировать отчёт</button>
             </div>
+            
             <div id="file-error" class="upload-error" hidden></div>
         </form>
     </div>
 
+    {# --- Информационная карточка --- #}
     <div class="upload-card upload-card-cols">
         <div class="filter-label mb-2">Как это работает</div>
         <ul class="upload-cols-list">
@@ -49,6 +65,10 @@
 
 {% block extra_js %}
 <script>
+"use strict";
+
+// --- Обработчик отправки формы генерации отчёта ---
+
 document.getElementById('sum-report-form').addEventListener('submit', async function(e) {
     e.preventDefault();
 
@@ -56,11 +76,13 @@ document.getElementById('sum-report-form').addEventListener('submit', async func
     const errDiv = document.getElementById('file-error');
     const formData = new FormData(this);
 
+    // Сбрасываем состояние и блокируем кнопку
     errDiv.hidden = true;
     btn.disabled = true;
     btn.textContent = 'Обработка...';
 
     try {
+        // Отправляем файл через AJAX
         const resp = await fetch('{% url "sum_report_upload" %}', {
             method: 'POST',
             body: formData,
@@ -72,6 +94,7 @@ document.getElementById('sum-report-form').addEventListener('submit', async func
             throw new Error(data.error || 'Ошибка обработки');
         }
 
+        // Скачиваем ZIP-архив как blob
         const blob = await resp.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -83,9 +106,11 @@ document.getElementById('sum-report-form').addEventListener('submit', async func
         window.URL.revokeObjectURL(url);
 
     } catch (err) {
+        // Показываем ошибку пользователю
         errDiv.textContent = err.message;
         errDiv.hidden = false;
     } finally {
+        // Разблокируем кнопку в любом случае
         btn.disabled = false;
         btn.textContent = 'Сформировать отчёт';
     }

@@ -1,3 +1,5 @@
+{# Базовый шаблон проекта. Содержит боковое меню, подключение стилей и глобальные JS-утилиты. #}
+
 {% load static %}
 <!DOCTYPE html>
 <html lang="ru">
@@ -10,6 +12,7 @@
 </head>
 <body>
 
+{# --- Боковое меню (Sidebar) --- #}
 <nav class="sidebar">
     <div class="sidebar-logo">
         <div class="sidebar-logo-icon">
@@ -18,65 +21,71 @@
         <div class="sidebar-logo-text">МТО<span>УВЗ</span></div>
     </div>
 
+    {# Раздел: Сводки #}
     <div class="nav-section">Сводки</div>
     <a href="{% url 'root' %}" class="nav-link">Обзор</a>
-    {% if perms.reports.access_dashboard %}
+    {% if perms.core.access_dashboard %}
     <a href="{% url 'dashboard' %}" class="nav-link">Договорная работа</a>
     {% endif %}
-    {% if perms.reports.access_znp %}
+    {% if perms.core.access_znp %}
     <a href="{% url 'znp_table' %}" class="nav-link">Заявки на платёж (ФЗД)</a>
     {% endif %}
-    {% if perms.reports.access_znp_sap %}
+    {% if perms.core.access_znp_sap %}
     <a href="{% url 'znp_sap_table' %}" class="nav-link">Заявки на платёж (SAP)</a>
     {% endif %}
 
-    {% if perms.reports.access_dashboard or perms.reports.access_znp or perms.reports.access_znp_sap %}
+    {# Раздел: Реестры #}
+    {% if perms.core.access_dashboard or perms.core.access_znp or perms.core.access_znp_sap %}
     <div class="nav-section">Реестры</div>
-    {% if perms.reports.access_dashboard %}
+    {% if perms.core.access_dashboard %}
     <a href="{% url 'all_contracts_table' %}" class="nav-sub-link">Все договоры</a>
     {% endif %}
-    {% if perms.reports.access_znp %}
+    {% if perms.core.access_znp %}
     <a href="{% url 'znp_list_table' %}" class="nav-sub-link">Все ЗнП (ФЗД)</a>
     {% endif %}
-    {% if perms.reports.access_znp_sap %}
+    {% if perms.core.access_znp_sap %}
     <a href="{% url 'znp_sap_list_table' %}" class="nav-sub-link">Все ЗнП (SAP)</a>
     {% endif %}
     {% endif %}
 
-    {% if perms.reports.access_kdr %}
+    {# Раздел: КДР #}
+    {% if perms.core.access_kdr %}
     <div class="nav-section">КДР</div>
     <a href="{% url 'kdr_table_default' %}" class="nav-sub-link">Заключение договоров</a>
     {% endif %}
 
-    {% if perms.reports.access_igk %}
+    {# Раздел: ИГК #}
+    {% if perms.core.access_igk %}
     <div class="nav-section">ИГК</div>
     <a href="{% url 'igk_concluded_table_default' %}" class="nav-sub-link">Заключённые</a>
     <a href="{% url 'igk_not_concluded_table_default' %}" class="nav-sub-link">Незаключённые</a>
     <a href="{% url 'igk_terminated_table_default' %}" class="nav-sub-link">Расторгнутые</a>
     {% endif %}
 
-    {% if perms.reports.access_history %}
+    {# Раздел: История изменений #}
+    {% if perms.core.access_history %}
     <div class="nav-section">История изменений</div>
     <a href="{% url 'history_status_table' %}" class="nav-sub-link">Статусы</a>
     <a href="{% url 'history_plan_table' %}" class="nav-sub-link">План</a>
     <a href="{% url 'history_fact_table' %}" class="nav-sub-link">Факт</a>
     {% endif %}
 
-    {% if perms.reports.access_dupes or perms.reports.access_export or perms.reports.access_upload or perms.reports.access_goz_report or user.is_superuser %}
+    {# Раздел: Служебное #}
+    {% if perms.core.access_dupes or perms.core.access_export or perms.core.access_upload or perms.core.access_goz_report or user.is_superuser %}
     <div class="nav-section">Служебное</div>
-    {% if perms.reports.access_dupes %}
+    {% if perms.core.access_dupes %}
     <a href="{% url 'contract_dupes_table' %}" class="nav-sub-link">Дубликаты</a>
     {% endif %}
-    {% if perms.reports.access_export %}
+    {% if perms.core.access_export %}
     <a href="{% url 'export_page' %}" class="nav-sub-link">Отчёты в Excel</a>
     {% endif %}
-    {% if perms.reports.access_export %}
+    {% if perms.core.access_export %}
     <a href="{% url 'sum_report_page' %}" class="nav-sub-link">Краткая справка</a>
     {% endif %}
-    {% if perms.reports.access_upload %}
+    {% if perms.core.access_upload %}
     <a href="{% url 'upload_excel' %}" class="nav-sub-link">Загрузка данных</a>
     {% endif %}
-    {% if perms.reports.access_goz_report %}
+    {% if perms.core.access_goz_report %}
     <a href="{% url 'goz_report' %}" class="nav-sub-link">Анализ ГОЗ</a>
     {% endif %}
     {% if user.is_superuser %}
@@ -84,6 +93,7 @@
     {% endif %}
     {% endif %}
 
+    {# Кнопка выхода #}
     <div class="sidebar-logout">
         <a href="{% url 'logout' %}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -94,23 +104,39 @@
     </div>
 </nav>
 
+{# --- Основной контент --- #}
 <div class="main-content">
     {% block content %}{% endblock %}
 </div>
 
+{# --- Глобальные скрипты --- #}
 <script src="{% static 'vendor/bootstrap.bundle.min.js' %}"></script>
 <script>
+"use strict";
+
+// --- Утилиты форматирования и экранирования ---
+
 const _ESC_MAP = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
+
+/**
+ * Экранирует HTML-символы в строке для безопасной вставки в DOM.
+ */
 function esc(val) {
     if (val === null || val === undefined) return '';
     return String(val).replace(/[&<>"']/g, c => _ESC_MAP[c]);
 }
 
+/**
+ * Преобразует дату из формата ГГГГ-ММ-ДД в ДД.ММ.ГГГГ.
+ */
 function fmtDate(val) {
     const m = String(val).match(/^(\d{4})-(\d{2})-(\d{2})/);
     return m ? `${m[3]}.${m[2]}.${m[1]}` : val;
 }
 
+/**
+ * Форматирует значение в зависимости от типа (число, процент, дата).
+ */
 function fmt(val, format) {
     if (val === null || val === undefined || val === '') return '';
     if (format === 'number')  return parseFloat(val).toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -120,6 +146,9 @@ function fmt(val, format) {
     return val;
 }
 
+/**
+ * Формирует URL для скачивания отчёта КДР с датами периода.
+ */
 function downloadKDR(url, year, startId, endId) {
     const start = document.getElementById(startId).value;
     const end = document.getElementById(endId).value;
@@ -131,45 +160,76 @@ function downloadKDR(url, year, startId, endId) {
     window.location.href = url.replace('/0/', `/${year}/`) + '?' + params;
 }
 
+/**
+ * Возвращает размер страницы для пагинации (Infinity, если выбрано "Все").
+ * Требует наличия элемента с id="page-size".
+ */
 function pageSize() {
-    const v = parseInt(document.getElementById('page-size').value);
+    const el = document.getElementById('page-size');
+    if (!el) return 100; // Значение по умолчанию
+    const v = parseInt(el.value, 10);
     return v === 0 ? Infinity : v;
 }
 
+/**
+ * Рендерит кнопки пагинации.
+ * Требует, чтобы в области видимости были определены переменные `currentPage` и функция `renderPage()`.
+ */
 function renderPagination(total, ps, cur, id) {
     const el = document.getElementById(id);
+    if (!el) return;
     if (!isFinite(ps) || total <= ps) { el.innerHTML = ''; return; }
+    
     const pages = Math.ceil(total / ps);
     const d = 2;
     let html = '<div class="d-flex gap-1 flex-wrap align-items-center">';
     html += `<button class="pgn-btn" data-p="1" ${cur === 1 ? 'disabled' : ''}>«</button>`;
     html += `<button class="pgn-btn" data-p="${cur - 1}" ${cur === 1 ? 'disabled' : ''}>‹</button>`;
+    
     for (let p = 1; p <= pages; p++) {
-        if (p === 1 || p === pages || (p >= cur - d && p <= cur + d))
+        if (p === 1 || p === pages || (p >= cur - d && p <= cur + d)) {
             html += `<button class="pgn-btn${p === cur ? ' pgn-active' : ''}" data-p="${p}">${p}</button>`;
-        else if (p === cur - d - 1 || p === cur + d + 1)
+        } else if (p === cur - d - 1 || p === cur + d + 1) {
             html += '<span style="padding:0 4px;color:#999">…</span>';
+        }
     }
+    
     html += `<button class="pgn-btn" data-p="${cur + 1}" ${cur === pages ? 'disabled' : ''}>›</button>`;
     html += `<button class="pgn-btn" data-p="${pages}" ${cur === pages ? 'disabled' : ''}>»</button>`;
     html += `<span class="row-count-label ms-2">стр. ${cur} из ${pages}</span></div>`;
     el.innerHTML = html;
+    
     el.querySelectorAll('.pgn-btn:not([disabled])').forEach(btn => {
-        btn.addEventListener('click', () => { currentPage = parseInt(btn.dataset.p); renderPage(); });
+        btn.addEventListener('click', () => { 
+            // Проверка на существование глобальных переменных, определённых в конкретных шаблонах
+            if (typeof currentPage !== 'undefined' && typeof renderPage === 'function') {
+                currentPage = parseInt(btn.dataset.p, 10); 
+                renderPage(); 
+            }
+        });
     });
 }
 
+/**
+ * Универсальная функция загрузки и отрисовки простой таблицы по API.
+ */
 async function loadTable(apiUrl, containerId, cols) {
     const container = document.getElementById(containerId);
-    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div>Загрузка...</div>';
+    if (!container) return;
+    
+    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка...</div>';
     try {
         const resp = await fetch(apiUrl);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
-        if (!data.length) { container.innerHTML = '<div class="p-3 text-muted">Нет данных</div>'; return; }
+        
+        if (!data || !data.length) { 
+            container.innerHTML = '<div class="p-3 text-muted">Нет данных</div>'; 
+            return; 
+        }
 
         let html = '<table class="report-table"><thead><tr>';
-        cols.forEach(col => { html += `<th>${col.title}</th>`; });
+        cols.forEach(col => { html += `<th>${esc(col.title)}</th>`; });
         html += '</tr></thead><tbody>';
 
         data.forEach((row, idx) => {
@@ -177,9 +237,13 @@ async function loadTable(apiUrl, containerId, cols) {
             html += `<tr class="${isTotal ? 'row-total' : ''}">`;
             cols.forEach(col => {
                 let val = row[col.field] ?? '';
-                if (col.field === 'igk' && val && !isTotal) val = String(val).slice(-4);
-                else if (col.field === 'stage' && val)      val = String(val).trim();
-                else                                         val = fmt(val, col.format);
+                if (col.field === 'igk' && val && !isTotal) {
+                    val = String(val).slice(-4);
+                } else if (col.field === 'stage' && val) {
+                    val = String(val).trim();
+                } else {
+                    val = fmt(val, col.format);
+                }
                 const align = (col.format && col.format !== 'date') ? 'text-end' : '';
                 const wrap  = !col.format ? 'wrap' : '';
                 html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${esc(val)}</td>`;
@@ -190,29 +254,40 @@ async function loadTable(apiUrl, containerId, cols) {
         html += '</tbody></table>';
         container.innerHTML = html;
     } catch(e) {
-        container.innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
+        container.innerHTML = `<div class="error-msg">Ошибка загрузки: ${esc(e.message)}</div>`;
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    const sidebar = document.querySelector('.sidebar');
-    const saved   = sessionStorage.getItem('sidebar_scroll');
-    if (saved) sidebar.scrollTop = parseInt(saved);
-    sidebar.addEventListener('scroll', () => sessionStorage.setItem('sidebar_scroll', sidebar.scrollTop));
+// --- Инициализация при загрузке DOM ---
 
-    // Подсветка активной ссылки: точное совпадение или вложенный маршрут.
-    // «Обзор» (root) подсвечивается только при точном совпадении пути.
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Сохранение и восстановление позиции скролла сайдбара
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+        const saved = sessionStorage.getItem('sidebar_scroll');
+        if (saved) sidebar.scrollTop = parseInt(saved, 10);
+        sidebar.addEventListener('scroll', () => {
+            sessionStorage.setItem('sidebar_scroll', sidebar.scrollTop);
+        });
+    }
+
+    // 2. Подсветка активной ссылки в меню
     const curPath = window.location.pathname;
     document.querySelectorAll('.sidebar a').forEach(link => {
-        const linkPath = new URL(link.href).pathname;
-        const isRoot = linkPath === '/reports/' || linkPath === '/reports';
+        const linkPath = new URL(link.href, window.location.origin).pathname;
+        // "Обзор" (root) подсвечивается только при точном совпадении пути
+        const isRoot = linkPath === '/reports/' || linkPath === '/reports' || linkPath === '/';
         const active = isRoot
-            ? curPath === linkPath
-            : (curPath === linkPath || curPath.startsWith(linkPath));
-        if (active) link.classList.add('active');
+            ? (curPath === '/reports/' || curPath === '/reports' || curPath === '/')
+            : (curPath === linkPath || curPath.startsWith(linkPath + '/') || curPath.startsWith(linkPath + '?'));
+        
+        if (active) {
+            link.classList.add('active');
+        }
     });
 });
 </script>
+
 {% block extra_js %}{% endblock %}
 </body>
 </html>

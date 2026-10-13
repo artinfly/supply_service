@@ -1,0 +1,8 @@
+UPDATE django_migrations   SET app = 'core'       WHERE app = 'reports';
+UPDATE django_content_type SET app_label = 'core' WHERE app_label = 'reports';
+
+
+python manage.py check
+python manage.py showmigrations core   # все миграции [X], новой 0001 нет
+python manage.py runserver             # страницы открываются, в админке чекбоксы «Разделы» на месте
+git grep -n "reports" -- "*.py"        # должны остаться только URL-префиксы и verbose-имена

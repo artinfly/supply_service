@@ -1,9 +1,14 @@
+{# Шаблон страницы "Заявки на платёж (SAP)". #}
+{# Содержит: фильтры по ИГК и дате, карточки статусов (все заявки, за две даты), #}
+{# таблицу по ЦФО с кликабельными ячейками и график этапов согласования. #}
+
 {% extends 'base.html' %}
 {% load static %}
 {% load custom_filters %}
 {% block title %}Заявки на платёж (SAP){% endblock %}
 
 {% block content %}
+    {# --- Заголовок и фильтры --- #}
     <div class="page-header">
         <h5>
             Заявки на платёж (SAP)
@@ -22,10 +27,12 @@
         </form>
     </div>
 
+    {# --- Состояние "Нет данных" --- #}
     {% if not has_data %}
         {% include "_no_data.html" %}
     {% else %}
 
+    {# --- Карточки: Все заявки --- #}
     <div class="row g-3 mb-4">
         <div class="block-title">Все заявки</div>
         <div class="card-block">
@@ -33,6 +40,7 @@
         </div>
     </div>
 
+    {# --- Карточки: Заявки за первую дату --- #}
     <div class="row g-3 mb-4">
         <div class="block-title">Заявки за {{ first_date|date:"d.m.Y" }}</div>
         <div class="card-block">
@@ -40,6 +48,7 @@
         </div>
     </div>
 
+    {# --- Карточки: Заявки за вторую дату --- #}
     <div class="row g-3 mb-4">
         <div class="block-title">Заявки за {{ second_date|date:"d.m.Y" }}</div>
         <div class="card-block">
@@ -47,9 +56,11 @@
         </div>
     </div>
 
+    {# --- Таблица по ЦФО с кликабельными ячейками --- #}
     <div class="igk-stat-card">
         <table class="report-table">
             <thead>
+                {# Заголовок с группировкой по этапам #}
                 <tr>
                     <th rowspan="2">ЦФО</th>
                     <th rowspan="2">Всего ЗнП, шт.</th>
@@ -66,8 +77,10 @@
                 </tr>
             </thead>
             <tbody>
+                {# Строки по ЦФО #}
                 {% for row in cfo_table %}
                 <tr>
+                    {# Кликабельные ячейки: каждая ведёт в реестр с фильтром по статусу #}
                     <td class="clickable-cell">
                         <div class="cell-content">{{ row.cfo }}</div>
                         <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid,ready_18"></a>
@@ -80,6 +93,7 @@
                         <div class="cell-content">{{ row.total_sum|floatformat:2|intspace }}</div>
                         <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid,ready_18"></a>
                     </td>
+                    {# Ячейки по этапам согласования #}
                     {% for cell in row.cells %}
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cell.count }}</div>
@@ -92,6 +106,8 @@
                     {% endfor %}
                 </tr>
                 {% endfor %}
+                
+                {# Итоговая строка #}
                 <tr class="row-total">
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cfo_total_row.cfo }}</div>
@@ -118,6 +134,8 @@
                 </tr>
             </tbody>
         </table>
+        
+        {# Сообщение, если по выбранному ИГК нет данных #}
         {% if not cfo_table %}
         <div class="p-4 text-muted text-center">
             По выбранному ИГК заявок нет.
@@ -125,6 +143,7 @@
         {% endif %}
     </div>
 
+    {# --- График: Этапы согласования по ЦФО --- #}
     <div class="table-container chart-block mt-4 mb-4">
         <h6 class="chart-block-title">Заявки SAP по ЦФО</h6>
         <div class="chart-block-hint">
@@ -142,10 +161,16 @@
 <script src="{% static 'vendor/chartjs-plugin-datalabels.min.js' %}"></script>
 <script src="{% static 'js/charts.js' %}"></script>
 <script>
-loadChart(
-    'chart-znp-sap',
-    '{% url "api_chart_znp_sap" %}?' +
-        new URLSearchParams({ igk: '{{ selected_igk|escapejs }}' })
-);
+"use strict";
+
+// Инициализация графика после полной загрузки DOM
+document.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams({
+        igk: '{{ selected_igk|escapejs }}'
+    });
+    
+    // loadChart определён в charts.js и сам обрабатывает состояния загрузки/ошибки
+    loadChart('chart-znp-sap', '{% url "api_chart_znp_sap" %}?' + params.toString());
+});
 </script>
 {% endblock %}

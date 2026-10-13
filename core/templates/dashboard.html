@@ -1,9 +1,14 @@
+{# Шаблон главной страницы "Договорная работа" (Дашборд). #}
+{# Содержит: фильтры, карточки метрик (всего и за год), таблицу по ЦФО и график незаключённых договоров. #}
+
 {% extends 'base.html' %}
 {% load static %}
 {% load custom_filters %}
+
 {% block title %}Договорная работа{% endblock %}
 
 {% block content %}
+    {# --- Заголовок и фильтры --- #}
     <div class="page-header">
         <h5>Договорная работа</h5>
         {% if has_data %}
@@ -22,10 +27,12 @@
         {% endif %}
     </div>
 
+    {# --- Состояние "Нет данных" --- #}
     {% if not has_data %}
         {% include "_no_data.html" %}
     {% else %}
 
+    {# --- Карточки: Всего по всем годам --- #}
     <div class="row g-3 mb-4">
         <div class="block-title">Всего по всем годам</div>
         <div class="card-block">
@@ -66,6 +73,7 @@
             </div>
         </div>
 
+        {# --- Карточки: За выбранный год --- #}
         <div class="block-title">За {{ selected_year }} год</div>
         <div class="card-block">
             <div class="dash-row">
@@ -114,6 +122,8 @@
                     </div>
                 </div>
             </div>
+            
+            {# --- Карточки: Метрики за год --- #}
             <div class="dash-row">
                 <div>
                     <div class="dash-card stage-metric">
@@ -133,7 +143,7 @@
                         </div>
                         <div>
                             <div class="dash-card-num">{{ curr_year_percent_count|floatformat:2 }}%</div>
-                            <div class="dash-card-lbl">% контрактации {{ selected_year }}(кол-во)</div>
+                            <div class="dash-card-lbl">% контрактации {{ selected_year }} (кол-во)</div>
                         </div>
                     </div>
                 </div>
@@ -144,7 +154,7 @@
                         </div>
                         <div>
                             <div class="dash-card-num">{{ curr_year_percent_sum|floatformat:2 }}%</div>
-                            <div class="dash-card-lbl">% контрактации {{ selected_year }}(руб)</div>
+                            <div class="dash-card-lbl">% контрактации {{ selected_year }} (руб)</div>
                         </div>
                     </div>
                 </div>
@@ -163,6 +173,7 @@
         </div>
     </div>
 
+    {# --- Детальная таблица по ЦФО --- #}
     <div class="igk-stat-card">
         <table class="report-table">
             <thead>
@@ -188,10 +199,11 @@
             <tbody>
                 {% for r in igk_table %}
                     <tr class="{% if forloop.last %} row-total{% endif %}">
+                        {# Клик по ячейке ЦФО ведёт в реестр с фильтром по выбранному ИГК (последние 4 символа) и ЦФО #}
                         <td class="clickable-cell">
                             <div class="cell-content">{{ r.cfo }}</div>
                             <a href="{% url 'all_contracts_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&statuses=concluded,not_concluded,terminated{% if r.cfo != 'ИТОГО' %}&cfo={{ r.cfo }}{% endif %}"
-                                class="text-decoration-none">
+                               class="text-decoration-none" title="Перейти к реестру">
                             </a>
                         </td>
                         <td>{{ r.all_count }}</td>
@@ -215,6 +227,7 @@
         </table>
     </div>
 
+    {# --- График: Незаключённые по ЦФО --- #}
     <div class="table-container chart-block mt-4 mb-4">
         <h6 class="chart-block-title">Незаключённые по ЦФО</h6>
         <div class="chart-block-hint">Где сосредоточен завал и насколько он застарелый. ЦФО отсортированы по сумме</div>
@@ -230,13 +243,17 @@
 <script src="{% static 'vendor/chartjs-plugin-datalabels.min.js' %}"></script>
 <script src="{% static 'js/charts.js' %}"></script>
 <script>
-function drawChart() {
+"use strict";
+
+// Инициализация графика после полной загрузки DOM
+document.addEventListener('DOMContentLoaded', () => {
     const params = new URLSearchParams({
         igk:  '{{ selected_igk|escapejs }}',
         year: '{{ selected_year|escapejs }}',
     });
-    loadChart('chart-contracts', '{% url "api_chart_contracts" %}?' + params);
-}
-drawChart();
+    
+    // loadChart определён в charts.js и сам обрабатывает состояния загрузки/ошибки
+    loadChart('chart-contracts', '{% url "api_chart_contracts" %}?' + params.toString());
+});
 </script>
 {% endblock %}

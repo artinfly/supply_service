@@ -1,7 +1,18 @@
 {% load custom_filters %}
-{# Карточки сводки SAP. Параметры: b — данные карточек, date — дата блока (пусто для блока «Все заявки») #}
+{# Partial-шаблон: карточки сводки SAP с фильтрацией по статусам. #}
+{# #}
+{# Параметры контекста: #}
+{#   b — словарь с данными карточек (total_count, total_sum, waiting_agreement, sent_18, и т.д.) #}
+{#   date — дата блока (пусто для блока «Все заявки»), используется в URL фильтров #}
+{# #}
+{# Каждая карточка — это ссылка на таблицу заявок с предзаполненным фильтром по статусу. #}
+
 {% url 'znp_sap_list_table' as list_url %}
+
+{# === Первая строка карточек (4 штуки) === #}
+
 <div class="dash-row">
+    {# Карточка "Всего ЗнП (SAP)" — общий итог #}
     <a href="{{ list_url }}?{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses=waiting_agreement,sent_18,confirmed_18,paid,ready_18" class="text-decoration-none">
         <div class="dash-card stage-total">
             <div class="dash-card-icon">
@@ -13,6 +24,8 @@
             </div>
         </div>
     </a>
+
+    {# Карточка "На согласовании" #}
     <a href="{{ list_url }}?{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses=waiting_agreement" class="text-decoration-none">
         <div class="dash-card stage-wait">
             <div class="dash-card-icon">
@@ -24,6 +37,8 @@
             </div>
         </div>
     </a>
+
+    {# Карточка "Передано в 18 отдел" #}
     <a href="{{ list_url }}?{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses=sent_18" class="text-decoration-none">
         <div class="dash-card stage-late">
             <div class="dash-card-icon">
@@ -35,6 +50,8 @@
             </div>
         </div>
     </a>
+
+    {# Карточка "Подтверждено 18 отделом" #}
     <a href="{{ list_url }}?{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses=confirmed_18" class="text-decoration-none">
         <div class="dash-card stage-ready">
             <div class="dash-card-icon">
@@ -47,7 +64,11 @@
         </div>
     </a>
 </div>
+
+{# === Вторая строка карточек (3 штуки + пустой слот) === #}
+
 <div class="dash-row">
+    {# Карточка "Согласовано для передачи в реестр" #}
     <a href="{{ list_url }}?{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses=agreed_registry" class="text-decoration-none">
         <div class="dash-card stage-registry">
             <div class="dash-card-icon">
@@ -59,6 +80,8 @@
             </div>
         </div>
     </a>
+
+    {# Карточка "Оплачено" #}
     <a href="{{ list_url }}?{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses=paid" class="text-decoration-none">
         <div class="dash-card stage-done">
             <div class="dash-card-icon">
@@ -70,6 +93,8 @@
             </div>
         </div>
     </a>
+
+    {# Карточка "Готово к передаче в 18 отдел" #}
     <a href="{{ list_url }}?{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses=ready_18" class="text-decoration-none">
         <div class="dash-card stage-upnext">
             <div class="dash-card-icon">
@@ -81,5 +106,7 @@
             </div>
         </div>
     </a>
+
+    {# Пустой слот для выравнивания сетки (4 колонки) #}
     <div class="dash-slot-empty"></div>
 </div>

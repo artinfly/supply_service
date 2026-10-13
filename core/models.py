@@ -1,10 +1,16 @@
+"""Модели базы данных: договоры, заявки, справочники и служебные таблицы."""
+
 from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.db import models
 
+# --- Справочники ---
+
 
 class NsiIgk(models.Model):
+    """Справочник кодов ИГК."""
+
     igk_id = models.AutoField(primary_key=True)
     igk = models.CharField(max_length=50, unique=True, verbose_name="Код ИГК")
 
@@ -18,11 +24,15 @@ class NsiIgk(models.Model):
 
 
 class GozContractVat(models.Model):
+    """Справочник ГК для анализа ГОЗ: ставка НДС по контракту."""
+
     igk = models.CharField(max_length=255, unique=True, verbose_name="ГК (игк/111сб)")
     enterprise = models.CharField(
         max_length=255, blank=True, null=True, verbose_name="Предприятие"
     )
-    order = models.CharField(max_length=100, blank=True, null=True, verbose_name="Заказ")
+    order = models.CharField(
+        max_length=100, blank=True, null=True, verbose_name="Заказ"
+    )
     contract_date = models.CharField(
         max_length=255, blank=True, null=True, verbose_name="Договор/Дата"
     )
@@ -47,7 +57,12 @@ class GozContractVat(models.Model):
         return f"{self.igk} ({self.year or 'без года'}) — {self.vat_rate}%"
 
 
+# --- Договоры ---
+
+
 class IgkStatData(models.Model):
+    """Рабочая таблица договоров: одна строка — одна позиция (этап, тип платежа)."""
+
     pp_id = models.AutoField(primary_key=True)
     igk = models.CharField(max_length=50, null=True, verbose_name="Код ИГК")
     c_agent = models.CharField(max_length=255, null=True, verbose_name="Контрагент")
@@ -87,6 +102,7 @@ class IgkStatData(models.Model):
     plan_date = models.CharField(max_length=50, null=True, verbose_name="Плановая дата")
     c_date = models.CharField(max_length=50, null=True, verbose_name="Дата заключения")
 
+    # Имя колонки историческое (ранее CRC32), фактически хранится MD5 64 бита.
     crc32_hash = models.BigIntegerField(verbose_name="CRC32 хеш")
 
     class Meta:
@@ -105,62 +121,14 @@ class IgkStatData(models.Model):
         return f"{self.igk} / {self.contract}"
 
 
-class StagingExcel(models.Model):
-    igk = models.TextField(null=True, verbose_name="ИГК")
-    kontragent = models.TextField(null=True, verbose_name="Контрагент")
-    cfo = models.TextField(null=True, verbose_name="ЦФО")
-    dogovor = models.TextField(null=True, verbose_name="Договор")
-    sostoyanie = models.TextField(null=True, verbose_name="Состояние")
-    tip_platezha = models.TextField(null=True, verbose_name="Тип платежа")
-    predmet = models.TextField(null=True, verbose_name="Предмет")
-    zakaz = models.TextField(null=True, verbose_name="Заказ")
-    plan = models.TextField(null=True, verbose_name="План")
-    fakt = models.TextField(null=True, verbose_name="Факт")
-    ostatok = models.TextField(null=True, verbose_name="Остаток")
-    tol = models.TextField(null=True, verbose_name="Допуск")
-    etap_grafika = models.TextField(null=True, verbose_name="Этап графика")
-    dataplan = models.TextField(null=True, verbose_name="Дата план")
-    summa_dogovora = models.TextField(null=True, verbose_name="Сумма договора")
-    god_igk = models.TextField(null=True, verbose_name="Год ИГК")
-
-    class Meta:
-        db_table = "staging_excel"
-        verbose_name = "Строка импорта договоров"
-        verbose_name_plural = "Строки импорта договоров"
-
-    def __str__(self):
-        return f"Staging: {self.igk} / {self.dogovor}"
-
-
-class StagingZnpExcel(models.Model):
-    igk = models.TextField(null=True, verbose_name="ИГК")
-    znp_igk = models.TextField(null=True, verbose_name="ИГК заявки")
-    znp_payment_type = models.CharField(
-        max_length=100, null=True, verbose_name="Тип платежа заявки"
-    )
-    c_agent = models.TextField(null=True, verbose_name="Контрагент")
-    contract = models.TextField(null=True, verbose_name="Договор")
-    stage = models.TextField(null=True, verbose_name="Этап")
-    plan_doc = models.TextField(null=True, verbose_name="Плановый документ")
-    payment_purpose = models.TextField(null=True, verbose_name="Назначение платежа")
-    plan_payment_date = models.TextField(null=True, verbose_name="Плановая дата")
-    fact_payment_date = models.TextField(null=True, verbose_name="Фактическая дата")
-    plan_sum = models.FloatField(null=True, verbose_name="Плановая сумма")
-    fact_sum = models.FloatField(null=True, verbose_name="Фактическая сумма")
-    znp_status = models.TextField(null=True, verbose_name="Статус заявки")
-    znp_date = models.TextField(null=True, verbose_name="Дата заявки")
-    crc32_hash = models.BigIntegerField(verbose_name="CRC32 хеш")
-
-    class Meta:
-        db_table = "staging_znp_excel"
-        verbose_name = "Строка импорта ЗнП (ФЗД)"
-        verbose_name_plural = "Строки импорта ЗнП (ФЗД)"
-
-    def __str__(self):
-        return f"Staging ЗнП: {self.plan_doc}"
+# --- Заявки на платёж ---
 
 
 class ZnpData(models.Model):
+    """Заявки на платёж ФЗД, привязанные к позициям договоров."""
+
+    # Без FK-ограничения: родительская таблица перезаписывается целиком
+    # при каждой загрузке, ограничение мешало бы TRUNCATE.
     parent = models.ForeignKey(
         IgkStatData,
         on_delete=models.SET_NULL,
@@ -213,6 +181,8 @@ class ZnpData(models.Model):
 
 
 class ZnpDataSAP(models.Model):
+    """Заявки на платёж SAP: перезаписываются целиком при каждой загрузке."""
+
     igk = models.CharField(max_length=50, null=True, verbose_name="ИГК")
     cfo = models.CharField(max_length=50, null=True, verbose_name="ЦФО")
     c_agent = models.CharField(max_length=255, null=True, verbose_name="Контрагент")
@@ -247,37 +217,12 @@ class ZnpDataSAP(models.Model):
         return f"ЗнП SAP: {self.reg_num}"
 
 
-class StagingZnpSAPExcel(models.Model):
-    igk = models.CharField(max_length=50, null=True, verbose_name="ИГК")
-    cfo = models.CharField(max_length=50, null=True, verbose_name="ЦФО")
-    c_agent = models.CharField(max_length=255, null=True, verbose_name="Контрагент")
-    reg_num = models.CharField(max_length=255, null=True, verbose_name="Рег. номер")
-    items = models.CharField(max_length=500, null=True, verbose_name="Предметы")
-    vv_sum = models.FloatField(null=True, verbose_name="Сумма ВВ")
-    bank_name = models.CharField(max_length=255, null=True, verbose_name="Банк")
-    c_type = models.CharField(max_length=50, null=True, verbose_name="Тип")
-
-    stage_e = models.DateField(null=True, verbose_name="Этап E")
-    stage_f = models.DateField(null=True, verbose_name="Этап F")
-    stage_c = models.DateField(null=True, verbose_name="Этап С")
-    payment_possible = models.DateField(
-        null=True, verbose_name="Возможная дата платежа"
-    )
-    normalize_doc_num = models.CharField(
-        max_length=255, null=True, verbose_name="Нормализованный номер"
-    )
-    created_date = models.DateField(null=True, verbose_name="Дата создания заявки")
-
-    class Meta:
-        db_table = "staging_znp_sap_excel"
-        verbose_name = "Строка импорта ЗнП (SAP)"
-        verbose_name_plural = "Строки импорта ЗнП (SAP)"
-
-    def __str__(self):
-        return f"Staging ЗнП SAP: {self.reg_num}"
+# --- История и снимки ---
 
 
 class ContractsHistory(models.Model):
+    """История изменений статуса, плана и факта договоров между загрузками."""
+
     hash = models.BinaryField(verbose_name="MD5 хеш позиции")
 
     old_status = models.CharField(
@@ -327,6 +272,8 @@ class ContractsHistory(models.Model):
 
 
 class ContractCountsSnapshot(models.Model):
+    """Снимки числа заключённых договоров по ИГК/ЦФО/году для дельты в КДР."""
+
     upload_date = models.DateField(verbose_name="Дата загрузки (снимка)")
     igk = models.CharField(max_length=10, verbose_name="Код ИГК")
     cfo = models.CharField(max_length=50, verbose_name="ЦФО")
@@ -347,10 +294,15 @@ class ContractCountsSnapshot(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.igk}/{self.cfo} {self.year_col} — {self.concluded_count} на {self.upload_date}"
+        return (
+            f"{self.igk}/{self.cfo} {self.year_col} — "
+            f"{self.concluded_count} на {self.upload_date}"
+        )
 
 
 class ContractsAppeared(models.Model):
+    """Договоры, появившиеся или сменившие статус между загрузками."""
+
     upload_date = models.DateField(verbose_name="Дата загрузки")
     kind = models.CharField(max_length=20, verbose_name="Тип появления")
     reason = models.CharField(max_length=20, verbose_name="Причина")
@@ -380,10 +332,110 @@ class ContractsAppeared(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.contract} - {self.kind} на {self.upload_date}"
+        return f"{self.contract} — {self.kind} на {self.upload_date}"
+
+
+# --- Staging-таблицы импорта ---
+# Сюда файл читается «как есть»; типы приводятся при нормализации.
+
+
+class StagingExcel(models.Model):
+    """Сырая строка импорта договоров."""
+
+    igk = models.TextField(null=True, verbose_name="ИГК")
+    kontragent = models.TextField(null=True, verbose_name="Контрагент")
+    cfo = models.TextField(null=True, verbose_name="ЦФО")
+    dogovor = models.TextField(null=True, verbose_name="Договор")
+    sostoyanie = models.TextField(null=True, verbose_name="Состояние")
+    tip_platezha = models.TextField(null=True, verbose_name="Тип платежа")
+    predmet = models.TextField(null=True, verbose_name="Предмет")
+    zakaz = models.TextField(null=True, verbose_name="Заказ")
+    plan = models.TextField(null=True, verbose_name="План")
+    fakt = models.TextField(null=True, verbose_name="Факт")
+    ostatok = models.TextField(null=True, verbose_name="Остаток")
+    tol = models.TextField(null=True, verbose_name="Допуск")
+    etap_grafika = models.TextField(null=True, verbose_name="Этап графика")
+    dataplan = models.TextField(null=True, verbose_name="Дата план")
+    summa_dogovora = models.TextField(null=True, verbose_name="Сумма договора")
+    god_igk = models.TextField(null=True, verbose_name="Год ИГК")
+
+    class Meta:
+        db_table = "staging_excel"
+        verbose_name = "Строка импорта договоров"
+        verbose_name_plural = "Строки импорта договоров"
+
+    def __str__(self):
+        return f"Staging: {self.igk} / {self.dogovor}"
+
+
+class StagingZnpExcel(models.Model):
+    """Сырая строка импорта заявок ЗнП (ФЗД)."""
+
+    igk = models.TextField(null=True, verbose_name="ИГК")
+    znp_igk = models.TextField(null=True, verbose_name="ИГК заявки")
+    znp_payment_type = models.CharField(
+        max_length=100, null=True, verbose_name="Тип платежа заявки"
+    )
+    c_agent = models.TextField(null=True, verbose_name="Контрагент")
+    contract = models.TextField(null=True, verbose_name="Договор")
+    stage = models.TextField(null=True, verbose_name="Этап")
+    plan_doc = models.TextField(null=True, verbose_name="Плановый документ")
+    payment_purpose = models.TextField(null=True, verbose_name="Назначение платежа")
+    plan_payment_date = models.TextField(null=True, verbose_name="Плановая дата")
+    fact_payment_date = models.TextField(null=True, verbose_name="Фактическая дата")
+    plan_sum = models.FloatField(null=True, verbose_name="Плановая сумма")
+    fact_sum = models.FloatField(null=True, verbose_name="Фактическая сумма")
+    znp_status = models.TextField(null=True, verbose_name="Статус заявки")
+    znp_date = models.TextField(null=True, verbose_name="Дата заявки")
+    crc32_hash = models.BigIntegerField(verbose_name="CRC32 хеш")
+
+    class Meta:
+        db_table = "staging_znp_excel"
+        verbose_name = "Строка импорта ЗнП (ФЗД)"
+        verbose_name_plural = "Строки импорта ЗнП (ФЗД)"
+
+    def __str__(self):
+        return f"Staging ЗнП: {self.plan_doc}"
+
+
+class StagingZnpSAPExcel(models.Model):
+    """Сырая строка импорта заявок ЗнП (SAP)."""
+
+    igk = models.CharField(max_length=50, null=True, verbose_name="ИГК")
+    cfo = models.CharField(max_length=50, null=True, verbose_name="ЦФО")
+    c_agent = models.CharField(max_length=255, null=True, verbose_name="Контрагент")
+    reg_num = models.CharField(max_length=255, null=True, verbose_name="Рег. номер")
+    items = models.CharField(max_length=500, null=True, verbose_name="Предметы")
+    vv_sum = models.FloatField(null=True, verbose_name="Сумма ВВ")
+    bank_name = models.CharField(max_length=255, null=True, verbose_name="Банк")
+    c_type = models.CharField(max_length=50, null=True, verbose_name="Тип")
+
+    stage_e = models.DateField(null=True, verbose_name="Этап E")
+    stage_f = models.DateField(null=True, verbose_name="Этап F")
+    stage_c = models.DateField(null=True, verbose_name="Этап C")
+    payment_possible = models.DateField(
+        null=True, verbose_name="Возможная дата платежа"
+    )
+    normalize_doc_num = models.CharField(
+        max_length=255, null=True, verbose_name="Нормализованный номер"
+    )
+    created_date = models.DateField(null=True, verbose_name="Дата создания заявки")
+
+    class Meta:
+        db_table = "staging_znp_sap_excel"
+        verbose_name = "Строка импорта ЗнП (SAP)"
+        verbose_name_plural = "Строки импорта ЗнП (SAP)"
+
+    def __str__(self):
+        return f"Staging ЗнП SAP: {self.reg_num}"
+
+
+# --- Права и служебные данные ---
 
 
 class Access(models.Model):
+    """Модель-заглушка: таблица не создаётся, нужны только права на разделы."""
+
     class Meta:
         managed = False
         default_permissions = ()
@@ -402,6 +454,8 @@ class Access(models.Model):
 
 
 class SystemEvent(models.Model):
+    """Время последних загрузок: для надписи «Актуально на …» на сводках."""
+
     event_key = models.CharField(
         max_length=50, unique=True, verbose_name="Ключ события"
     )
@@ -417,6 +471,8 @@ class SystemEvent(models.Model):
 
 
 class Profile(models.Model):
+    """Данные сотрудника из HR-системы, привязанные к пользователю."""
+
     user = models.OneToOneField(
         User,
         on_delete=models.CASCADE,

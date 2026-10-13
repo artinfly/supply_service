@@ -1,3 +1,5 @@
+"""Экспорт данных в Excel: история, дубликаты, КДР, авансы, договоры."""
+
 from collections import defaultdict
 from datetime import datetime
 
@@ -25,20 +27,26 @@ from ..services.queries import (
     valid_date,
 )
 
+# --- Вспомогательные функции ---
+
 
 def _fv(v):
+    """Преобразует значение в float, возвращает 0 для None."""
     return float(v or 0)
 
 
 def _pct(a, b):
+    """Вычисляет процент от деления a на b."""
     return round(_fv(a) / _fv(b) * 100, 1) if _fv(b) else 0.0
 
 
 def _igk4(s):
+    """Возвращает последние 4 символа ИГК."""
     return (s or "")[-4:]
 
 
 def _export_simple(sql, params, name, headers, col_widths):
+    """Выполняет SQL-запрос и возвращает Excel-файл."""
     with connection.cursor() as cur:
         cur.execute(sql, params)
         cols = [c[0] for c in cur.description]
@@ -50,11 +58,16 @@ def _export_simple(sql, params, name, headers, col_widths):
 
 
 def _year_check(year):
+    """Проверяет, существует ли колонка года. Возвращает имя колонки или None."""
     return YEAR_COL.get(str(year))
+
+
+# --- Экспорт истории изменений ---
 
 
 @login_required
 def export_history_status(request):
+    """Экспорт истории изменений статусов договоров."""
     return _export_simple(
         history_status(),
         [],
@@ -80,6 +93,7 @@ def export_history_status(request):
 
 @login_required
 def export_history_plan(request):
+    """Экспорт истории изменений плановых сумм."""
     return _export_simple(
         history_plan(),
         [],
@@ -104,6 +118,7 @@ def export_history_plan(request):
 
 @login_required
 def export_history_fact(request):
+    """Экспорт истории изменений фактических сумм."""
     return _export_simple(
         history_fact(),
         [],
@@ -122,6 +137,9 @@ def export_history_fact(request):
         ],
         [10, 40, 8, 50, 15, 50, 16, 16, 12, 12],
     )
+
+
+# --- Экспорт появившихся договоров ---
 
 
 APPEARED_HEADERS = [
@@ -144,6 +162,7 @@ APPEARED_WIDTHS = [14, 12, 10, 8, 40, 50, 50, 20, 15, 12, 18, 16, 20]
 
 @login_required
 def export_appeared_concluded(request):
+    """Экспорт появившихся заключённых договоров."""
     sql, params = contracts_appeared("concluded")
     return _export_simple(
         sql, params, "новые_заключённые", APPEARED_HEADERS, APPEARED_WIDTHS
@@ -152,18 +171,24 @@ def export_appeared_concluded(request):
 
 @login_required
 def export_appeared_not_concluded(request):
+    """Экспорт появившихся незаключённых договоров."""
     sql, params = contracts_appeared("not_concluded")
     return _export_simple(
         sql, params, "новые_незаключённые", APPEARED_HEADERS, APPEARED_WIDTHS
     )
 
 
+# --- Экспорт дубликатов ---
+
+
 def _dupes_args(request):
+    """Извлекает параметры ЦФО и года из запроса."""
     return request.GET.get("cfo", "").strip(), request.GET.get("year", "").strip()
 
 
 @login_required
 def export_contract_dupes(request):
+    """Экспорт дубликатов договоров."""
     sql, params = contract_dupes(*_dupes_args(request))
     return _export_simple(
         sql,
@@ -186,6 +211,7 @@ def export_contract_dupes(request):
 
 @login_required
 def export_contract_dupes_by_order(request):
+    """Экспорт дубликатов договоров по заказу."""
     sql, params = contract_dupes_by_order(*_dupes_args(request))
     return _export_simple(
         sql,
@@ -205,8 +231,12 @@ def export_contract_dupes_by_order(request):
     )
 
 
+# --- Экспорт КДР ---
+
+
 @login_required
 def export_kdr(request, year):
+    """Экспорт отчёта КДР (контрактация договоров) с опциональным периодом."""
     yc = _year_check(year)
     if not yc:
         return JsonResponse({"error": "недопустимый год"}, status=400)
@@ -316,7 +346,7 @@ def export_kdr(request, year):
         "Всего договоров, шт.",
         "Сумма всех договоров, млн.руб.",
         "Заключено, шт.",
-        "Сумма заключенных договоров(Всех), млн.руб.",
+        "Сумма заключенных договоров (всех), млн.руб.",
         f"Всего договоров на {yy}г., шт.",
         f"Сумма договоров на {yy}г., млн.руб.",
         f"Заключено договоров на {yy}г., шт.",
@@ -349,8 +379,12 @@ def export_kdr(request, year):
     )
 
 
+# --- Экспорт авансов ---
+
+
 @login_required
 def export_advances(request, year):
+    """Экспорт отчёта по авансам за год."""
     if not _year_check(year):
         return JsonResponse({"error": "недопустимый год"}, status=400)
     with connection.cursor() as cur:
@@ -360,8 +394,12 @@ def export_advances(request, year):
     return build_advances_xlsx(rows, str(year))
 
 
+# --- Экспорт договоров по контрагентам ---
+
+
 @login_required
 def export_contracts_by_agent(request, year):
+    """Экспорт договоров по контрагенту за год."""
     yc = _year_check(year)
     if not yc:
         return JsonResponse({"error": "недопустимый год"}, status=400)
@@ -408,7 +446,8 @@ def export_contracts_by_agent(request, year):
         for row in rows
     ]
     agent_safe = agent[:30].replace(" ", "_") if agent else ""
+    filename = f"контрагент_{agent_safe}_{year}" if agent_safe else f"контрагент_{year}"
     return xlsx_response(
         make_wb(f"Договоры {year}", headers, col_w, data_rows),
-        f'контрагент{"_" + agent_safe if agent_safe else ""}_{year}',
+        filename,
     )

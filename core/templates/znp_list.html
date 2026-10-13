@@ -1,3 +1,7 @@
+{# Шаблон страницы "Реестр ЗнП (ФЗД)". #}
+{# Содержит фильтры по контрагенту, ИГК, ЦФО, году, статусам заявок и пагинацию. #}
+{# Данные загружаются асинхронно через API (api_znp_list). #}
+
 {% extends 'base.html' %}
 {% block title %}Реестр ЗнП (ФЗД){% endblock %}
 
@@ -6,6 +10,7 @@
     <h5>Реестр ЗнП (ФЗД)</h5>
 </div>
 
+{# --- Панель фильтров --- #}
 <div class="filter-panel mb-3">
     <div class="d-flex flex-wrap gap-3 align-items-end">
         <div class="filter-group">
@@ -53,7 +58,7 @@
             </div>
         </div>
         <div class="filter-group">
-            <label class="filter-label">Строк</label>
+            <label class="filter-label">Строк на странице</label>
             <select id="page-size" class="filter-select">
                 <option value="50">50</option>
                 <option value="100" selected>100</option>
@@ -67,18 +72,26 @@
     </div>
 </div>
 
+{# --- Инфо-панель и пагинация --- #}
 <div class="d-flex align-items-center justify-content-between mb-2">
     <span class="row-count-label">Показано: <strong id="row-count">0</strong> записей</span>
     <div id="pagination-top"></div>
 </div>
 
+{# --- Контейнер для таблицы --- #}
 <div class="table-container" id="table-wrapper"></div>
 <div id="pagination-bot" class="mt-2 d-flex justify-content-end"></div>
+
+{# --- Скрытые данные для JS --- #}
 <div id="page-data" data-api-url="{% url 'api_znp_list' %}" style="display:none"></div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+"use strict";
+
+// --- Конфигурация колонок таблицы ---
+
 const COLS = [
     { field: 'igk',               title: 'ИГК дог.',         style: 'style="width: 40px;"' },
     { field: 'znp_igk',           title: 'ИГК опл.',         style: 'style="width: 40px;"' },
@@ -96,10 +109,15 @@ const COLS = [
     { field: 'znp_fact_sum',      title: 'Факт, руб.',       format: 'number' },
 ];
 
-const apiUrl    = document.getElementById('page-data').dataset.apiUrl;
-let loadedData  = [];
+// --- Состояние приложения ---
+
+const apiUrl = document.getElementById('page-data').dataset.apiUrl;
+let loadedData = [];
 let currentPage = 1;
 
+// --- Маппинг чекбоксов статусов на значения API ---
+
+// Пары [ID чекбокса, значение статуса для API]
 const STATUS_BOXES = [
     ['cb-not-issued-advance',     'not_issued_advance'],
     ['cb-not-issued-postpayment', 'not_issued_postpayment'],
@@ -110,29 +128,74 @@ const STATUS_BOXES = [
     ['cb-postpayment-paid',       'postpayment_paid'],
 ];
 
+// Алиасы: при выборе "not_issued" в URL, включаются оба типа "не оформлена"
 const STATUS_ALIASES = { not_issued: ['not_issued_advance', 'not_issued_postpayment'] };
 
+// --- Логика запросов ---
+
+/**
+ * Формирует URL для API-запроса на основе текущих значений фильтров.
+ * @returns {string} URL с query-параметрами
+ */
 function buildUrl() {
     const params = new URLSearchParams();
     const agent = document.getElementById('filter-agent').value.trim();
-    const igk    = document.getElementById('filter-igk').value.trim();
-    const cfo    = document.getElementById('filter-cfo').value.trim();
+    const igk = document.getElementById('filter-igk').value.trim();
+    const cfo = document.getElementById('filter-cfo').value.trim();
+    
     if (agent) params.append('agent', agent);
-    if (igk)   params.append('igk', igk);
-    if (cfo)   params.append('cfo', cfo);
-    for (const [id, status] of STATUS_BOXES)
-        if (document.getElementById(id).checked) params.append('status', status);
-    if (!params.has('status')) params.append('status', '');
+    if (igk) params.append('igk', igk);
+    if (cfo) params.append('cfo', cfo);
+    
+    // Добавляем выбранные статусы
+    for (const [id, status] of STATUS_BOXES) {
+        if (document.getElementById(id).checked) {
+            params.append('status', status);
+        }
+    }
+    
+    // Если ни один статус не выбран, отправляем пустой параметр
+    if (!params.has('status')) {
+        params.append('status', '');
+    }
+    
     const year = document.getElementById('filter-year').value;
-    if (year !== 'all') params.append('year', year);
+    if (year !== 'all') {
+        params.append('year', year);
+    }
+    
     const qs = params.toString();
     return apiUrl + (qs ? '?' + qs : '');
 }
 
+/**
+ * Выполняет запрос к API и обновляет состояние данных.
+ */
+async function loadData() {
+    document.getElementById('table-wrapper').innerHTML = 
+        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка...</div>';
+    try {
+        const resp = await fetch(buildUrl());
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        loadedData = await resp.json();
+        currentPage = 1;
+        renderPage();
+    } catch (e) {
+        document.getElementById('table-wrapper').innerHTML = 
+            `<div class="error-msg">Ошибка загрузки: ${esc(e.message)}</div>`;
+    }
+}
+
+// --- Рендеринг ---
+
+/**
+ * Отрисовывает текущую страницу таблицы на основе loadedData.
+ */
 function renderPage() {
-    const ps    = pageSize();
+    const ps = pageSize();
     const start = isFinite(ps) ? (currentPage - 1) * ps : 0;
     const slice = isFinite(ps) ? loadedData.slice(start, start + ps) : loadedData;
+    
     document.getElementById('row-count').textContent = loadedData.length;
     renderPagination(loadedData.length, ps, currentPage, 'pagination-top');
     renderPagination(loadedData.length, ps, currentPage, 'pagination-bot');
@@ -144,21 +207,25 @@ function renderPage() {
     }
 
     let html = '<table class="report-table" style="table-layout: auto;"><thead><tr>';
-    COLS.forEach(col => { html += `<th ${col.style || ''}>${col.title}</th>`; });
+    COLS.forEach(col => { html += `<th ${col.style || ''}>${esc(col.title)}</th>`; });
     html += '</tr></thead><tbody>';
 
     slice.forEach(row => {
         html += '<tr>';
         COLS.forEach(col => {
             let val = row[col.field] ?? '';
-            if ((col.field === 'igk' || col.field === 'znp_igk') && val !== '')
+            
+            // Специфичная логика форматирования
+            if ((col.field === 'igk' || col.field === 'znp_igk') && val !== '') {
                 val = String(val).slice(-4);
-            else if (col.format === 'number' && val !== '')
+            } else if (col.format === 'number' && val !== '') {
                 val = parseFloat(val).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            else if (col.format === 'date' && val !== '')
+            } else if (col.format === 'date' && val !== '') {
                 val = fmtDate(val);
+            }
+            
             const align = (col.format && col.format !== 'date') ? 'text-end' : '';
-            const wrap  = (!col.format && !col.style) ? 'wrap' : '';
+            const wrap = (!col.format && !col.style) ? 'wrap' : '';
             html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${esc(val)}</td>`;
         });
         html += '</tr>';
@@ -168,54 +235,59 @@ function renderPage() {
     container.innerHTML = html;
 }
 
+/**
+ * Инициализирует значения фильтров из параметров URL (для сохранения состояния).
+ * Поддерживает алиасы статусов (например, "not_issued" включает оба типа).
+ */
 function loadFiltersFromURL() {
     const params = new URLSearchParams(window.location.search);
-    if (params.has('agent'))
-        document.getElementById('filter-agent').value = params.get('agent');
-    if (params.has('igk'))
-        document.getElementById('filter-igk').value = params.get('igk');
-    if (params.has('cfo'))
-        document.getElementById('filter-cfo').value = params.get('cfo');
-    if (params.has('year'))
-        document.getElementById('filter-year').value = params.get('year');
+    
+    if (params.has('agent')) document.getElementById('filter-agent').value = params.get('agent');
+    if (params.has('igk')) document.getElementById('filter-igk').value = params.get('igk');
+    if (params.has('cfo')) document.getElementById('filter-cfo').value = params.get('cfo');
+    if (params.has('year')) document.getElementById('filter-year').value = params.get('year');
+    
     if (params.has('statuses')) {
         const asked = new Set();
-        for (const s of params.get('statuses').split(','))
+        // Раскрываем алиасы в конкретные статусы
+        for (const s of params.get('statuses').split(',')) {
             (STATUS_ALIASES[s] || [s]).forEach(x => asked.add(x));
-        for (const [id, status] of STATUS_BOXES)
+        }
+        // Устанавливаем чекбоксы
+        for (const [id, status] of STATUS_BOXES) {
             document.getElementById(id).checked = asked.has(status);
+        }
     }
 }
 
-async function loadData() {
-    document.getElementById('table-wrapper').innerHTML =
-        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div>Загрузка...</div>';
-    try {
-        const resp = await fetch(buildUrl());
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        loadedData  = await resp.json();
-        currentPage = 1;
-        renderPage();
-    } catch (e) {
-        document.getElementById('table-wrapper').innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
-    }
-}
+// --- Инициализация и обработчики событий ---
 
-document.getElementById('page-size').addEventListener('change', () => { currentPage = 1; renderPage(); });
-document.getElementById('filter-agent').addEventListener('keydown', e => {
-    if (e.key === 'Enter') loadData();
-});
-document.getElementById('btn-search').addEventListener('click', loadData);
-document.getElementById('btn-reset').addEventListener('click', () => {
-    document.getElementById('filter-agent').value = '';
-    document.getElementById('filter-igk').value   = '';
-    document.getElementById('filter-cfo').value   = '';
-    for (const [id] of STATUS_BOXES) document.getElementById(id).checked = true;
-    document.getElementById('filter-year').value = 'all';
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('page-size').addEventListener('change', () => { 
+        currentPage = 1; 
+        renderPage(); 
+    });
+    
+    document.getElementById('filter-agent').addEventListener('keydown', e => {
+        if (e.key === 'Enter') loadData();
+    });
+    
+    document.getElementById('btn-search').addEventListener('click', loadData);
+    
+    document.getElementById('btn-reset').addEventListener('click', () => {
+        document.getElementById('filter-agent').value = '';
+        document.getElementById('filter-igk').value = '';
+        document.getElementById('filter-cfo').value = '';
+        for (const [id] of STATUS_BOXES) {
+            document.getElementById(id).checked = true;
+        }
+        document.getElementById('filter-year').value = 'all';
+        loadData();
+    });
+    
+    // Загрузка при инициализации страницы
+    loadFiltersFromURL();
     loadData();
 });
-
-loadFiltersFromURL();
-loadData();
 </script>
 {% endblock %}

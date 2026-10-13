@@ -1,6 +1,7 @@
+"""HTML-страницы и обработчики загрузки данных."""
+
 import json
 import os
-import re
 import tempfile
 import zipfile
 from datetime import datetime
@@ -53,9 +54,9 @@ from ..services.dashboards import (
     znp_aggregates,
 )
 from ..services.excel import xlsx_response
+from ..services.excel_import import CONTRACT_COLUMNS, ZNP_COLUMNS, ZNP_SAP_COLUMNS
 from ..services.gk_directory import directory_index, find_gk, import_extended_rows
 from ..services.gk_key import gk_key, parse_gk_key
-from ..services.excel_import import CONTRACT_COLUMNS, ZNP_COLUMNS, ZNP_SAP_COLUMNS
 from ..services.queries import (
     ADVANCE,
     CONCLUDED,
@@ -72,14 +73,11 @@ from ..services.queries import (
     valid_date,
     valid_year,
 )
-from ..services.sap_status import (
-    SAP_STAGE_NAMES,
-    SAP_STAGE_PARAMS,
-    sap_second_date,
-)
+from ..services.sap_status import SAP_STAGE_NAMES, SAP_STAGE_PARAMS, sap_second_date
+
+# --- Константы ---
 
 DEFAULT_VAT_RATE = Decimal("22.0")
-
 HAS_ORDER_Q = Q(order__isnull=False) & ~Q(order__regex=r"^\s*$")
 
 FILE_TYPE_COMMANDS = {
@@ -101,7 +99,11 @@ FILE_TYPE_LABELS = {
 }
 
 
+# --- Вспомогательные функции ---
+
+
 def _ctx():
+    """Базовый контекст для всех страниц: годы и последний год."""
     return {
         "years": YEARS,
         "year_cols": [(y, f"y{str(y)[2:]}") for y in YEARS],
@@ -110,6 +112,8 @@ def _ctx():
 
 
 def superuser_required(view_func):
+    """Декоратор: доступ только для суперпользователей."""
+
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         if not request.user.is_superuser:
@@ -122,11 +126,8 @@ def superuser_required(view_func):
     return wrapper
 
 
-def normalize_igk(value):
-    return re.sub(r"[^0-9a-zA-Z]", "", str(value))
-
-
 def _igk_and_cfo_lists():
+    """Возвращает списки уникальных ИГК (последние 4 символа) и ЦФО."""
     with connection.cursor() as cur:
         cur.execute(distinct_igk_suffixes())
         igk_list = [r[0] for r in cur.fetchall()]
@@ -135,7 +136,11 @@ def _igk_and_cfo_lists():
     return igk_list, cfo_list
 
 
+# --- Аутентификация ---
+
+
 def login_view(request):
+    """Страница входа в систему."""
     if request.user.is_authenticated:
         return redirect("root")
 
@@ -155,17 +160,26 @@ def login_view(request):
 
 
 def logout_view(request):
+    """Выход из системы."""
     logout(request)
     return redirect("login")
 
 
+# --- Главные страницы ---
+
+
 @login_required
 def index(request):
+    """Главная страница (перенаправляет на dashboard)."""
     return render(request, "index.html", _ctx())
+
+
+# --- КДР и ИГК ---
 
 
 @login_required
 def kdr_table(request, year):
+    """Таблица КДР за выбранный год."""
     year_int = valid_year(year)
     if str(year_int) != str(year):
         return redirect("kdr_table", year=str(year_int))
@@ -177,11 +191,13 @@ def kdr_table(request, year):
 
 @login_required
 def kdr_table_default(request):
+    """Перенаправление на КДР за последний год."""
     return redirect("kdr_table", year=str(YEARS[-1]))
 
 
 @login_required
 def igk_concluded_table(request, year):
+    """Таблица заключённых ИГК за выбранный год."""
     year_int = valid_year(year)
     if str(year_int) != str(year):
         return redirect("igk_concluded_table", year=str(year_int))
@@ -200,11 +216,13 @@ def igk_concluded_table(request, year):
 
 @login_required
 def igk_concluded_table_default(request):
+    """Перенаправление на заключённые ИГК за последний год."""
     return redirect("igk_concluded_table", year=str(YEARS[-1]))
 
 
 @login_required
 def igk_not_concluded_table(request, year):
+    """Таблица незаключённых ИГК за выбранный год."""
     year_int = valid_year(year)
     if str(year_int) != str(year):
         return redirect("igk_not_concluded_table", year=str(year_int))
@@ -223,11 +241,13 @@ def igk_not_concluded_table(request, year):
 
 @login_required
 def igk_not_concluded_table_default(request):
+    """Перенаправление на незаключённые ИГК за последний год."""
     return redirect("igk_not_concluded_table", year=str(YEARS[-1]))
 
 
 @login_required
 def igk_terminated_table(request, year):
+    """Таблица расторгнутых ИГК за выбранный год."""
     year_int = valid_year(year)
     if str(year_int) != str(year):
         return redirect("igk_terminated_table", year=str(year_int))
@@ -246,11 +266,16 @@ def igk_terminated_table(request, year):
 
 @login_required
 def igk_terminated_table_default(request):
+    """Перенаправление на расторгнутые ИГК за последний год."""
     return redirect("igk_terminated_table", year=str(YEARS[-1]))
+
+
+# --- Реестры ---
 
 
 @login_required
 def all_contracts_table(request):
+    """Реестр всех договоров с фильтрами."""
     igk_list, cfo_list = _igk_and_cfo_lists()
     ctx = _ctx()
     ctx.update(
@@ -267,6 +292,7 @@ def all_contracts_table(request):
 
 @login_required
 def znp_list_table(request):
+    """Реестр заявок на платёж (ФЗД)."""
     igk_list, cfo_list = _igk_and_cfo_lists()
     ctx = _ctx()
     ctx.update({"igk_list": igk_list, "cfo_list": cfo_list})
@@ -274,44 +300,8 @@ def znp_list_table(request):
 
 
 @login_required
-def history_status_table(request):
-    return render(request, "history_status.html", _ctx())
-
-
-@login_required
-def history_plan_table(request):
-    return render(request, "history_plan.html", _ctx())
-
-
-@login_required
-def history_fact_table(request):
-    return render(request, "history_fact.html", _ctx())
-
-
-@login_required
-def contract_dupes_table(request):
-    with connection.cursor() as cur:
-        cur.execute(distinct_cfo())
-        cfo_list = [r[0] for r in cur.fetchall()]
-
-    ctx = _ctx()
-    ctx["cfo_list"] = cfo_list
-    return render(request, "contract_dupes.html", ctx)
-
-
-@login_required
-def export_page(request):
-    with connection.cursor() as cur:
-        cur.execute(distinct_agents())
-        agents = [r[0] for r in cur.fetchall()]
-
-    ctx = _ctx()
-    ctx["agents"] = agents
-    return render(request, "export.html", ctx)
-
-
-@login_required
 def znp_sap_list_table(request):
+    """Реестр заявок на платёж (SAP)."""
     with connection.cursor() as cur:
         cur.execute(distinct_sap_igk())
         igk_list = [r[0] for r in cur.fetchall()]
@@ -323,8 +313,63 @@ def znp_sap_list_table(request):
     return render(request, "znp_sap_list.html", ctx)
 
 
+# --- История изменений ---
+
+
+@login_required
+def history_status_table(request):
+    """Таблица изменений статусов договоров."""
+    return render(request, "history_status.html", _ctx())
+
+
+@login_required
+def history_plan_table(request):
+    """Таблица изменений плановых сумм."""
+    return render(request, "history_plan.html", _ctx())
+
+
+@login_required
+def history_fact_table(request):
+    """Таблица изменений фактических сумм."""
+    return render(request, "history_fact.html", _ctx())
+
+
+# --- Дубликаты ---
+
+
+@login_required
+def contract_dupes_table(request):
+    """Таблица дубликатов договоров."""
+    with connection.cursor() as cur:
+        cur.execute(distinct_cfo())
+        cfo_list = [r[0] for r in cur.fetchall()]
+
+    ctx = _ctx()
+    ctx["cfo_list"] = cfo_list
+    return render(request, "contract_dupes.html", ctx)
+
+
+# --- Экспорт ---
+
+
+@login_required
+def export_page(request):
+    """Страница выбора отчётов для экспорта в Excel."""
+    with connection.cursor() as cur:
+        cur.execute(distinct_agents())
+        agents = [r[0] for r in cur.fetchall()]
+
+    ctx = _ctx()
+    ctx["agents"] = agents
+    return render(request, "export.html", ctx)
+
+
+# --- Загрузка данных ---
+
+
 @login_required
 def upload_excel(request):
+    """Загрузка Excel-файлов (договоры, ЗнП ФЗД, ЗнП SAP)."""
     result = None
     file_type = request.POST.get("file_type", "contracts")
 
@@ -375,7 +420,11 @@ def upload_excel(request):
     return render(request, "upload.html", ctx)
 
 
+# --- Анализ ГОЗ ---
+
+
 def _to_vat(value):
+    """Преобразует значение в Decimal для ставки НДС."""
     try:
         return Decimal(str(value).replace(",", "."))
     except Exception:
@@ -383,6 +432,7 @@ def _to_vat(value):
 
 
 def _save_gk_to_directory(gk_data):
+    """Сохраняет данные ГК в справочник. Возвращает список ошибок."""
     errors = []
     index = directory_index()
 
@@ -414,6 +464,7 @@ def _save_gk_to_directory(gk_data):
 
 
 def _is_own_temp_zip(path):
+    """Проверяет, что файл — временный ZIP из системной папки."""
     if not path or not path.lower().endswith(".zip"):
         return False
 
@@ -423,6 +474,7 @@ def _is_own_temp_zip(path):
 
 @login_required
 def goz_report(request):
+    """Страница анализа ГОЗ: загрузка ZIP-архива и формирование отчёта."""
     ctx = _ctx()
     ctx["directory_list"] = GozContractVat.objects.all().order_by("igk", "year")
 
@@ -530,7 +582,11 @@ def goz_report(request):
     return render(request, "goz_report.html", ctx)
 
 
+# --- Справочник ГК ---
+
+
 def _upsert_gk(igk):
+    """Создаёт или обновляет запись ГК в справочнике. Возвращает True, если создана."""
     igk = gk_key(igk)
     try:
         _, created = GozContractVat.objects.update_or_create(
@@ -543,6 +599,7 @@ def _upsert_gk(igk):
 
 
 def _sheet_rows(file, ext):
+    """Читает строки из Excel-файла (.xlsx или .xls)."""
     if ext == ".xlsx":
         wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
         return [tuple(r) for r in wb.active.iter_rows(min_row=1, values_only=True)]
@@ -552,7 +609,7 @@ def _sheet_rows(file, ext):
 
 
 def _is_extended_directory(rows):
-    """Файл с колонками № | Предприятие | Заказ | Договор/Дата."""
+    """Проверяет, является ли файл расширенным справочником (с колонками Предприятие, Заказ)."""
     for row in rows[:10]:
         text = " ".join(str(c).lower() for c in row if c is not None)
         if "предприятие" in text or "договор" in text or "догово/" in text:
@@ -565,6 +622,7 @@ def _is_extended_directory(rows):
 @login_required
 @superuser_required
 def upload_gk_directory(request):
+    """Загрузка справочника ГК из Word или Excel."""
     if request.method != "POST" or not request.FILES.get("doc_file"):
         return redirect("goz_report")
 
@@ -655,6 +713,7 @@ def upload_gk_directory(request):
 @login_required
 @superuser_required
 def gk_directory_save(request):
+    """Сохранение записи справочника ГК (создание или обновление)."""
     if request.method == "POST":
         record_id = request.POST.get("record_id", "").strip()
         igk = gk_key(request.POST.get("igk", ""))
@@ -708,6 +767,7 @@ def gk_directory_save(request):
 @login_required
 @superuser_required
 def gk_directory_delete(request):
+    """Удаление записи справочника ГК."""
     if request.method == "POST":
         record_id = request.POST.get("record_id", "").strip()
 
@@ -725,8 +785,12 @@ def gk_directory_delete(request):
     return redirect("goz_report")
 
 
+# --- Дашборды ---
+
+
 @login_required
 def dashboard(request):
+    """Сводка по договорам и ЦФО."""
     available_igk = NsiIgk.objects.all()
     year = valid_year(request.GET.get("year"))
     selected_igk = request.GET.get("igk", "") or str(available_igk.first() or "")
@@ -844,6 +908,7 @@ def dashboard(request):
 
 @login_required
 def znp_table(request):
+    """Сводка по заявкам на платёж (ФЗД)."""
     available_igk = NsiIgk.objects.all()
     year = valid_year(request.GET.get("year"))
     selected_igk = request.GET.get("igk", "") or str(available_igk.first() or "")
@@ -966,6 +1031,7 @@ def znp_table(request):
 
 @login_required
 def znp_sap_table(request):
+    """Сводка по заявкам на платёж (SAP)."""
     ctx = _ctx()
     qs = ZnpDataSAP.objects.filter(cfo__in=SAP_CFO)
 

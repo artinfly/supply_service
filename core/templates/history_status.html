@@ -1,16 +1,27 @@
+{# Шаблон страницы "История изменений статусов". #}
+{# Отображает таблицу изменений статусов договоров. #}
+{# Использует глобальную функцию loadTable из base.html. #}
+
 {% extends 'base.html' %}
 {% block title %}История изменений статусов{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h5>Изменения договоров — статусы</h5>
+    <h5>История изменений статусов</h5>
 </div>
+
+{# Контейнер для таблицы, заполняемый через JS #}
 <div class="table-container" id="table-wrapper"></div>
+
+{# Скрытый элемент для передачи URL API в JavaScript #}
 <div id="page-data" data-api-url="{% url 'api_history_status' %}" style="display:none"></div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+"use strict";
+
+// Конфигурация колонок таблицы истории изменений статусов
 const COLS = [
     { field: 'igk',          title: 'ИГК' },
     { field: 'c_agent',      title: 'Контрагент' },
@@ -26,6 +37,12 @@ const COLS = [
     { field: 'upload_date',  title: 'Дата загрузки', format: 'date' },
     { field: 'c_date',       title: 'Год создания' },
 ];
-loadTable(document.getElementById('page-data').dataset.apiUrl, 'table-wrapper', COLS);
+
+// Загрузка данных при инициализации страницы
+// Функция loadTable определена в base.html и сама обрабатывает состояния загрузки и ошибок
+document.addEventListener('DOMContentLoaded', () => {
+    const apiUrl = document.getElementById('page-data').dataset.apiUrl;
+    loadTable(apiUrl, 'table-wrapper', COLS);
+});
 </script>
 {% endblock %}

@@ -1,11 +1,16 @@
+{# Кастомный шаблон формы добавления пользователя в админке. #}
+{# Добавляет кнопку для автоматического заполнения полей данными из HR-сервиса. #}
+
 {% extends "admin/change_form.html" %}
 {% load i18n static %}
 
+{# Подключаем скрипт для загрузки данных сотрудника #}
 {% block extrahead %}
   {{ block.super }}
   <script src="{% static 'admin/js/fetch_external_data.js' %}"></script>
 {% endblock %}
 
+{# Добавляем кнопку получения данных после основных полей формы #}
 {% block after_field_sets %}
   {{ block.super }}
   <div class="module aligned" style="margin: 10px 0;">

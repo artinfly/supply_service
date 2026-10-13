@@ -1,11 +1,16 @@
+{# Кастомный шаблон формы редактирования пользователя в админке. #}
+{# Идентичен add_form.html — кнопка загрузки данных из HR работает и здесь. #}
+
 {% extends "admin/change_form.html" %}
 {% load i18n static %}
 
+{# Подключаем скрипт для загрузки данных сотрудника #}
 {% block extrahead %}
   {{ block.super }}
   <script src="{% static 'admin/js/fetch_external_data.js' %}"></script>
 {% endblock %}
 
+{# Добавляем кнопку получения данных после основных полей формы #}
 {% block after_field_sets %}
   {{ block.super }}
   <div class="module aligned" style="margin: 10px 0;">

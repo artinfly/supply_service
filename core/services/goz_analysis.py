@@ -1,3 +1,5 @@
+"""Анализ отчётов ЕИС ГОЗ: чтение ZIP-архивов с .xls, расчёт метрик, формирование Excel-отчёта."""
+
 import re
 import zipfile
 from io import BytesIO
@@ -9,27 +11,36 @@ from openpyxl.utils import get_column_letter
 
 from .gk_key import gk_key
 
+# --- Константы для чтения .xls файлов ---
+
+
 SHEET_NAME = "Лист_1"
-_PLAN_COL = 3
-_FACT_COL = 6
+_PLAN_COL = 3  # Колонка с плановыми значениями
+_FACT_COL = 6  # Колонка с фактическими значениями
 
+# Строки с метриками (план и факт)
 _LINE_ROWS = {
-    "shipment": 31,
-    "cost": 32,
-    "amr": 33,
-    "commercial": 34,
-    "credit_pct": 35,
-    "profit": 37,
+    "shipment": 31,  # Отгрузка
+    "cost": 32,  # Себестоимость
+    "amr": 33,  # АУР
+    "commercial": 34,  # Коммерческие расходы
+    "credit_pct": 35,  # % кредита
+    "profit": 37,  # Прибыль
 }
 
+# Строки только с фактическими значениями
 _FACT_ONLY_ROWS = {
-    "financing": 4,
-    "distribution": 9,
-    "materials": 15,
-    "vat_in": 16,
-    "wip": 21,
-    "resource_delta": 38,
+    "financing": 4,  # Финансирование
+    "distribution": 9,  # Распределение
+    "materials": 15,  # ТМЦ
+    "vat_in": 16,  # НДС вх.
+    "wip": 21,  # НЗП
+    "resource_delta": 38,  # +/- ресурсов ГК
 }
+
+
+# --- Стили Excel ---
+
 
 HEADERS = [
     "№ п/п",
@@ -67,37 +78,46 @@ _COL_WIDTHS = (
     + [30, 30]
 )
 
+# Колонки для форматирования
 _LEAD_COLS = 6  # №, ГК, Контрагент, Заказ, Наименование, строка («Целевые»/«Факт»…)
 _CENTER_COLS = (1, 2, 4)
 _TEXT_COLS = (3, 5, TOTAL_COLS - 1, TOTAL_COLS)
 _MERGE_COLS = [1, 2, 3, 4, 5, TOTAL_COLS - 1, TOTAL_COLS]
 
+# Колонки с метриками (номера колонок Excel)
 _K_COL, _L_COL, _M_COL, _N_COL = 13, 14, 15, 16
 _Q_COL, _R_COL = 19, 20
 _PERCENT_COLS = {_M_COL, _N_COL}
 
-_RENT_THRESHOLD = 0.075
-_MISMATCH_EPS = 1.0
+# Пороги для проверок
+_RENT_THRESHOLD = 0.075  # Рентабельность выше 7.5% подсвечивается красным
+_MISMATCH_EPS = 1.0  # Допустимое расхождение для проверок
 
+# Стили ячеек
 _THIN = Side(style="thin")
 _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 _FONT_NAME = "Times New Roman"
 _FONT = Font(name=_FONT_NAME, size=10)
 _TITLE_FONT = Font(name=_FONT_NAME, size=14, bold=True)
 _RED_FONT = Font(name=_FONT_NAME, size=10, color="9C0006")
+
+# Цвета подсветки для проверок
 _RENT_FILL = PatternFill("solid", fgColor="FFC7CE")
 _NEGATIVE_FILL = PatternFill("solid", fgColor="FFC7CE")
 _PROFIT_MISMATCH_FILL = PatternFill("solid", fgColor="CCC1DA")
 _RESOURCE_MISMATCH_FILL = PatternFill("solid", fgColor="FAC090")
+
 _BOTTOM_ONLY = Border(bottom=_THIN)
 _CENTER = Alignment(horizontal="center", vertical="center")
 _LEFT_WRAP = Alignment(horizontal="left", vertical="center", wrap_text=True)
 _RIGHT = Alignment(horizontal="right")
 
+# Буквы колонок для легенды
 _K, _L, _M, _N, _Q, _R = (
     get_column_letter(c) for c in (_K_COL, _L_COL, _M_COL, _N_COL, _Q_COL, _R_COL)
 )
 
+# Элементы легенды: (цвет_фона, шрифт, текст)
 _LEGEND_ITEMS = [
     (
         _RENT_FILL,
@@ -121,12 +141,26 @@ _LEGEND_ITEMS = [
     ),
 ]
 
+
+# --- Регулярные выражения для парсинга имён файлов ---
+
+
 _IGK_RE = re.compile(r"ИГК\s*(\d+)", re.IGNORECASE)
 _NUM_RE = re.compile(r"№\s*(\d+)(?:_([^.]*))?")
 _PAGE_RE = re.compile(r"[_\s-]*Стр\.?\s*(\d+)", re.IGNORECASE)
 
 
+# --- Чтение архивов и файлов ---
+
+
 def _contract_label(filename):
+    """Извлекает ключ ГК из имени файла.
+
+    Примеры:
+        «№1234_5.xls» -> «1234 5»
+        «ИГК 6066.xls» -> «6066»
+        «Стр. 1234_5.xls» -> «1234 5»
+    """
     num_match = _NUM_RE.search(filename)
     if num_match:
         label = num_match.group(1)[-4:]
@@ -148,6 +182,7 @@ def igk_key(label):
 
 
 def _cell_number(sheet, row, col):
+    """Безопасно читает числовое значение ячейки, возвращает 0.0 при ошибке."""
     try:
         value = sheet.cell_value(row, col)
     except IndexError:
@@ -156,6 +191,11 @@ def _cell_number(sheet, row, col):
 
 
 def _read_contract_file(igk, content):
+    """Читает .xls файл и извлекает плановые и фактические метрики.
+
+    Returns:
+        tuple: (igk, plan_dict, fact_dict)
+    """
     try:
         book = xlrd.open_workbook(file_contents=content)
         sheet = book.sheet_by_name(SHEET_NAME)
@@ -171,7 +211,7 @@ def _read_contract_file(igk, content):
 
 
 def _zip_name(info):
-    """Имя файла в архиве; кириллица из Windows-архивов (cp866) без флага UTF-8."""
+    """Извлекает имя файла из ZIP-архива с корректной обработкой кириллицы (cp866)."""
     name = info.filename
     if not info.flag_bits & 0x800:
         try:
@@ -184,7 +224,17 @@ def _zip_name(info):
 
 
 def read_archive(archive_file):
-    """Читает .xls из архива. Файлы «Стр. N» с нечётным N пропускаются."""
+    """Читает .xls файлы из ZIP-архива. Файлы «Стр. N» с нечётным N пропускаются.
+
+    Args:
+        archive_file: путь к ZIP-архиву или file-like объект
+
+    Returns:
+        list: список кортежей (igk, plan_dict, fact_dict), отсортированный по ключу ГК
+
+    Raises:
+        ValueError: если в архиве не найдено ни одного .xls файла
+    """
     contracts = []
     with zipfile.ZipFile(archive_file) as zf:
         for info in zf.infolist():
@@ -206,7 +256,19 @@ def read_archive(archive_file):
     return contracts
 
 
+# --- Расчёт метрик ---
+
+
 def _line_metrics(values, vat_rate):
+    """Рассчитывает метрики для строки отчёта (отгрузка, себестоимость, прибыль, рентабельность).
+
+    Args:
+        values: словарь с исходными значениями (_LINE_ROWS)
+        vat_rate: ставка НДС в процентах
+
+    Returns:
+        list: [shipment, cost, amr, commercial, vat, credit_pct, profit, calc_profit, rent_calc, rent_report]
+    """
     shipment = values["shipment"]
     cost = values["cost"]
     amr = values["amr"]
@@ -232,6 +294,11 @@ def _line_metrics(values, vat_rate):
 
 
 def _deviation(fact_m, plan_m):
+    """Рассчитывает абсолютные и относительные отклонения факта от плана.
+
+    Returns:
+        tuple: (abs_dev, rel_dev) — списки отклонений
+    """
     abs_dev = [
         (
             (fv - pv)
@@ -247,6 +314,11 @@ def _deviation(fact_m, plan_m):
 
 
 def _block_rows(igk, num, plan, fact, vat_rate, product="", agent="", order=""):
+    """Формирует 4 строки блока отчёта для одного ГК: Целевые, Факт, откл.абсол., откл.отн.%.
+
+    Returns:
+        list: 4 списка значений для строк Excel
+    """
     plan_m = _line_metrics(plan, vat_rate)
     fact_m = _line_metrics(fact, vat_rate)
     fact_extra = [
@@ -280,7 +352,11 @@ def _block_rows(igk, num, plan, fact, vat_rate, product="", agent="", order=""):
     ]
 
 
+# --- Запись в Excel ---
+
+
 def _write_row(ws, row_idx, values, force_percent=False):
+    """Записывает строку в Excel с форматированием (границы, шрифты, выравнивание, форматы чисел)."""
     for ci, val in enumerate(values, 1):
         cell = ws.cell(row=row_idx, column=ci, value=val)
         cell.border = _BORDER
@@ -298,6 +374,11 @@ def _write_row(ws, row_idx, values, force_percent=False):
 
 
 def _apply_report_checks(ws, row_idx, metrics):
+    """Применяет проверки к строке отчёта: рентабельность и расхождение прибыли.
+
+    Подсвечивает ячейки красным при превышении порога рентабельности,
+    фиолетовым при расхождении прибыли в отчёте и расчётной.
+    """
     profit_report, profit_calc = metrics[6], metrics[7]
     if isinstance(profit_report, (int, float)) and isinstance(
         profit_calc, (int, float)
@@ -314,6 +395,11 @@ def _apply_report_checks(ws, row_idx, metrics):
 
 
 def _apply_fact_checks(ws, row_idx, fact_extra):
+    """Применяет проверки к строке факта: расхождение ресурсов и отрицательные значения.
+
+    Подсвечивает оранжевым при расхождении расчётного и отчётного значений ресурсов,
+    красным при отрицательном значении ресурсов.
+    """
     q_calc, r_report = fact_extra[2], fact_extra[3]
     if isinstance(q_calc, (int, float)) and isinstance(r_report, (int, float)):
         if abs(q_calc - r_report) > _MISMATCH_EPS:
@@ -324,6 +410,7 @@ def _apply_fact_checks(ws, row_idx, fact_extra):
 
 
 def _write_legend(ws, start_row):
+    """Записывает легенду цветовых отметок в конец отчёта."""
     header = ws.cell(row=start_row, column=1, value="Легенда цветовых отметок:")
     header.font = Font(name=_FONT_NAME, size=11, bold=True)
 
@@ -339,6 +426,7 @@ def _write_legend(ws, start_row):
 
 
 def _merge_block(ws, first_row):
+    """Объединяет ячейки в блоке из 4 строк для колонок с одинаковыми значениями."""
     last_row = first_row + 3
     for col in _MERGE_COLS:
         ws.merge_cells(
@@ -347,14 +435,28 @@ def _merge_block(ws, first_row):
 
 
 def _to_rate(value, default=22.0):
+    """Преобразует значение ставки НДС в float, возвращает default при ошибке."""
     try:
         return float(str(value).replace(",", "."))
     except ValueError:
         return default
 
 
+# --- Главная функция формирования отчёта ---
+
+
 def build_report(contracts, vat_rates, products=None, extras=None):
-    """extras: {ключ ГК: {"agent": предприятие, "order": заказ}} из справочника."""
+    """Формирует Excel-отчёт «Анализ ГОЗ» по списку контрактов.
+
+    Args:
+        contracts: список кортежей (igk, plan_dict, fact_dict)
+        vat_rates: словарь {ключ_ГК: ставка_НДС}
+        products: словарь {ключ_ГК: наименование_изделия}
+        extras: словарь {ключ_ГК: {"agent": предприятие, "order": заказ}} из справочника
+
+    Returns:
+        bytes: содержимое Excel-файла
+    """
     vat_rates_dict = {k: _to_rate(v) for k, v in vat_rates.items()}
     products = products or {}
     extras = extras or {}
@@ -364,6 +466,7 @@ def build_report(contracts, vat_rates, products=None, extras=None):
     ws.title = "Анализ ГОЗ"
     ws.freeze_panes = "A3"
 
+    # Заголовок отчёта
     title_cell = ws.cell(row=1, column=1, value="Анализ отчётов ЕИС ГОЗ")
     title_cell.font = _TITLE_FONT
     title_cell.alignment = Alignment(horizontal="center")
@@ -372,6 +475,7 @@ def build_report(contracts, vat_rates, products=None, extras=None):
         ws.cell(row=1, column=ci).border = _BOTTOM_ONLY
     ws.row_dimensions[1].height = 24
 
+    # Шапка таблицы
     hdr_aln = Alignment(horizontal="center", vertical="center", wrap_text=True)
     for ci, (h, w) in enumerate(zip(HEADERS, _COL_WIDTHS), 1):
         cell = ws.cell(row=2, column=ci, value=h)
@@ -381,6 +485,7 @@ def build_report(contracts, vat_rates, products=None, extras=None):
         ws.column_dimensions[get_column_letter(ci)].width = w
     ws.row_dimensions[2].height = 60
 
+    # Данные по контрактам
     row_i = 3
     for num, (igk, plan, fact) in enumerate(contracts, 1):
         rate = vat_rates_dict.get(igk, 22.0)
@@ -396,11 +501,13 @@ def build_report(contracts, vat_rates, products=None, extras=None):
             extra.get("order", ""),
         )
 
+        # Строка «Целевые»
         _write_row(ws, row_i, block[0])
         plan_m = _line_metrics(plan, rate)
         _apply_report_checks(ws, row_i, plan_m)
         row_i += 1
 
+        # Строка «Факт»
         _write_row(ws, row_i, block[1])
         fact_m = _line_metrics(fact, rate)
         fact_extra = block[1][_LEAD_COLS + 10 : _LEAD_COLS + 10 + 7]
@@ -408,14 +515,18 @@ def build_report(contracts, vat_rates, products=None, extras=None):
         _apply_fact_checks(ws, row_i, fact_extra)
         row_i += 1
 
+        # Строка «откл.абсол.»
         _write_row(ws, row_i, block[2])
         row_i += 1
 
+        # Строка «откл.отн.%»
         _write_row(ws, row_i, block[3], force_percent=True)
         row_i += 1
 
+        # Объединяем ячейки блока
         _merge_block(ws, row_i - 4)
 
+    # Легенда в конце
     _write_legend(ws, row_i + 1)
 
     buf = BytesIO()

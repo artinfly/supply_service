@@ -1,3 +1,7 @@
+{# Шаблон страницы "Загрузка данных". #}
+{# Форма загрузки Excel-файлов (договоры, ЗнП ФЗД, ЗнП SAP) с валидацией и нормализацией. #}
+{# Динамически показывает обязательные колонки в зависимости от выбранного типа файла. #}
+
 {% extends 'base.html' %}
 {% block title %}Загрузка данных{% endblock %}
 
@@ -8,7 +12,9 @@
 
 <div class="upload-layout">
 
+    {# --- Форма загрузки файла --- #}
     <div class="upload-card upload-card-form">
+        {# Сообщения об ошибках/успехе от сервера #}
         {% if messages %}
         {% for msg in messages %}
         <div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}{{ msg.tags }}{% endif %} upload-alert">{{ msg }}</div>
@@ -24,30 +30,41 @@
 
         <form method="post" enctype="multipart/form-data" onsubmit="return checkFile()">
             {% csrf_token %}
+            
             <div class="mb-3">
-                <label class="filter-label">Excel файл (.xlsx или .xls)</label>
-                <input type="file" name="excel_file" accept=".xlsx,.xls"
+                <label for="excel-file" class="filter-label">Excel файл (.xlsx или .xls)</label>
+                <input type="file" 
+                       id="excel-file"
+                       name="excel_file" 
+                       accept=".xlsx,.xls"
                        class="form-control upload-file-input mt-1">
             </div>
+            
             <div class="mb-3">
-                <label class="filter-label">Тип файла</label>
-                <select name="file_type" class="form-control upload-file-input mt-1">
+                <label for="file-type" class="filter-label">Тип файла</label>
+                <select id="file-type"
+                        name="file_type" 
+                        class="form-control upload-file-input mt-1">
                     {% for value, label in file_types.items %}
                     <option value="{{ value }}" {% if value == selected_type %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
             </div>
+            
             <div class="d-flex align-items-center">
                 <button type="submit" class="btn-orange" id="upload-btn">Загрузить и нормализовать</button>
             </div>
+            
             <div id="file-error" class="upload-error" hidden></div>
         </form>
 
+        {# Результат обработки (вывод команды load_*) #}
         {% if result %}
         <div class="upload-result">{{ result|linebreaksbr }}</div>
         {% endif %}
     </div>
 
+    {# --- Список обязательных колонок для каждого типа файла --- #}
     <div class="upload-card upload-card-cols">
         <div class="filter-label mb-2">Обязательные колонки в шапке файла</div>
         {% for type, cols in file_columns.items %}
@@ -65,6 +82,15 @@
 
 {% block extra_js %}
 <script>
+"use strict";
+
+// --- Валидация файла перед отправкой формы ---
+
+/**
+ * Проверяет выбранный файл перед отправкой формы.
+ * Блокирует отправку, если файл не выбран или имеет неверное расширение.
+ * @returns {boolean} true, если файл валиден; false, если есть ошибка
+ */
 function checkFile() {
     const input = document.querySelector('input[name="excel_file"]');
     const err   = document.getElementById('file-error');
@@ -75,27 +101,41 @@ function checkFile() {
         err.hidden = false;
         return false;
     }
+    
+    // Проверка: файл выбран
     if (!input.files || !input.files.length) {
         return fail('Файл не прикреплён — выберите .xlsx или .xls файл перед загрузкой');
     }
+    
+    // Проверка: расширение файла
     const name = input.files[0].name;
     const lower = name.toLowerCase();
     if (!lower.endsWith('.xlsx') && !lower.endsWith('.xls')) {
         const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : 'без расширения';
         return fail('Это ' + ext + ', а нужен .xlsx или .xls.');
     }
+    
+    // Файл валиден — скрываем ошибку и блокируем кнопку
     err.hidden = true;
     btn.disabled = true;
     btn.textContent = 'Загрузка...';
     return true;
 }
 
+// --- Переключение отображения обязательных колонок ---
+
+/**
+ * Показывает список обязательных колонок для выбранного типа файла.
+ * Скрывает списки для других типов.
+ */
 function showCols() {
     const t = document.querySelector('select[name="file_type"]').value;
     document.querySelectorAll('.req-cols').forEach(function (el) {
         el.hidden = el.dataset.type !== t;
     });
 }
+
+// Навешиваем обработчик на изменение типа файла и вызываем сразу при загрузке
 document.querySelector('select[name="file_type"]').addEventListener('change', showCols);
 showCols();
 </script>

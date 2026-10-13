@@ -1,9 +1,11 @@
+"""Конфигурация приложения core."""
+
 from django.apps import AppConfig
 
 
-class ReportsConfig(AppConfig):
+class CoreConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "reports"
+    name = "core"
 
     def ready(self):
-        import reports.signals
+        import core.signals

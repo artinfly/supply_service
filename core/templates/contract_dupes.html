@@ -1,3 +1,7 @@
+{# Шаблон страницы "Дубликаты". #}
+{# Содержит две таблицы: полные повторы строк и повторы по ключевым полям (ИГК + предмет + заказ). #}
+{# Использует глобальную функцию loadTable из base.html. #}
+
 {% extends 'base.html' %}
 {% block title %}Дубликаты{% endblock %}
 
@@ -6,6 +10,7 @@
     <h5>Дубликаты</h5>
 </div>
 
+{# --- Панель фильтров --- #}
 <div class="filter-panel mb-3">
     <div class="d-flex flex-wrap gap-3 align-items-end">
         <div class="filter-group">
@@ -31,11 +36,12 @@
         </div>
     </div>
     <div class="dupes-hint">
-        Фильтр применяется только к таблице «Повторы по ИГК, предмету и заказу».
+        Фильтр применяется только к таблице «Повторы по ИГК, предмету и заказу».<br>
         «Полные повторы строк» показываются без фильтра.
     </div>
 </div>
 
+{# --- Таблица 1: Полные повторы --- #}
 <div class="dupes-block">
     <div class="dupes-head">
         <h6>Полные повторы строк</h6>
@@ -44,6 +50,7 @@
     <div class="table-container dupes-table" id="wrap-full"></div>
 </div>
 
+{# --- Таблица 2: Повторы по ключевым полям --- #}
 <div class="dupes-block">
     <div class="dupes-head">
         <h6>Повторы по ИГК, предмету и заказу</h6>
@@ -52,6 +59,7 @@
     <div class="table-container dupes-table" id="wrap-order"></div>
 </div>
 
+{# --- Скрытые данные для JS --- #}
 <div id="page-data"
      data-full-url="{% url 'api_contract_dupes' %}"
      data-order-url="{% url 'api_contract_dupes_by_order' %}"
@@ -60,6 +68,10 @@
 
 {% block extra_js %}
 <script>
+"use strict";
+
+// --- Конфигурация колонок таблиц ---
+
 const COLS_FULL = [
     { field: 'igk',       title: 'ИГК' },
     { field: 'cfo',       title: 'ЦФО' },
@@ -82,30 +94,46 @@ const COLS_ORDER = [
     { field: 'plan_sum',        title: 'Сумма плана, руб.', format: 'number' },
 ];
 
+// Получаем URL из data-атрибутов (dataset автоматически преобразует data-full-url в fullUrl)
 const data = document.getElementById('page-data').dataset;
 
+// --- Логика запросов ---
+
+/**
+ * Формирует query-строку для API на основе текущих значений фильтров.
+ * @returns {string} Строка запроса, начинающаяся с '?' или пустая строка.
+ */
 function query() {
     const params = new URLSearchParams();
     const year = document.getElementById('filter-year').value;
     const cfo  = document.getElementById('filter-cfo').value;
+    
     if (year) params.append('year', year);
     if (cfo)  params.append('cfo', cfo);
+    
     const qs = params.toString();
     return qs ? '?' + qs : '';
 }
 
+/**
+ * Перезагружает таблицу "Повторы по ИГК, предмету и заказу" с учётом фильтров.
+ */
 function reloadOrder() {
     loadTable(data.orderUrl + query(), 'wrap-order', COLS_ORDER);
 }
 
+// --- Инициализация и обработчики событий ---
+
 document.getElementById('filter-year').addEventListener('change', reloadOrder);
 document.getElementById('filter-cfo').addEventListener('change', reloadOrder);
+
 document.getElementById('filter-reset').addEventListener('click', () => {
     document.getElementById('filter-year').value = '';
     document.getElementById('filter-cfo').value  = '';
     reloadOrder();
 });
 
+// Загружаем обе таблицы при инициализации страницы
 loadTable(data.fullUrl, 'wrap-full', COLS_FULL);
 reloadOrder();
 </script>

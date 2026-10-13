@@ -1,7 +1,12 @@
+{# Универсальный шаблон для таблиц ИГК: заключённые, незаключённые, расторгнутые. #}
+{# Использует один шаблон для трёх типов отчётов через параметры report_type и url_name. #}
+{# При клике на ИГК открывается модальное окно с детализацией по договорам. #}
+
 {% extends 'base.html' %}
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
+{# --- Заголовок и переключатель годов --- #}
 <div class="page-header">
     <h5>{{ title }}</h5>
     <div class="d-flex gap-2 align-items-center">
@@ -12,7 +17,11 @@
         {% endfor %}
     </div>
 </div>
+
+{# --- Контейнер для основной таблицы --- #}
 <div class="table-container" id="table-wrapper"></div>
+
+{# --- Скрытые данные для JS: URL API, год, тип отчёта, шаблон URL детализации --- #}
 <div id="page-data"
      data-api-url="{% if report_type == 'concluded' %}{% url 'api_igk_concluded' year %}{% elif report_type == 'not_concluded' %}{% url 'api_igk_not_concluded' year %}{% else %}{% url 'api_igk_terminated' year %}{% endif %}"
      data-year="{{ year }}"
@@ -20,6 +29,7 @@
      data-detail-url="{% url 'api_igk_detail' year '000' %}"
      style="display:none"></div>
 
+{# --- Модальное окно для детализации по ИГК --- #}
 <div class="modal fade" id="igkModal" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
@@ -37,6 +47,9 @@
 
 {% block extra_js %}
 <script>
+"use strict";
+
+// --- Конфигурация колонок основной таблицы (сводка по ИГК) ---
 const COLS = [
     { field: 'igk',            title: 'ИГК' },
     { field: 'spec_sum',       title: 'Сумма по спецификации, руб.', format: 'number' },
@@ -49,6 +62,7 @@ const COLS = [
     { field: 'pp_quantity',    title: 'Кол-во позиций',              format: 'int' },
 ];
 
+// --- Конфигурация колонок таблицы детализации (договоры внутри ИГК) ---
 const DETAIL_COLS = [
     { field: 'contract',     title: 'Договор' },
     { field: 'c_agent',      title: 'Контрагент' },
@@ -62,17 +76,33 @@ const DETAIL_COLS = [
     { field: 'remain',       title: 'Остаток, руб.', format: 'number' },
 ];
 
+// --- Извлечение данных из скрытого элемента ---
 const pd         = document.getElementById('page-data');
 const apiUrl     = pd.dataset.apiUrl;
 const year       = pd.dataset.year;
 const reportType = pd.dataset.type;
+// Хак: заменяем placeholder '000' на пустую строку для формирования базового URL детализации
 const detailBase = pd.dataset.detailUrl.replace('/000/', '/');
 
+// --- Утилиты рендеринга ---
+
+/**
+ * Универсальная функция рендеринга таблицы из массива данных.
+ * Используется как для основной таблицы, так и для модального окна детализации.
+ * @param {Array} data - Массив строк данных
+ * @param {Array} cols - Конфигурация колонок (field, title, format)
+ * @param {HTMLElement} container - Контейнер для вставки таблицы
+ */
 function renderTable(data, cols, container) {
-    if (!data.length) { container.innerHTML = '<div class="p-3 text-muted">Нет данных</div>'; return; }
+    if (!data.length) { 
+        container.innerHTML = '<div class="p-3 text-muted">Нет данных</div>'; 
+        return; 
+    }
+    
     let html = '<table class="report-table"><thead><tr>';
     cols.forEach(col => { html += `<th>${col.title}</th>`; });
     html += '</tr></thead><tbody>';
+    
     data.forEach(row => {
         html += '<tr>';
         cols.forEach(col => {
@@ -83,42 +113,66 @@ function renderTable(data, cols, container) {
         });
         html += '</tr>';
     });
+    
     html += '</tbody></table>';
     container.innerHTML = html;
 }
 
+// --- Загрузка детализации по ИГК ---
+
+/**
+ * Открывает модальное окно и загружает детализацию по конкретному ИГК.
+ * @param {string} igkCode - Код ИГК (последние 4 символа)
+ */
 async function openDetail(igkCode) {
     document.getElementById('igkModalTitle').textContent = `ИГК ${igkCode} — ${year}`;
     const container = document.getElementById('modal-table-wrapper');
-    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div>Загрузка...</div>';
+    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка...</div>';
+    
     new bootstrap.Modal(document.getElementById('igkModal')).show();
+    
     try {
         const resp = await fetch(`${detailBase}${igkCode}/?type=${reportType}`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         renderTable(await resp.json(), DETAIL_COLS, container);
     } catch(e) {
-        container.innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
+        container.innerHTML = `<div class="error-msg">Ошибка загрузки: ${esc(e.message)}</div>`;
     }
 }
 
+// --- Загрузка основной таблицы ---
+
+/**
+ * Загружает и отображает основную таблицу сводки по ИГК.
+ * Для каждой строки делает ИГК кликабельным для открытия детализации.
+ */
 async function loadMain() {
     const container = document.getElementById('table-wrapper');
-    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div>Загрузка...</div>';
+    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка...</div>';
+    
     try {
         const resp = await fetch(apiUrl);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
-        if (!data.length) { container.innerHTML = '<div class="p-3 text-muted">Нет данных</div>'; return; }
+        
+        if (!data.length) { 
+            container.innerHTML = '<div class="p-3 text-muted">Нет данных</div>'; 
+            return; 
+        }
 
         let html = '<table class="report-table"><thead><tr>';
         COLS.forEach(col => { html += `<th>${col.title}</th>`; });
         html += '</tr></thead><tbody>';
+        
         data.forEach((row, idx) => {
             const isTotal = idx === data.length - 1 && row.igk === 'ИТОГО';
             html += `<tr class="${isTotal ? 'row-total' : ''}">`;
+            
             COLS.forEach(col => {
                 const val = row[col.field] ?? '';
                 let inner;
+                
+                // Для колонки ИГК создаём кликабельную ссылку (кроме итоговой строки)
                 if (col.field === 'igk' && val !== '' && !isTotal) {
                     const code = esc(String(val).slice(-4));
                     inner = `<span class="igk-link" data-igk="${code}"
@@ -126,20 +180,30 @@ async function loadMain() {
                 } else {
                     inner = esc(fmt(val, col.format));
                 }
+                
                 html += `<td class="${col.format ? 'text-end' : ''}">${inner}</td>`;
             });
+            
             html += '</tr>';
         });
+        
         html += '</tbody></table>';
         container.innerHTML = html;
+        
+        // Навешиваем обработчики кликов на ссылки ИГК
         container.querySelectorAll('.igk-link').forEach(el => {
             el.addEventListener('click', () => openDetail(el.dataset.igk));
         });
     } catch(e) {
-        container.innerHTML = `<div class="error-msg">Ошибка: ${e.message}</div>`;
+        container.innerHTML = `<div class="error-msg">Ошибка загрузки: ${esc(e.message)}</div>`;
     }
 }
 
-loadMain();
+// --- Инициализация ---
+
+// Загружаем основную таблицу после полной загрузки DOM
+document.addEventListener('DOMContentLoaded', () => {
+    loadMain();
+});
 </script>
 {% endblock %}

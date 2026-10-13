@@ -1,3 +1,5 @@
+"""Расчёт карточек сводок (ФЗД, SAP) и вспомогательные функции."""
+
 from decimal import Decimal
 
 from django.db.models import Count, Q, Sum
@@ -5,8 +7,11 @@ from django.db.models import Count, Q, Sum
 from .queries import ADVANCE, POSTPAYMENT, ZNP_APPROVED
 from .sap_status import SAP_STAGE_PARAMS, sap_date_field, sap_status_conditions
 
+# --- Утилиты для работы с числами ---
+
 
 def to_decimal(value):
+    """Безопасно преобразует значение в Decimal, возвращает 0 для None."""
     if value is None:
         return Decimal("0")
     if isinstance(value, Decimal):
@@ -15,18 +20,24 @@ def to_decimal(value):
 
 
 def to_mln(value):
+    """Преобразует значение в миллионы (Decimal / 1_000_000)."""
     return to_decimal(value) / Decimal("1000000")
 
 
 def percent(part, whole):
+    """Вычисляет процент part от whole. Возвращает 0, если whole = 0."""
     part = to_decimal(part)
     whole = to_decimal(whole)
     return (part / whole * 100) if whole else Decimal("0")
 
 
 def filter_by_year(queryset, year, field_prefix=""):
+    """Фильтрует queryset по годовому флагу (y25, y26, ...)."""
     field_name = f"{field_prefix}y{str(year)[-2:]}"
     return queryset.filter(**{field_name: True})
+
+
+# --- Дашборд договоров: константы и функции ---
 
 
 EMPTY_CFO_STATS = {
@@ -44,6 +55,7 @@ EMPTY_CFO_STATS = {
     "curr_fact": None,
 }
 
+# Ключи, которые суммируются при расчёте строки "ИТОГО"
 CFO_SUMMED = (
     "all_count",
     "all_sum",
@@ -61,6 +73,7 @@ CFO_SUMMED = (
 
 
 def cfo_row(label, s):
+    """Формирует строку таблицы ЦФО для дашборда договоров."""
     row = {
         "cfo": label,
         "all_count": s["all_count"],
@@ -80,6 +93,7 @@ def cfo_row(label, s):
 
 
 def with_cfo_percents(row):
+    """Добавляет в строку ЦФО проценты контрактации и авансирования."""
     row["year_concluded_percent"] = percent(
         row["year_concluded_count"], row["year_count"]
     )
@@ -91,10 +105,14 @@ def with_cfo_percents(row):
 
 
 def cfo_totals_row(rows):
+    """Формирует итоговую строку «ИТОГО» по всем ЦФО."""
     totals = {"cfo": "ИТОГО"}
     for key in CFO_SUMMED:
         totals[key] = sum((to_decimal(r[key]) for r in rows), Decimal("0"))
     return with_cfo_percents(totals)
+
+
+# --- Дашборд ЗнП (ФЗД): статусы и агрегации ---
 
 
 ZNP_STAGE_LABELS = {
@@ -111,6 +129,7 @@ ZNP_STAGE_NAMES = list(ZNP_STAGE_LABELS.values())
 
 
 def not_issued_aggregates():
+    """Агрегации для позиций без оформленных заявок (по типам платежа)."""
     advance = Q(payment_type=ADVANCE)
     postpayment = Q(payment_type=POSTPAYMENT)
     return {
@@ -124,6 +143,7 @@ def not_issued_aggregates():
 
 
 def stage_aggregates():
+    """Агрегации по всем позициям (общее количество и сумма плана)."""
     return {
         "stage_count": Count("pp_id"),
         "stage_sum": Sum("plan"),
@@ -131,6 +151,7 @@ def stage_aggregates():
 
 
 def znp_aggregates():
+    """Агрегации для заявок ФЗД по статусам оформления и оплаты."""
     approved = Q(znp_status=ZNP_APPROVED)
     pending = ~Q(znp_status=ZNP_APPROVED)
     advance = Q(parent__payment_type=ADVANCE) & approved
@@ -152,20 +173,7 @@ def znp_aggregates():
     }
 
 
-def cfo_breakdown_row(label, breakdown, statuses):
-    return {
-        "cfo": label,
-        "total_count": breakdown["total_count"],
-        "total_sum": breakdown["total_sum"],
-        "cells": [
-            {
-                "status_param": status,
-                "count": breakdown[status]["count"],
-                "sum": breakdown[status]["sum"],
-            }
-            for status in statuses
-        ],
-    }
+# --- Breakdown: формирование карточек дашборда ЗнП ---
 
 
 EMPTY_STAGES = {
@@ -198,7 +206,30 @@ EMPTY_ZNP = {
 }
 
 
+def cfo_breakdown_row(label, breakdown, statuses):
+    """Формирует строку таблицы ЦФО для дашборда ЗнП."""
+    return {
+        "cfo": label,
+        "total_count": breakdown["total_count"],
+        "total_sum": breakdown["total_sum"],
+        "cells": [
+            {
+                "status_param": status,
+                "count": breakdown[status]["count"],
+                "sum": breakdown[status]["sum"],
+            }
+            for status in statuses
+        ],
+    }
+
+
 def breakdown_from_stats(ni, zs, st):
+    """Собирает карточки дашборда ЗнП из трёх наборов агрегаций.
+
+    ni — агрегации по позициям без заявок,
+    zs — агрегации по заявкам,
+    st — агрегации по всем позициям.
+    """
     not_issued_count = ni["count"] or 0
     not_issued_sum = to_mln(ni["plan_sum"])
     not_issued_advance_count = ni["advance_count"] or 0
@@ -265,7 +296,19 @@ def breakdown_from_stats(ni, zs, st):
     }
 
 
+# --- Дашборд SAP: агрегации и карточки ---
+
+
+EMPTY_SAP = {
+    "total": 0,
+    "total_sum": None,
+    **{f"{status}_count": 0 for status in SAP_STAGE_PARAMS},
+    **{f"{status}_sum": None for status in SAP_STAGE_PARAMS},
+}
+
+
 def sap_aggregates(date=None):
+    """Агрегации для заявок SAP по статусам. Опционально фильтрует по дате."""
     total_filter = Q(created_date=date) if date else None
     aggregates = {
         "total": Count("id", filter=total_filter),
@@ -279,15 +322,8 @@ def sap_aggregates(date=None):
     return aggregates
 
 
-EMPTY_SAP = {
-    "total": 0,
-    "total_sum": None,
-    **{f"{status}_count": 0 for status in SAP_STAGE_PARAMS},
-    **{f"{status}_sum": None for status in SAP_STAGE_PARAMS},
-}
-
-
 def sap_cards(stats):
+    """Формирует карточки дашборда SAP из агрегаций."""
     total = stats["total"] or 0
     cards = {
         "total_count": total,

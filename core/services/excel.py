@@ -1,3 +1,5 @@
+"""Создание Excel-файлов с форматированием и формирование HTTP-ответов для скачивания."""
+
 from io import BytesIO
 from urllib.parse import quote
 
@@ -6,6 +8,9 @@ from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+
+# --- Стили ячеек ---
+
 
 _THIN = Side(style="thin")
 _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
@@ -21,24 +26,46 @@ _ALIGN_HEADER = Alignment(horizontal="center", wrap_text=True)
 _ALIGN_LEFT = Alignment(horizontal="left")
 _ALIGN_RIGHT = Alignment(horizontal="right")
 
+# Таблица транслитерации для ASCII-имён файлов (кириллица → латиница)
 _TRANSLIT = str.maketrans(
     "абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ ",
     "abvgdeejzijklmnoprstufxccssiieeuaABVGDEEJZIJKLMNOPRSTUFXCCSSIIEEUA_",
 )
 
 
+# --- Вспомогательные функции ---
+
+
 def _get_number_format(value):
+    """Возвращает формат числа: '0' для целых, '0.00' для дробных."""
     if isinstance(value, int) or (isinstance(value, float) and value.is_integer()):
         return "0"
     return "0.00"
 
 
+# --- Создание Excel-файлов ---
+
+
 def make_wb(sheet_name, headers, col_widths, rows_data, kinds=None, formats=None):
+    """Создаёт Workbook с заголовками, данными и форматированием.
+
+    Args:
+        sheet_name: имя листа
+        headers: список заголовков колонок
+        col_widths: список ширин колонок
+        rows_data: список строк данных (списки значений)
+        kinds: список типов строк ('normal', 'subtotal', 'total') для форматирования
+        formats: словарь {индекс_колонки: формат_числа} для переопределения форматов
+
+    Returns:
+        bytes: содержимое Excel-файла
+    """
     wb = Workbook()
     ws = wb.active
     ws.title = sheet_name
-    ws.freeze_panes = "A2"
+    ws.freeze_panes = "A2"  # Фиксируем первую строку (заголовки)
 
+    # Форматируем заголовки
     for ci, (header, width) in enumerate(zip(headers, col_widths), 1):
         cell = ws.cell(row=1, column=ci, value=header)
         cell.font = _HEADER_FONT
@@ -47,6 +74,7 @@ def make_wb(sheet_name, headers, col_widths, rows_data, kinds=None, formats=None
         cell.alignment = _ALIGN_HEADER
         ws.column_dimensions[get_column_letter(ci)].width = width
 
+    # Форматируем данные
     for ri, row in enumerate(rows_data, 2):
         kind = kinds[ri - 2] if kinds else "normal"
 
@@ -56,6 +84,7 @@ def make_wb(sheet_name, headers, col_widths, rows_data, kinds=None, formats=None
 
             is_num = isinstance(value, (int, float)) and not isinstance(value, bool)
 
+            # Форматирование для итоговых строк
             if kind in ("total", "subtotal"):
                 cell.font = _BOLD_FONT
                 cell.fill = _TOTAL_FILL
@@ -65,6 +94,7 @@ def make_wb(sheet_name, headers, col_widths, rows_data, kinds=None, formats=None
                 if is_num:
                     cell.alignment = _ALIGN_RIGHT
 
+            # Формат чисел
             if is_num:
                 if formats and ci in formats:
                     cell.number_format = formats[ci]
@@ -76,15 +106,31 @@ def make_wb(sheet_name, headers, col_widths, rows_data, kinds=None, formats=None
     return buf.getvalue()
 
 
+# --- HTTP-ответы для скачивания ---
+
+
 def xlsx_response(data, filename_ru):
+    """Формирует HttpResponse для скачивания Excel-файла.
+
+    Args:
+        data: bytes содержимого Excel-файла
+        filename_ru: имя файла на русском (будет транслитерировано для ASCII)
+
+    Returns:
+        HttpResponse с правильными заголовками Content-Disposition
+    """
     today = timezone.localdate().strftime("%d_%m_%Y")
+
+    # ASCII-версия имени для старых клиентов
     fname_ascii = f"{filename_ru.translate(_TRANSLIT)}_{today}.xlsx"
+    # UTF-8 версия для современных клиентов (RFC 5987)
     fname_utf8 = quote(f"{filename_ru}_{today}.xlsx")
 
     response = HttpResponse(
         data,
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+    # Двойное имя файла: ASCII fallback + UTF-8 для корректного отображения кириллицы
     response["Content-Disposition"] = (
         f"attachment; filename=\"{fname_ascii}\"; filename*=UTF-8''{fname_utf8}"
     )

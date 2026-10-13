@@ -1,16 +1,27 @@
+{# Шаблон страницы "История изменений плана". #}
+{# Отображает таблицу изменений плановых сумм по договорам. #}
+{# Использует глобальную функцию loadTable из base.html. #}
+
 {% extends 'base.html' %}
 {% block title %}История изменений плана{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h5>Изменения договоров — план</h5>
+    <h5>История изменений плана</h5>
 </div>
+
+{# Контейнер для таблицы, заполняемый через JS #}
 <div class="table-container" id="table-wrapper"></div>
+
+{# Скрытый элемент для передачи URL API в JavaScript #}
 <div id="page-data" data-api-url="{% url 'api_history_plan' %}" style="display:none"></div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+"use strict";
+
+// Конфигурация колонок таблицы истории изменений плана
 const COLS = [
     { field: 'igk',               title: 'ИГК' },
     { field: 'c_agent',           title: 'Контрагент' },
@@ -25,6 +36,12 @@ const COLS = [
     { field: 'plan_changed_date', title: 'Дата изменения', format: 'date' },
     { field: 'c_date',            title: 'Год создания' },
 ];
-loadTable(document.getElementById('page-data').dataset.apiUrl, 'table-wrapper', COLS);
+
+// Загрузка данных при инициализации страницы
+// Функция loadTable определена в base.html и сама обрабатывает состояния загрузки и ошибок
+document.addEventListener('DOMContentLoaded', () => {
+    const apiUrl = document.getElementById('page-data').dataset.apiUrl;
+    loadTable(apiUrl, 'table-wrapper', COLS);
+});
 </script>
 {% endblock %}

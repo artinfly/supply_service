@@ -1,15 +1,34 @@
+"""Привязка заявок ФЗД к позициям договоров по хешу."""
+
 from zlib import crc32
 
 from django.db import connection
 
 
 def contract_hash(igk, c_agent, contract, stage):
+    """Вычисляет хеш привязки заявки к договору.
+
+    Args:
+        igk: код ИГК
+        c_agent: контрагент
+        contract: номер договора
+        stage: этап
+
+    Returns:
+        int: CRC32 хеш
+    """
     parts = [str(v) if v is not None else "" for v in (igk, c_agent, contract, stage)]
     return crc32("".join(parts).encode())
 
 
 def relink_znp_parents():
+    """Обновляет связи заявок ФЗД с позициями договоров.
+
+    1. Привязывает заявки к позиции с минимальным pp_id при совпадении хеша.
+    2. Сбрасывает parent_id в NULL, если совпадение не найдено.
+    """
     with connection.cursor() as cur:
+        # Шаг 1: Привязка по совпадению хеша
         cur.execute("""
             UPDATE znp_data z
             SET parent_id = matched.pp_id
@@ -20,6 +39,8 @@ def relink_znp_parents():
             ) matched
             WHERE z.crc32_hash = matched.crc32_hash
         """)
+
+        # Шаг 2: Сброс связей для заявок без совпадений
         cur.execute("""
             UPDATE znp_data z
             SET parent_id = NULL

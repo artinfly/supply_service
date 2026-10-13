@@ -1,4 +1,9 @@
+{# Partial-шаблон: состояние "нет данных" с иконкой и кнопкой загрузки. #}
+{# Используется на страницах, где данные ещё не загружены. #}
+{# Переменная контекста: no_data_hint — подсказка, что нужно загрузить. #}
+
 <div class="no-data">
+    {# Иконка папки (SVG) #}
     <div class="no-data-icon">
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
@@ -8,7 +13,9 @@
     </div>
     <div class="no-data-title">Нет данных</div>
     <div class="no-data-hint">{{ no_data_hint }}</div>
-    {% if perms.reports.access_upload %}
+    
+    {# Кнопка загрузки видна только пользователям с правом доступа к загрузке #}
+    {% if perms.core.access_upload %}
     <a href="{% url 'upload_excel' %}" class="btn-orange no-data-action">Загрузить данные</a>
     {% endif %}
 </div>
