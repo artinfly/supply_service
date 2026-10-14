@@ -1,11 +1,45 @@
-!reports/static/files/templateIGK.xlsx
-!reports/static/files/templateSum.xlsx
+# --- Шаблоны отчётов (в git) ---
+!core/static/files/templateIGK.xlsx
+!core/static/files/templateSum.xlsx
+
+# --- Python ---
+*.py[cod]
+*$py.class
+__pycache__/
+*.egg-info/
+*.egg
+
+# --- Виртуальное окружение ---
+.venv/
+venv/
+ENV/
+
+# --- Django ---
 *.log
-*.pyc
+*.sqlite3
+db.sqlite3
+staticfiles/
+media/
+
+# --- Документы (выгрузки пользователей) ---
 *.xls
 *.xlsx
-.env
-.venv/
+
+# --- IDE ---
 .vscode/
-__pycache__/
-staticfiles/
+.idea/
+*.swp
+*.swo
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Переменные окружения ---
+.env
+.env.local
+
+# --- Тесты ---
+.pytest_cache/
+.coverage
+htmlcov/

@@ -1,0 +1,72 @@
+{# Страница входа в систему отчётов МТО. #}
+{# Самостоятельный шаблон (не наследуется от base.html), так как имеет уникальную разметку. #}
+
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход — Отчёты МТО</title>
+    <link rel="stylesheet" href="{% static 'vendor/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body class="login-page">
+
+<div class="login-wrap">
+    <div class="login-box">
+        
+        {# --- Шапка с логотипом --- #}
+        <div class="login-top">
+            <div class="login-icon">
+                <svg viewBox="0 0 24 24"><path d="M3 3h18v4H3zm0 6h11v4H3zm0 6h14v4H3z"/></svg>
+            </div>
+            <div class="login-title">
+                Отчёты МТО
+                <span>Введите учётные данные</span>
+            </div>
+        </div>
+        
+        {# --- Форма входа --- #}
+        <div class="login-body">
+            {% if error %}
+            <div class="login-error" role="alert">Неверный логин или пароль</div>
+            {% endif %}
+            
+            <form method="post" autocomplete="on">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label for="username" class="form-label">Логин</label>
+                    <input type="text" 
+                           id="username" 
+                           name="username" 
+                           class="form-control" 
+                           placeholder="Введите логин"
+                           autofocus 
+                           autocomplete="username"
+                           required>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="password" class="form-label">Пароль</label>
+                    <input type="password" 
+                           id="password" 
+                           name="password" 
+                           class="form-control" 
+                           placeholder="Введите пароль"
+                           autocomplete="current-password"
+                           required>
+                </div>
+                
+                <button type="submit" class="btn-login">Войти</button>
+            </form>
+        </div>
+        
+        {# --- Футер --- #}
+        <div class="login-footer">Отчёты МТО</div>
+    </div>
+</div>
+
+</body>
+</html>

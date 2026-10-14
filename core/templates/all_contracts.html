@@ -1,0 +1,366 @@
+{# Шаблон реестра всех договоров с фильтрацией и пагинацией. #}
+{# Данные загружаются асинхронно через API (api_all_contracts). #}
+
+{% extends 'base.html' %}
+{% block title %}Реестр договоров{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h5>Реестр договоров</h5>
+</div>
+
+{# --- Панель фильтров --- #}
+<div class="filter-panel mb-3">
+    <div class="d-flex flex-wrap gap-3 align-items-end">
+        <div class="filter-group">
+            <label class="filter-label">Контрагент или договор</label>
+            <input type="text" id="filter-agent" class="filter-input"
+                   placeholder="Часть названия или номера" autocomplete="off"
+                   style="width:260px">
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">ИГК</label>
+            <select id="filter-igk" class="filter-select">
+                <option value="">Все</option>
+                {% for igk in igk_list %}
+                <option value="{{ igk }}">{{ igk }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">ЦФО</label>
+            <select id="filter-cfo" class="filter-select">
+                <option value="">Все</option>
+                {% for cfo in cfo_list %}
+                <option value="{{ cfo }}">{{ cfo }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Год</label>
+            <select id="filter-year" class="filter-select">
+                <option value="all">Все</option>
+                {% for y, yc in year_cols %}
+                <option value="{{ y }}">{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Состояние</label>
+            <div class="d-flex gap-2 flex-wrap">
+                <label class="status-check"><input type="checkbox" id="cb-concluded" checked> Заключённые</label>
+                <label class="status-check"><input type="checkbox" id="cb-not-concluded"> Незаключённые</label>
+                <label class="status-check"><input type="checkbox" id="cb-terminated"> Расторгнутые</label>
+            </div>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Отображение</label>
+            <div class="d-flex gap-2 flex-wrap">
+                <label class="status-check"><input type="checkbox" id="cb-only-totals"> Только итоги</label>
+            </div>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Строк на странице</label>
+            <select id="page-size" class="filter-select">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="200">200</option>
+            </select>
+        </div>
+        <div class="filter-group" style="flex-direction:row;align-items:flex-end;gap:0.4rem">
+            <button id="btn-search" class="btn-orange">Найти</button>
+            <button id="btn-reset" class="btn-ghost">Сбросить</button>
+        </div>
+    </div>
+</div>
+
+{# --- Инфо-панель и пагинация --- #}
+<div class="d-flex align-items-center justify-content-between mb-2">
+    <span class="row-count-label">Показано: <strong id="row-count">0</strong> записей</span>
+    <div id="pagination-top"></div>
+</div>
+
+{# --- Контейнер для таблицы --- #}
+<div class="table-container" id="table-wrapper"></div>
+<div id="pagination-bot" class="mt-2 d-flex justify-content-end"></div>
+
+{# --- Скрытые данные для JS --- #}
+<div id="page-data" data-api-url="{% url 'api_all_contracts' %}" style="display:none"></div>
+{{ concluded_statuses|json_script:"concluded-statuses" }}
+{{ not_concl_statuses|json_script:"not-concl-statuses" }}
+{{ terminated_statuses|json_script:"terminated-statuses" }}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+"use strict";
+
+// --- Константы и конфигурация ---
+
+const CONCLUDED_STATUSES  = JSON.parse(document.getElementById('concluded-statuses').textContent);
+const NOT_CONCL_STATUSES  = JSON.parse(document.getElementById('not-concl-statuses').textContent);
+const TERMINATED_STATUSES = JSON.parse(document.getElementById('terminated-statuses').textContent);
+
+const COLS = [
+    { field: 'igk',          title: 'ИГК',                   style: 'style="width: 80px;"' },
+    { field: 'c_agent',      title: 'Контрагент' },
+    { field: 'contract',     title: 'Договор' },
+    { field: 'status',       title: 'Состояние',             style: 'style="width: 120px;"' },
+    { field: 'payment_type', title: 'Тип платежа',           style: 'style="width: 100px;"' },
+    { field: 'item',         title: 'Предмет' },
+    { field: 'order',        title: 'Заказ' },
+    { field: 'stage',        title: 'Этап' },
+    { field: 'spec_sum',     title: 'Сумма договора, руб.',  format: 'number' },
+    { field: 'pp_sum',       title: 'План, руб.',            format: 'number' },
+    { field: 'pp_fact',      title: 'Факт, руб.',            format: 'number' },
+    { field: 'pp_remain',    title: 'Остаток, руб.',         format: 'number' },
+];
+
+const apiUrl = document.getElementById('page-data').dataset.apiUrl;
+
+// --- Состояние приложения ---
+
+let loadedData = [];
+let currentPage = 1;
+
+// --- Утилиты ---
+
+/**
+ * Экранирует HTML-символы для предотвращения XSS.
+ * Заменяет отсутствующую в оригинале функцию esc().
+ */
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+/**
+ * Возвращает текущее значение количества строк на странице.
+ */
+function pageSize() {
+    return parseInt(document.getElementById('page-size').value, 10) || 100;
+}
+
+/**
+ * Базовая реализация пагинации (восполняет отсутствующую в оригинале функцию).
+ */
+function renderPagination(totalItems, itemsPerPage, currentPage, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    let html = '<nav><ul class="pagination pagination-sm mb-0">';
+    
+    // Кнопка "Назад"
+    html += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+        <a class="page-link" href="#" data-page="${currentPage - 1}">&laquo;</a>
+    </li>`;
+
+    // Упрощённый вывод номеров страниц (можно расширить при необходимости)
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+            html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+                <a class="page-link" href="#" data-page="${i}">${i}</a>
+            </li>`;
+        } else if (i === currentPage - 2 || i === currentPage + 2) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+
+    // Кнопка "Вперёд"
+    html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+        <a class="page-link" href="#" data-page="${currentPage + 1}">&raquo;</a>
+    </li>`;
+    
+    html += '</ul></nav>';
+    container.innerHTML = html;
+
+    // Навешиваем обработчики на новые ссылки
+    container.querySelectorAll('a[data-page]').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            currentPage = parseInt(link.dataset.page, 10);
+            renderPage();
+            // Прокрутка к началу таблицы
+            document.getElementById('table-wrapper').scrollIntoView({ behavior: 'smooth' });
+        });
+    });
+}
+
+// --- Логика запросов ---
+
+/**
+ * Формирует URL для API-запроса на основе текущих значений фильтров.
+ */
+function buildUrl() {
+    const params = new URLSearchParams();
+    const agent = document.getElementById('filter-agent').value.trim();
+    const igk = document.getElementById('filter-igk').value.trim();
+    const cfo = document.getElementById('filter-cfo').value.trim();
+    
+    if (agent) params.append('agent', agent);
+    if (igk) params.append('igk', igk);
+    if (cfo) params.append('cfo', cfo);
+    
+    if (document.getElementById('cb-concluded').checked) {
+        CONCLUDED_STATUSES.forEach(s => params.append('status', s));
+    }
+    if (document.getElementById('cb-not-concluded').checked) {
+        NOT_CONCL_STATUSES.forEach(s => params.append('status', s));
+    }
+    if (document.getElementById('cb-terminated').checked) {
+        TERMINATED_STATUSES.forEach(s => params.append('status', s));
+    }
+    
+    // Если ни один статус не выбран, отправляем пустой параметр, 
+    // чтобы API вернул пустой результат, а не все статусы.
+    if (!params.has('status')) {
+        params.append('status', '');
+    }
+    
+    const year = document.getElementById('filter-year').value;
+    if (year !== 'all') {
+        params.append('year', year);
+    }
+    
+    const qs = params.toString();
+    return apiUrl + (qs ? '?' + qs : '');
+}
+
+/**
+ * Выполняет запрос к API и обновляет состояние данных.
+ */
+async function loadData() {
+    document.getElementById('table-wrapper').innerHTML = 
+        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка...</div>';
+    try {
+        const resp = await fetch(buildUrl());
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        loadedData = await resp.json();
+        currentPage = 1;
+        renderPage();
+    } catch (e) {
+        document.getElementById('table-wrapper').innerHTML = 
+            `<div class="error-msg">Ошибка загрузки данных: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+// --- Рендеринг ---
+
+/**
+ * Отрисовывает текущую страницу таблицы на основе loadedData.
+ */
+function renderPage() {
+    const onlyTotals = document.getElementById('cb-only-totals').checked;
+    const rows = onlyTotals ? loadedData.filter(r => r.is_subtotal === 1) : loadedData;
+    const ps = pageSize();
+    const start = isFinite(ps) ? (currentPage - 1) * ps : 0;
+    const slice = isFinite(ps) ? rows.slice(start, start + ps) : rows;
+    
+    document.getElementById('row-count').textContent = rows.length;
+    renderPagination(rows.length, ps, currentPage, 'pagination-top');
+    renderPagination(rows.length, ps, currentPage, 'pagination-bot');
+
+    const container = document.getElementById('table-wrapper');
+    if (!slice.length) {
+        container.innerHTML = '<div class="p-4 text-muted text-center">Нет данных по заданным фильтрам</div>';
+        return;
+    }
+
+    let html = '<table class="report-table" style="table-layout: auto;"><thead><tr>';
+    COLS.forEach(col => { html += `<th ${col.style || ''}>${escapeHtml(col.title)}</th>`; });
+    html += '</tr></thead><tbody>';
+
+    slice.forEach(row => {
+        const cls = row.is_subtotal === 1 ? 'row-subtotal' : '';
+        html += `<tr class="${cls}">`;
+        COLS.forEach(col => {
+            let val = row[col.field] ?? '';
+            
+            // Специфичная логика форматирования для итоговых строк и конкретных полей
+            if (col.field === 'payment_type' && row.is_subtotal === 1) {
+                val = 'ИТОГО';
+            } else if (col.field === 'igk' && val !== '') {
+                val = String(val).slice(-4);
+            } else if (col.field === 'stage' && val !== '') {
+                val = String(val).trim();
+            } else if (col.format === 'number' && val !== '') {
+                val = parseFloat(val).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+            
+            const align = col.format ? 'text-end' : '';
+            const wrap = (!col.format && !col.style) ? 'wrap' : '';
+            const classes = [align, wrap].filter(Boolean).join(' ');
+            
+            html += `<td class="${classes}">${escapeHtml(val)}</td>`;
+        });
+        html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+/**
+ * Инициализирует значения фильтров из параметров URL (для сохранения состояния при обновлении).
+ */
+function loadFiltersFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('agent')) document.getElementById('filter-agent').value = params.get('agent');
+    if (params.has('igk')) document.getElementById('filter-igk').value = params.get('igk');
+    if (params.has('cfo')) document.getElementById('filter-cfo').value = params.get('cfo');
+    if (params.has('year')) document.getElementById('filter-year').value = params.get('year');
+    
+    if (params.has('statuses')) {
+        const statusesParams = params.get('statuses').split(',');
+        document.getElementById('cb-concluded').checked = statusesParams.includes('concluded');
+        document.getElementById('cb-not-concluded').checked = statusesParams.includes('not_concluded');
+        document.getElementById('cb-terminated').checked = statusesParams.includes('terminated');
+    }
+}
+
+// --- Инициализация и обработчики событий ---
+
+document.getElementById('page-size').addEventListener('change', () => { 
+    currentPage = 1; 
+    renderPage(); 
+});
+
+document.getElementById('cb-only-totals').addEventListener('change', () => { 
+    currentPage = 1; 
+    renderPage(); 
+});
+
+document.getElementById('filter-agent').addEventListener('keydown', e => {
+    if (e.key === 'Enter') loadData();
+});
+
+document.getElementById('btn-search').addEventListener('click', loadData);
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+    document.getElementById('filter-agent').value = '';
+    document.getElementById('filter-igk').value = '';
+    document.getElementById('filter-cfo').value = '';
+    document.getElementById('cb-concluded').checked = true;
+    document.getElementById('cb-not-concluded').checked = false;
+    document.getElementById('cb-terminated').checked = false;
+    document.getElementById('cb-only-totals').checked = false;
+    document.getElementById('filter-year').value = 'all';
+    loadData();
+});
+
+// Запуск при загрузке страницы
+loadFiltersFromURL();
+loadData();
+</script>
+{% endblock %}

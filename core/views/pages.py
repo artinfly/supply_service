@@ -1,0 +1,1106 @@
+"""HTML-страницы и обработчики загрузки данных."""
+
+import json
+import os
+import tempfile
+import zipfile
+from datetime import datetime
+from decimal import Decimal
+from functools import wraps
+from io import StringIO
+
+import docx
+import openpyxl
+import xlrd
+from django.contrib import messages
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
+from django.core.management import call_command
+from django.db import IntegrityError, connection
+from django.db.models import Count, Exists, OuterRef, Q, Sum
+from django.db.models.expressions import RawSQL
+from django.http import JsonResponse
+from django.shortcuts import redirect, render
+from django.utils import timezone
+
+from ..models import (
+    GozContractVat,
+    IgkStatData,
+    NsiIgk,
+    SystemEvent,
+    ZnpData,
+    ZnpDataSAP,
+)
+from ..services import goz_analysis
+from ..services.dashboards import (
+    EMPTY_CFO_STATS,
+    EMPTY_NOT_ISSUED,
+    EMPTY_SAP,
+    EMPTY_STAGES,
+    EMPTY_ZNP,
+    ZNP_STAGE_LABELS,
+    ZNP_STAGE_NAMES,
+    breakdown_from_stats,
+    cfo_breakdown_row,
+    cfo_row,
+    cfo_totals_row,
+    filter_by_year,
+    not_issued_aggregates,
+    percent,
+    sap_aggregates,
+    sap_cards,
+    stage_aggregates,
+    to_mln,
+    znp_aggregates,
+)
+from ..services.excel import xlsx_response
+from ..services.excel_import import CONTRACT_COLUMNS, ZNP_COLUMNS, ZNP_SAP_COLUMNS
+from ..services.gk_directory import directory_index, find_gk, import_extended_rows
+from ..services.gk_key import gk_key, parse_gk_key
+from ..services.queries import (
+    ADVANCE,
+    CONCLUDED,
+    NOT_CONCL,
+    SAP_CFO,
+    TERMINATED,
+    YEARS,
+    distinct_agents,
+    distinct_cfo,
+    distinct_igk_suffixes,
+    distinct_sap_cfo,
+    distinct_sap_igk,
+    needs_znp,
+    valid_date,
+    valid_year,
+)
+from ..services.sap_status import SAP_STAGE_NAMES, SAP_STAGE_PARAMS, sap_second_date
+
+# --- Константы ---
+
+DEFAULT_VAT_RATE = Decimal("22.0")
+HAS_ORDER_Q = Q(order__isnull=False) & ~Q(order__regex=r"^\s*$")
+
+FILE_TYPE_COMMANDS = {
+    "contracts": "load_contracts",
+    "znp": "load_znp",
+    "znp_sap": "load_znp_sap",
+}
+
+FILE_TYPE_COLUMNS = {
+    "contracts": list(CONTRACT_COLUMNS),
+    "znp": list(ZNP_COLUMNS),
+    "znp_sap": list(ZNP_SAP_COLUMNS),
+}
+
+FILE_TYPE_LABELS = {
+    "contracts": "Договоры",
+    "znp": "ЗНП (ФЗД)",
+    "znp_sap": "ЗНП (SAP)",
+}
+
+
+# --- Вспомогательные функции ---
+
+
+def _ctx():
+    """Базовый контекст для всех страниц: годы и последний год."""
+    return {
+        "years": YEARS,
+        "year_cols": [(y, f"y{str(y)[2:]}") for y in YEARS],
+        "last_year": YEARS[-1],
+    }
+
+
+def superuser_required(view_func):
+    """Декоратор: доступ только для суперпользователей."""
+
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_superuser:
+            messages.error(
+                request, "Загрузка справочника доступна только суперпользователям."
+            )
+            return redirect("goz_report")
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
+
+
+def _igk_and_cfo_lists():
+    """Возвращает списки уникальных ИГК (последние 4 символа) и ЦФО."""
+    with connection.cursor() as cur:
+        cur.execute(distinct_igk_suffixes())
+        igk_list = [r[0] for r in cur.fetchall()]
+        cur.execute(distinct_cfo())
+        cfo_list = [r[0] for r in cur.fetchall()]
+    return igk_list, cfo_list
+
+
+# --- Аутентификация ---
+
+
+def login_view(request):
+    """Страница входа в систему."""
+    if request.user.is_authenticated:
+        return redirect("root")
+
+    error = False
+    if request.method == "POST":
+        user = authenticate(
+            request,
+            username=request.POST.get("username"),
+            password=request.POST.get("password"),
+        )
+        if user:
+            login(request, user)
+            return redirect("root")
+        error = True
+
+    return render(request, "login.html", {"error": error})
+
+
+def logout_view(request):
+    """Выход из системы."""
+    logout(request)
+    return redirect("login")
+
+
+# --- Главные страницы ---
+
+
+@login_required
+def index(request):
+    """Главная страница (перенаправляет на dashboard)."""
+    return render(request, "index.html", _ctx())
+
+
+# --- КДР и ИГК ---
+
+
+@login_required
+def kdr_table(request, year):
+    """Таблица КДР за выбранный год."""
+    year_int = valid_year(year)
+    if str(year_int) != str(year):
+        return redirect("kdr_table", year=str(year_int))
+
+    ctx = _ctx()
+    ctx["year"] = year_int
+    return render(request, "kdr_table.html", ctx)
+
+
+@login_required
+def kdr_table_default(request):
+    """Перенаправление на КДР за последний год."""
+    return redirect("kdr_table", year=str(YEARS[-1]))
+
+
+@login_required
+def igk_concluded_table(request, year):
+    """Таблица заключённых ИГК за выбранный год."""
+    year_int = valid_year(year)
+    if str(year_int) != str(year):
+        return redirect("igk_concluded_table", year=str(year_int))
+
+    ctx = _ctx()
+    ctx.update(
+        {
+            "year": year_int,
+            "report_type": "concluded",
+            "title": f"ИГК {year_int} — Заключённые",
+            "url_name": "igk_concluded_table",
+        }
+    )
+    return render(request, "igk_table.html", ctx)
+
+
+@login_required
+def igk_concluded_table_default(request):
+    """Перенаправление на заключённые ИГК за последний год."""
+    return redirect("igk_concluded_table", year=str(YEARS[-1]))
+
+
+@login_required
+def igk_not_concluded_table(request, year):
+    """Таблица незаключённых ИГК за выбранный год."""
+    year_int = valid_year(year)
+    if str(year_int) != str(year):
+        return redirect("igk_not_concluded_table", year=str(year_int))
+
+    ctx = _ctx()
+    ctx.update(
+        {
+            "year": year_int,
+            "report_type": "not_concluded",
+            "title": f"ИГК {year_int} — Незаключённые",
+            "url_name": "igk_not_concluded_table",
+        }
+    )
+    return render(request, "igk_table.html", ctx)
+
+
+@login_required
+def igk_not_concluded_table_default(request):
+    """Перенаправление на незаключённые ИГК за последний год."""
+    return redirect("igk_not_concluded_table", year=str(YEARS[-1]))
+
+
+@login_required
+def igk_terminated_table(request, year):
+    """Таблица расторгнутых ИГК за выбранный год."""
+    year_int = valid_year(year)
+    if str(year_int) != str(year):
+        return redirect("igk_terminated_table", year=str(year_int))
+
+    ctx = _ctx()
+    ctx.update(
+        {
+            "year": year_int,
+            "report_type": "terminated",
+            "title": f"ИГК {year_int} — Расторгнутые",
+            "url_name": "igk_terminated_table",
+        }
+    )
+    return render(request, "igk_table.html", ctx)
+
+
+@login_required
+def igk_terminated_table_default(request):
+    """Перенаправление на расторгнутые ИГК за последний год."""
+    return redirect("igk_terminated_table", year=str(YEARS[-1]))
+
+
+# --- Реестры ---
+
+
+@login_required
+def all_contracts_table(request):
+    """Реестр всех договоров с фильтрами."""
+    igk_list, cfo_list = _igk_and_cfo_lists()
+    ctx = _ctx()
+    ctx.update(
+        {
+            "igk_list": igk_list,
+            "cfo_list": cfo_list,
+            "concluded_statuses": list(CONCLUDED),
+            "not_concl_statuses": list(NOT_CONCL),
+            "terminated_statuses": list(TERMINATED),
+        }
+    )
+    return render(request, "all_contracts.html", ctx)
+
+
+@login_required
+def znp_list_table(request):
+    """Реестр заявок на платёж (ФЗД)."""
+    igk_list, cfo_list = _igk_and_cfo_lists()
+    ctx = _ctx()
+    ctx.update({"igk_list": igk_list, "cfo_list": cfo_list})
+    return render(request, "znp_list.html", ctx)
+
+
+@login_required
+def znp_sap_list_table(request):
+    """Реестр заявок на платёж (SAP)."""
+    with connection.cursor() as cur:
+        cur.execute(distinct_sap_igk())
+        igk_list = [r[0] for r in cur.fetchall()]
+        cur.execute(distinct_sap_cfo())
+        cfo_list = [r[0] for r in cur.fetchall()]
+
+    ctx = _ctx()
+    ctx.update({"igk_list": igk_list, "cfo_list": cfo_list})
+    return render(request, "znp_sap_list.html", ctx)
+
+
+# --- История изменений ---
+
+
+@login_required
+def history_status_table(request):
+    """Таблица изменений статусов договоров."""
+    return render(request, "history_status.html", _ctx())
+
+
+@login_required
+def history_plan_table(request):
+    """Таблица изменений плановых сумм."""
+    return render(request, "history_plan.html", _ctx())
+
+
+@login_required
+def history_fact_table(request):
+    """Таблица изменений фактических сумм."""
+    return render(request, "history_fact.html", _ctx())
+
+
+# --- Дубликаты ---
+
+
+@login_required
+def contract_dupes_table(request):
+    """Таблица дубликатов договоров."""
+    with connection.cursor() as cur:
+        cur.execute(distinct_cfo())
+        cfo_list = [r[0] for r in cur.fetchall()]
+
+    ctx = _ctx()
+    ctx["cfo_list"] = cfo_list
+    return render(request, "contract_dupes.html", ctx)
+
+
+# --- Экспорт ---
+
+
+@login_required
+def export_page(request):
+    """Страница выбора отчётов для экспорта в Excel."""
+    with connection.cursor() as cur:
+        cur.execute(distinct_agents())
+        agents = [r[0] for r in cur.fetchall()]
+
+    ctx = _ctx()
+    ctx["agents"] = agents
+    return render(request, "export.html", ctx)
+
+
+# --- Загрузка данных ---
+
+
+@login_required
+def upload_excel(request):
+    """Загрузка Excel-файлов (договоры, ЗнП ФЗД, ЗнП SAP)."""
+    result = None
+    file_type = request.POST.get("file_type", "contracts")
+
+    if request.method == "POST" and request.FILES.get("excel_file"):
+        command = FILE_TYPE_COMMANDS.get(file_type)
+
+        if command is None:
+            messages.error(request, f"Неизвестный тип файла: {file_type}")
+        else:
+            uploaded_file = request.FILES["excel_file"]
+            ext = os.path.splitext(uploaded_file.name)[1].lower()
+
+            if ext not in (".xlsx", ".xls"):
+                messages.error(
+                    request,
+                    f"Неподдерживаемый формат файла: {ext or 'без расширения'}. Нужен .xlsx или .xls",
+                )
+            else:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                    for chunk in uploaded_file.chunks():
+                        tmp.write(chunk)
+                    tmp_path = tmp.name
+
+                try:
+                    out = StringIO()
+                    call_command(command, tmp_path, stdout=out)
+                    result = out.getvalue()
+                    messages.success(request, "Файл успешно загружен и нормализован")
+                except Exception as e:
+                    text = str(e)
+                    messages.error(
+                        request,
+                        text if text.startswith("Ошибка") else f"Ошибка: {text}",
+                    )
+                    result = text
+                finally:
+                    os.unlink(tmp_path)
+
+    ctx = _ctx()
+    ctx.update(
+        {
+            "result": result,
+            "file_types": FILE_TYPE_LABELS,
+            "file_columns": FILE_TYPE_COLUMNS,
+            "selected_type": file_type,
+        }
+    )
+    return render(request, "upload.html", ctx)
+
+
+# --- Анализ ГОЗ ---
+
+
+def _to_vat(value):
+    """Преобразует значение в Decimal для ставки НДС."""
+    try:
+        return Decimal(str(value).replace(",", "."))
+    except Exception:
+        return DEFAULT_VAT_RATE
+
+
+def _save_gk_to_directory(gk_data):
+    """Сохраняет данные ГК в справочник. Возвращает список ошибок."""
+    errors = []
+    index = directory_index()
+
+    for label, item in gk_data.items():
+        key = gk_key(label)
+        defaults = {"vat_rate": _to_vat(item.get("vat"))}
+
+        year = str(item.get("year") or "").strip()
+        product = str(item.get("product") or "").strip()
+
+        if year:
+            defaults["year"] = year
+        if product:
+            defaults["product"] = product
+
+        try:
+            rec = find_gk(key, index)
+            if rec:
+                for name, value in defaults.items():
+                    setattr(rec, name, value)
+                rec.save()
+            else:
+                rec = GozContractVat.objects.create(igk=key, **defaults)
+            index[key] = rec
+        except Exception as e:
+            errors.append(f"{key}: {e}")
+
+    return errors
+
+
+def _is_own_temp_zip(path):
+    """Проверяет, что файл — временный ZIP из системной папки."""
+    if not path or not path.lower().endswith(".zip"):
+        return False
+
+    folder = os.path.dirname(os.path.abspath(path))
+    return folder == os.path.abspath(tempfile.gettempdir()) and os.path.exists(path)
+
+
+@login_required
+def goz_report(request):
+    """Страница анализа ГОЗ: загрузка ZIP-архива и формирование отчёта."""
+    ctx = _ctx()
+    ctx["directory_list"] = GozContractVat.objects.all().order_by("igk", "year")
+
+    if request.method == "POST":
+        temp_zip_path = request.POST.get("temp_zip_path")
+        gk_data_json = request.POST.get("gk_data")
+        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+        if gk_data_json and _is_own_temp_zip(temp_zip_path):
+            try:
+                gk_data = json.loads(gk_data_json)
+
+                if request.POST.get("save_to_dir") == "on":
+                    for err in _save_gk_to_directory(gk_data):
+                        messages.warning(request, f"Не сохранено в справочник: {err}")
+
+                index = directory_index()
+                normalized_contracts = []
+                extras = {}
+
+                for zip_igk, plan, fact in goz_analysis.read_archive(temp_zip_path):
+                    normalized_contracts.append((zip_igk, plan, fact))
+                    rec = find_gk(zip_igk, index)
+                    if rec:
+                        extras[zip_igk] = {
+                            "agent": rec.enterprise or "",
+                            "order": rec.order or "",
+                        }
+
+                vat_rates = {k: v.get("vat") for k, v in gk_data.items()}
+                products = {
+                    k: (v.get("product") or "").strip() for k, v in gk_data.items()
+                }
+
+                data = goz_analysis.build_report(
+                    normalized_contracts, vat_rates, products, extras
+                )
+                os.unlink(temp_zip_path)
+                return xlsx_response(data, "Анализ_ГОЗ")
+            except Exception as e:
+                if os.path.exists(temp_zip_path):
+                    os.unlink(temp_zip_path)
+
+                if is_ajax:
+                    return JsonResponse(
+                        {"error": f"Ошибка формирования отчёта: {e}"}, status=400
+                    )
+
+                messages.error(request, f"Ошибка формирования отчёта: {e}")
+
+        elif request.FILES.get("archive"):
+            tmp_path = None
+
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+                    for chunk in request.FILES["archive"].chunks():
+                        tmp.write(chunk)
+                    tmp_path = tmp.name
+
+                index = directory_index()
+                gk_list = []
+
+                for zip_igk, _plan, _fact in goz_analysis.read_archive(tmp_path):
+                    db_vat = find_gk(zip_igk, index)
+
+                    if db_vat:
+                        gk_list.append(
+                            {
+                                "igk": zip_igk,
+                                "enterprise": db_vat.enterprise or "",
+                                "order": db_vat.order or "",
+                                "year": db_vat.year or "",
+                                "product": db_vat.product or "",
+                                "vat_rate": float(db_vat.vat_rate),
+                                "is_new": False,
+                            }
+                        )
+                    else:
+                        gk_list.append(
+                            {
+                                "igk": zip_igk,
+                                "enterprise": "",
+                                "order": "",
+                                "year": "",
+                                "product": "",
+                                "vat_rate": float(DEFAULT_VAT_RATE),
+                                "is_new": True,
+                            }
+                        )
+
+                ctx["temp_zip_path"] = tmp_path
+                ctx["gk_list"] = gk_list
+                ctx["step2"] = True
+            except zipfile.BadZipFile:
+                messages.error(request, "Файл не является ZIP-архивом")
+            except Exception as e:
+                messages.error(request, f"Ошибка обработки архива: {e}")
+
+            if "step2" not in ctx and tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    if "step2" not in ctx:
+        ctx["default_vat_rate"] = float(DEFAULT_VAT_RATE)
+
+    return render(request, "goz_report.html", ctx)
+
+
+# --- Справочник ГК ---
+
+
+def _upsert_gk(igk):
+    """Создаёт или обновляет запись ГК в справочнике. Возвращает True, если создана."""
+    igk = gk_key(igk)
+    try:
+        _, created = GozContractVat.objects.update_or_create(
+            igk=igk,
+            defaults={"vat_rate": DEFAULT_VAT_RATE},
+        )
+        return created
+    except Exception:
+        return None
+
+
+def _sheet_rows(file, ext):
+    """Читает строки из Excel-файла (.xlsx или .xls)."""
+    if ext == ".xlsx":
+        wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+        return [tuple(r) for r in wb.active.iter_rows(min_row=1, values_only=True)]
+
+    ws = xlrd.open_workbook(file_contents=file.read()).sheet_by_index(0)
+    return [tuple(ws.row_values(rx)) for rx in range(ws.nrows)]
+
+
+def _is_extended_directory(rows):
+    """Проверяет, является ли файл расширенным справочником (с колонками Предприятие, Заказ)."""
+    for row in rows[:10]:
+        text = " ".join(str(c).lower() for c in row if c is not None)
+        if "предприятие" in text or "договор" in text or "догово/" in text:
+            return True
+        if len(row) >= 4 and parse_gk_key(row[3]):
+            return True
+    return False
+
+
+@login_required
+@superuser_required
+def upload_gk_directory(request):
+    """Загрузка справочника ГК из Word или Excel."""
+    if request.method != "POST" or not request.FILES.get("doc_file"):
+        return redirect("goz_report")
+
+    file = request.FILES["doc_file"]
+    ext = os.path.splitext(file.name)[1].lower()
+
+    added_count = 0
+    updated_count = 0
+
+    try:
+        if ext == ".docx":
+            doc = docx.Document(file)
+
+            for table in doc.tables:
+                for row in table.rows:
+                    cells = row.cells
+
+                    if len(cells) < 2:
+                        continue
+
+                    num_text = cells[0].text.strip()
+                    igk = cells[1].text.strip()
+
+                    if not igk or "гк" in igk.lower() or "номер" in igk.lower():
+                        continue
+
+                    if (
+                        num_text
+                        and not num_text.isdigit()
+                        and num_text.lower() not in ["№", "п/п"]
+                    ):
+                        continue
+
+                    created = _upsert_gk(igk)
+                    if created is None:
+                        continue
+
+                    if created:
+                        added_count += 1
+                    else:
+                        updated_count += 1
+
+        elif ext in (".xlsx", ".xls"):
+            rows = _sheet_rows(file, ext)
+
+            if _is_extended_directory(rows):
+                added_count, updated_count, errors = import_extended_rows(rows)
+                for err in errors[:5]:
+                    messages.warning(request, f"Пропущено: {err}")
+                if len(errors) > 5:
+                    messages.warning(request, f"…и ещё ошибок: {len(errors) - 5}")
+            else:
+                for row in rows:
+                    if len(row) < 2:
+                        continue
+
+                    igk = str(row[1]).strip() if row[1] is not None else ""
+                    if not igk or igk.lower() in {"nan", "гк", "номер", "none"}:
+                        continue
+
+                    created = _upsert_gk(igk)
+                    if created is None:
+                        continue
+
+                    if created:
+                        added_count += 1
+                    else:
+                        updated_count += 1
+
+        else:
+            messages.error(
+                request,
+                "Неподдерживаемый формат. Используйте .docx, .xlsx или .xls",
+            )
+            return redirect("goz_report")
+
+    except Exception as e:
+        messages.error(request, f"Ошибка парсинга файла: {e}")
+        return redirect("goz_report")
+
+    messages.success(
+        request,
+        f"Справочник обновлён. Добавлено: {added_count}, Обновлено: {updated_count}.",
+    )
+    return redirect("goz_report")
+
+
+@login_required
+@superuser_required
+def gk_directory_save(request):
+    """Сохранение записи справочника ГК (создание или обновление)."""
+    if request.method == "POST":
+        record_id = request.POST.get("record_id", "").strip()
+        igk = gk_key(request.POST.get("igk", ""))
+        enterprise = request.POST.get("enterprise", "").strip()
+        order = request.POST.get("order", "").strip()
+        contract_date = request.POST.get("contract_date", "").strip()
+        year = request.POST.get("year", "").strip()
+        product = request.POST.get("product", "").strip()
+        vat_rate_raw = request.POST.get("vat_rate", "22.0").strip()
+
+        if not igk:
+            messages.error(request, "Поле «ГК» обязательно для заполнения.")
+            return redirect("goz_report")
+
+        try:
+            vat_rate = Decimal(vat_rate_raw.replace(",", "."))
+        except Exception:
+            vat_rate = DEFAULT_VAT_RATE
+
+        try:
+            if record_id:
+                obj = GozContractVat.objects.get(id=record_id)
+                obj.igk = igk
+                obj.enterprise = enterprise or None
+                obj.order = order or None
+                obj.contract_date = contract_date or None
+                obj.year = year or None
+                obj.product = product or None
+                obj.vat_rate = vat_rate
+                obj.save()
+                messages.success(request, f"Запись для ГК «{igk}» обновлена.")
+            else:
+                GozContractVat.objects.create(
+                    igk=igk,
+                    enterprise=enterprise or None,
+                    order=order or None,
+                    contract_date=contract_date or None,
+                    year=year or None,
+                    product=product or None,
+                    vat_rate=vat_rate,
+                )
+                messages.success(request, f"ГК «{igk}» добавлен в справочник.")
+        except IntegrityError:
+            messages.error(request, f"ГК «{igk}» уже есть в справочнике.")
+        except Exception as e:
+            messages.error(request, f"Ошибка сохранения: {e}")
+
+    return redirect("goz_report")
+
+
+@login_required
+@superuser_required
+def gk_directory_delete(request):
+    """Удаление записи справочника ГК."""
+    if request.method == "POST":
+        record_id = request.POST.get("record_id", "").strip()
+
+        if record_id:
+            try:
+                obj = GozContractVat.objects.get(id=record_id)
+                igk = obj.igk
+                obj.delete()
+                messages.success(request, f"Запись для ГК «{igk}» удалена.")
+            except GozContractVat.DoesNotExist:
+                messages.error(request, "Запись не найдена.")
+            except Exception as e:
+                messages.error(request, f"Ошибка удаления: {e}")
+
+    return redirect("goz_report")
+
+
+# --- Дашборды ---
+
+
+@login_required
+def dashboard(request):
+    """Сводка по договорам и ЦФО."""
+    available_igk = NsiIgk.objects.all()
+    year = valid_year(request.GET.get("year"))
+    selected_igk = request.GET.get("igk", "") or str(available_igk.first() or "")
+
+    ctx = _ctx()
+    year_field = f"y{str(year)[-2:]}"
+
+    concluded_q = Q(status__in=CONCLUDED)
+    not_concl_q = Q(status__in=NOT_CONCL)
+    year_q = Q(**{year_field: True})
+    advance_q = Q(payment_type=ADVANCE)
+
+    totals_all = IgkStatData.objects.filter(
+        HAS_ORDER_Q, contract__isnull=False
+    ).aggregate(
+        count=Count("contract", distinct=True),
+        plan_sum=Sum("plan"),
+        concluded_count=Count("contract", filter=concluded_q, distinct=True),
+        concluded_plan=Sum("plan", filter=concluded_q),
+        not_concluded_count=Count("contract", filter=not_concl_q, distinct=True),
+        not_concluded_plan=Sum("plan", filter=not_concl_q),
+    )
+
+    totals_year = (
+        IgkStatData.objects.exclude(status="Расторгнут")
+        .filter(HAS_ORDER_Q, contract__isnull=False, **{year_field: True})
+        .aggregate(
+            count=Count("contract", distinct=True),
+            plan_sum=Sum("plan"),
+            concluded_count=Count("contract", filter=concluded_q, distinct=True),
+            concluded_plan=Sum("plan", filter=concluded_q),
+            advance_plan=Sum("plan", filter=advance_q),
+            advance_fact=Sum("fact", filter=advance_q),
+        )
+    )
+
+    available_cfo = list(
+        IgkStatData.objects.filter(igk=selected_igk)
+        .values_list("cfo", flat=True)
+        .distinct()
+        .order_by("cfo")
+    )
+
+    cfo_stats = {
+        row["cfo"]: row
+        for row in (
+            IgkStatData.objects.exclude(status="Расторгнут")
+            .filter(HAS_ORDER_Q, igk=selected_igk, contract__isnull=False)
+            .values("cfo")
+            .annotate(
+                all_count=Count("contract", distinct=True),
+                all_sum=Sum("plan"),
+                all_concluded_count=Count(
+                    "contract", filter=concluded_q, distinct=True
+                ),
+                all_concluded_sum=Sum("plan", filter=concluded_q),
+                curr_count=Count("contract", filter=year_q, distinct=True),
+                curr_sum=Sum("plan", filter=year_q),
+                curr_concluded_count=Count(
+                    "contract", filter=concluded_q & year_q, distinct=True
+                ),
+                curr_concluded_sum=Sum("plan", filter=concluded_q & year_q),
+                curr_not_concluded_count=Count(
+                    "contract", filter=not_concl_q & year_q, distinct=True
+                ),
+                curr_not_concluded_sum=Sum("plan", filter=not_concl_q & year_q),
+                curr_plan=Sum("plan", filter=advance_q & year_q),
+                curr_fact=Sum("fact", filter=advance_q & year_q),
+            )
+        )
+    }
+
+    igk_table = [
+        cfo_row(cfo, cfo_stats.get(cfo, EMPTY_CFO_STATS)) for cfo in available_cfo
+    ]
+    igk_table.append(cfo_totals_row(igk_table))
+
+    year_count = totals_year["count"]
+    year_concluded_count = totals_year["concluded_count"]
+    year_plan = totals_year["plan_sum"] or 0
+    year_concluded_plan = totals_year["concluded_plan"] or 0
+    advance_plan = totals_year["advance_plan"] or 0
+    advance_fact = totals_year["advance_fact"] or 0
+
+    ctx.update(
+        {
+            "available_years": YEARS,
+            "selected_year": str(year),
+            "available_igk": available_igk,
+            "selected_igk": selected_igk,
+            "all_contracts_count": totals_all["count"],
+            "all_contracts_sum": to_mln(totals_all["plan_sum"]),
+            "all_concluded_count": totals_all["concluded_count"],
+            "all_concluded_sum": to_mln(totals_all["concluded_plan"]),
+            "all_not_concluded_count": totals_all["not_concluded_count"],
+            "all_not_concluded_sum": to_mln(totals_all["not_concluded_plan"]),
+            "curr_year_contracts_count": year_count,
+            "curr_year_contracts_sum": to_mln(year_plan),
+            "curr_year_concluded_count": year_concluded_count,
+            "curr_year_concluded_sum": to_mln(year_concluded_plan),
+            "curr_year_not_concluded_count": year_count - year_concluded_count,
+            "curr_year_not_concluded_sum": to_mln(year_plan - year_concluded_plan),
+            "curr_year_fact": to_mln(advance_fact),
+            "curr_year_plan": to_mln(advance_plan),
+            "curr_year_percent_count": percent(year_concluded_count, year_count),
+            "curr_year_percent_sum": percent(year_concluded_plan, year_plan),
+            "curr_year_percent_prepaid": percent(advance_fact, advance_plan),
+            "igk_table": igk_table,
+            "has_data": IgkStatData.objects.exists(),
+            "no_data_hint": "Договоры ещё не загружены. Нужен файл выгрузки по договорам.",
+        }
+    )
+    return render(request, "dashboard.html", ctx)
+
+
+@login_required
+def znp_table(request):
+    """Сводка по заявкам на платёж (ФЗД)."""
+    available_igk = NsiIgk.objects.all()
+    year = valid_year(request.GET.get("year"))
+    selected_igk = request.GET.get("igk", "") or str(available_igk.first() or "")
+
+    ctx = _ctx()
+    has_znp = Exists(ZnpData.objects.filter(parent=OuterRef("pk")))
+
+    def _not_issued_qs(igk=None):
+        qs = (
+            IgkStatData.objects.filter(status__in=CONCLUDED)
+            .annotate(has_znp=has_znp)
+            .filter(has_znp=False)
+            .annotate(needs_znp=RawSQL(needs_znp("igk_stat_data"), []))
+            .filter(needs_znp=True)
+        )
+        if igk is not None:
+            qs = qs.filter(igk=igk)
+        return qs
+
+    def _znp_qs(igk=None):
+        qs = ZnpData.objects.filter(parent__status__in=CONCLUDED)
+        if igk is not None:
+            qs = qs.filter(parent__igk=igk)
+        return qs
+
+    def _stages_qs(igk=None):
+        qs = IgkStatData.objects.filter(status__in=CONCLUDED)
+        if igk is not None:
+            qs = qs.filter(igk=igk)
+        return qs
+
+    all_not_issued_qs = _not_issued_qs()
+    all_znp_qs = _znp_qs()
+    all_stages_qs = _stages_qs()
+
+    year_not_issued_qs = filter_by_year(all_not_issued_qs, year)
+    year_znp_qs = filter_by_year(all_znp_qs, year, field_prefix="parent__")
+    year_stages_qs = filter_by_year(all_stages_qs, year)
+
+    def _breakdown(not_issued_qs, znp_qs, stages_qs):
+        return breakdown_from_stats(
+            not_issued_qs.aggregate(**not_issued_aggregates()),
+            znp_qs.aggregate(**znp_aggregates()),
+            stages_qs.aggregate(**stage_aggregates()),
+        )
+
+    all_breakdown = _breakdown(all_not_issued_qs, all_znp_qs, all_stages_qs)
+    year_breakdown = _breakdown(year_not_issued_qs, year_znp_qs, year_stages_qs)
+
+    available_cfo = list(
+        IgkStatData.objects.filter(igk=selected_igk)
+        .values_list("cfo", flat=True)
+        .distinct()
+        .order_by("cfo")
+    )
+
+    igk_not_issued_qs = filter_by_year(_not_issued_qs(igk=selected_igk), year)
+    igk_znp_qs = filter_by_year(
+        _znp_qs(igk=selected_igk), year, field_prefix="parent__"
+    )
+    igk_stages_qs = filter_by_year(_stages_qs(igk=selected_igk), year)
+
+    not_issued_stats = {
+        row["cfo"]: row
+        for row in igk_not_issued_qs.values("cfo").annotate(**not_issued_aggregates())
+    }
+    znp_stats = {
+        row["parent__cfo"]: row
+        for row in igk_znp_qs.values("parent__cfo").annotate(**znp_aggregates())
+    }
+    stage_stats = {
+        row["cfo"]: row
+        for row in igk_stages_qs.values("cfo").annotate(**stage_aggregates())
+    }
+
+    cfo_table = [
+        cfo_breakdown_row(
+            cfo,
+            breakdown_from_stats(
+                not_issued_stats.get(cfo, EMPTY_NOT_ISSUED),
+                znp_stats.get(cfo, EMPTY_ZNP),
+                stage_stats.get(cfo, EMPTY_STAGES),
+            ),
+            ZNP_STAGE_LABELS,
+        )
+        for cfo in available_cfo
+    ]
+
+    cfo_total_row = cfo_breakdown_row(
+        "ИТОГО",
+        _breakdown(igk_not_issued_qs, igk_znp_qs, igk_stages_qs),
+        ZNP_STAGE_LABELS,
+    )
+
+    chart_start = request.GET.get("start", "").strip()
+    chart_end = request.GET.get("end", "").strip()
+
+    if not (valid_date(chart_start) and valid_date(chart_end)):
+        chart_start = chart_end = ""
+
+    ctx.update(
+        {
+            "available_years": YEARS,
+            "selected_year": str(year),
+            "available_igk": available_igk,
+            "selected_igk": selected_igk,
+            "chart_start": chart_start,
+            "chart_end": chart_end,
+            "stage_names": ZNP_STAGE_NAMES,
+            "all": all_breakdown,
+            "year": year_breakdown,
+            "cfo_table": cfo_table,
+            "cfo_total_row": cfo_total_row,
+            "has_data": all_breakdown["total_count"] > 0,
+            "no_data_hint": "Нет ни договоров, ни заявок на платёж (ФЗД). Нужны файлы выгрузки.",
+        }
+    )
+    return render(request, "znp_table.html", ctx)
+
+
+@login_required
+def znp_sap_table(request):
+    """Сводка по заявкам на платёж (SAP)."""
+    ctx = _ctx()
+    qs = ZnpDataSAP.objects.filter(cfo__in=SAP_CFO)
+
+    def _breakdown(queryset, date=None):
+        return sap_cards(queryset.aggregate(**sap_aggregates(date)))
+
+    all_breakdown = _breakdown(qs)
+
+    date_param = request.GET.get("date", "")
+    first_date = (
+        datetime.strptime(date_param, "%Y-%m-%d").date()
+        if valid_date(date_param)
+        else timezone.localdate()
+    )
+    second_date = sap_second_date(first_date)
+
+    first_date_breakdown = _breakdown(qs, first_date)
+    second_date_breakdown = _breakdown(qs, second_date)
+
+    available_igk = list(
+        qs.exclude(igk__isnull=True)
+        .exclude(igk="")
+        .values_list("igk", flat=True)
+        .distinct()
+        .order_by("igk")
+    )
+    selected_igk = request.GET.get("igk", "") or (
+        available_igk[0] if available_igk else ""
+    )
+
+    cfo_qs = qs.filter(igk=selected_igk) if selected_igk else qs
+    available_cfo = list(
+        cfo_qs.values_list("cfo", flat=True).distinct().order_by("cfo")
+    )
+    cfo_stats = {
+        row["cfo"]: row for row in cfo_qs.values("cfo").annotate(**sap_aggregates())
+    }
+
+    cfo_table = [
+        cfo_breakdown_row(
+            cfo,
+            sap_cards(cfo_stats.get(cfo, EMPTY_SAP)),
+            SAP_STAGE_PARAMS,
+        )
+        for cfo in available_cfo
+    ]
+    cfo_total_row = cfo_breakdown_row("ИТОГО", _breakdown(cfo_qs), SAP_STAGE_PARAMS)
+
+    ctx.update(
+        {
+            "stage_names": SAP_STAGE_NAMES,
+            "available_igk": available_igk,
+            "selected_igk": selected_igk,
+            "all": all_breakdown,
+            "first_date": first_date,
+            "second_date": second_date,
+            "first_date_breakdown": first_date_breakdown,
+            "second_date_breakdown": second_date_breakdown,
+            "cfo_table": cfo_table,
+            "cfo_total_row": cfo_total_row,
+            "has_data": all_breakdown["total_count"] > 0,
+            "no_data_hint": "Заявки на платёж из SAP ещё не загружены. Нужен файл выгрузки ЗНП (SAP).",
+        }
+    )
+
+    try:
+        sap_load_event = SystemEvent.objects.filter(event_key="sap_load").first()
+        ctx["sap_load_time"] = sap_load_event.event_time if sap_load_event else None
+    except Exception:
+        ctx["sap_load_time"] = None
+
+    return render(request, "znp_sap_table.html", ctx)
