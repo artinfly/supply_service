@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('reports', '0017_alter_contractsappeared_options_and_more'),
+        ('core', '0017_alter_contractsappeared_options_and_more'),
     ]
 
     operations = [
@@ -25,3 +25,7 @@ class Migration(migrations.Migration):
             },
         ),
     ]
+
+
+
+

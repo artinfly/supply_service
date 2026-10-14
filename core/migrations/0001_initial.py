@@ -229,7 +229,7 @@ class Migration(migrations.Migration):
                         db_constraint=False,
                         null=True,
                         on_delete=django.db.models.deletion.SET_NULL,
-                        to="reports.igkstatdata",
+                        to="core.igkstatdata",
                     ),
                 ),
             ],
@@ -241,3 +241,6 @@ class Migration(migrations.Migration):
             },
         ),
     ]
+
+
+

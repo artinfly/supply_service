@@ -176,11 +176,6 @@ def _contract_label(filename):
     return gk_key(filename[:-4])
 
 
-def igk_key(label):
-    """Оставлено для совместимости: ключ ГК вида «6066/162сб»."""
-    return gk_key(label)
-
-
 def _cell_number(sheet, row, col):
     """Безопасно читает числовое значение ячейки, возвращает 0.0 при ошибке."""
     try:

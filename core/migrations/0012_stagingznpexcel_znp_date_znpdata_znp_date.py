@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("reports", "0011_alter_igkstatdata_remainder"),
+        ("core", "0011_alter_igkstatdata_remainder"),
     ]
 
     operations = [
@@ -21,3 +21,7 @@ class Migration(migrations.Migration):
             field=models.DateField(null=True),
         ),
     ]
+
+
+
+

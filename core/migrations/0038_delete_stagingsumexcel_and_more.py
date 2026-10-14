@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('reports', '0037_stagingsumexcel_report_title'),
+        ('core', '0037_stagingsumexcel_report_title'),
     ]
 
     operations = [
@@ -249,3 +249,7 @@ class Migration(migrations.Migration):
             field=models.CharField(max_length=50, null=True, verbose_name='ИГК'),
         ),
     ]
+
+
+
+

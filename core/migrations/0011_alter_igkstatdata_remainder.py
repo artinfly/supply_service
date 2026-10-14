@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("reports", "0010_igkstatdata_remainder_stagingexcel_ostatok"),
+        ("core", "0010_igkstatdata_remainder_stagingexcel_ostatok"),
     ]
 
     operations = [
@@ -16,3 +16,7 @@ class Migration(migrations.Migration):
             field=models.FloatField(null=True),
         ),
     ]
+
+
+
+

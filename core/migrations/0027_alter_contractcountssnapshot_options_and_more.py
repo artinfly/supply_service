@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('reports', '0026_alter_access_options'),
+        ('core', '0026_alter_access_options'),
     ]
 
     operations = [
@@ -144,3 +144,7 @@ class Migration(migrations.Migration):
             index=models.Index(fields=['parent_id'], name='idx_znp_parent'),
         ),
     ]
+
+
+
+

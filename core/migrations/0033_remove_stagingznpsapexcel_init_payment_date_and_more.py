@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('reports', '0032_rename_stage_с_stagingznpsapexcel_stage_c'),
+        ('core', '0032_rename_stage_с_stagingznpsapexcel_stage_c'),
     ]
 
     operations = [
@@ -19,3 +19,7 @@ class Migration(migrations.Migration):
             name='init_payment_date',
         ),
     ]
+
+
+
+

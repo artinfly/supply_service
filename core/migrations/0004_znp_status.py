@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("reports", "0003_sap_indexes"),
+        ("core", "0003_sap_indexes"),
     ]
 
     operations = [
@@ -19,3 +19,7 @@ class Migration(migrations.Migration):
             field=models.CharField(max_length=100, null=True),
         ),
     ]
+
+
+
+

@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("reports", "0008_testtable"),
+        ("core", "0008_testtable"),
     ]
 
     operations = [
@@ -14,3 +14,7 @@ class Migration(migrations.Migration):
             name="TestTable",
         ),
     ]
+
+
+
+

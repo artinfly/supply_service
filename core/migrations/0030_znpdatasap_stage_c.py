@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('reports', '0029_gozcontractvat_product_gozcontractvat_year_and_more'),
+        ('core', '0029_gozcontractvat_product_gozcontractvat_year_and_more'),
     ]
 
     operations = [
@@ -16,3 +16,7 @@ class Migration(migrations.Migration):
             field=models.DateField(null=True, verbose_name='Этап C'),
         ),
     ]
+
+
+
+

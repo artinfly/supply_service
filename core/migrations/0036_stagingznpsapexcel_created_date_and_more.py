@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('reports', '0035_stagingsumexcel'),
+        ('core', '0035_stagingsumexcel'),
     ]
 
     operations = [
@@ -21,3 +21,7 @@ class Migration(migrations.Migration):
             field=models.DateField(null=True, verbose_name='Дата создания заявки'),
         ),
     ]
+
+
+
+

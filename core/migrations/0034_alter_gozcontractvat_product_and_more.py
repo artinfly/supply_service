@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('reports', '0033_remove_stagingznpsapexcel_init_payment_date_and_more'),
+        ('core', '0033_remove_stagingznpsapexcel_init_payment_date_and_more'),
     ]
 
     operations = [
@@ -21,3 +21,7 @@ class Migration(migrations.Migration):
             field=models.CharField(blank=True, max_length=4, null=True, verbose_name='Год'),
         ),
     ]
+
+
+
+

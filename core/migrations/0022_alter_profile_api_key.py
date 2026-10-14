@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('reports', '0021_profile_last_synced_at_profile_sync_error'),
+        ('core', '0021_profile_last_synced_at_profile_sync_error'),
     ]
 
     operations = [
@@ -16,3 +16,7 @@ class Migration(migrations.Migration):
             field=models.CharField(blank=True, max_length=64, null=True, verbose_name='API ключ'),
         ),
     ]
+
+
+
+

@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('reports', '0019_stagingznpsapexcel_init_payment_date_and_more'),
+        ('core', '0019_stagingznpsapexcel_init_payment_date_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -24,3 +24,7 @@ class Migration(migrations.Migration):
             ],
         ),
     ]
+
+
+
+

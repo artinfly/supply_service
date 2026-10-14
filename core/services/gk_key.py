@@ -32,9 +32,6 @@ _SPEC_CONTRACT_RE = re.compile(r"спец.*/\s*(\d+)", re.IGNORECASE)
 # Последние 4 цифры числа (для извлечения ИГК из длинного номера)
 _LAST4_RE = re.compile(r"(\d{4})(?!\d)")
 
-# Первые 4 цифры ключа (для gk_base)
-_BASE_RE = re.compile(r"\s*(\d{4})")
-
 
 # --- Вспомогательные функции ---
 
@@ -128,20 +125,3 @@ def key_from_contract(text):
     # Извлекаем спец-номер из «спец…/N»
     spec = _SPEC_CONTRACT_RE.search(text)
     return _compose(head, spec.group(1) if spec else None)
-
-
-def gk_base(key):
-    """Возвращает первые 4 цифры ключа ГК (базовый ИГК).
-
-    Примеры:
-        «6066/162сб 5» -> «6066»
-        «6066» -> «6066»
-
-    Args:
-        key: ключ ГК (строка)
-
-    Returns:
-        str: первые 4 цифры или исходная строка, если не удалось распознать
-    """
-    m = _BASE_RE.match(str(key or ""))
-    return m.group(1) if m else str(key or "").strip()

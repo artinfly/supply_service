@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("reports", "0014_pgcrypto"),
+        ("core", "0014_pgcrypto"),
     ]
 
     operations = [
@@ -40,3 +40,7 @@ class Migration(migrations.Migration):
             },
         ),
     ]
+
+
+
+

@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("reports", "0024_alter_stagingznpsapexcel_cfo_alter_znpdatasap_cfo"),
+        ("core", "0024_alter_stagingznpsapexcel_cfo_alter_znpdatasap_cfo"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -711,7 +711,7 @@ class Migration(migrations.Migration):
                 db_constraint=False,
                 null=True,
                 on_delete=django.db.models.deletion.SET_NULL,
-                to="reports.igkstatdata",
+                to="core.igkstatdata",
                 verbose_name="Родительская позиция договора",
             ),
         ),
@@ -833,3 +833,6 @@ class Migration(migrations.Migration):
             field=models.FloatField(null=True, verbose_name="Сумма ВВ"),
         ),
     ]
+
+
+

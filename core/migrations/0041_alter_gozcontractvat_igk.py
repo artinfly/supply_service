@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('reports', '0040_convert_gk_keys'),
+        ('core', '0040_convert_gk_keys'),
     ]
 
     operations = [
@@ -16,3 +16,7 @@ class Migration(migrations.Migration):
             field=models.CharField(max_length=255, unique=True, verbose_name='ГК (игк/111сб)'),
         ),
     ]
+
+
+
+

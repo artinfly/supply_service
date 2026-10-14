@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('reports', '0030_znpdatasap_stage_c'),
+        ('core', '0030_znpdatasap_stage_c'),
     ]
 
     operations = [
@@ -16,3 +16,7 @@ class Migration(migrations.Migration):
             field=models.DateField(null=True, verbose_name='Этап С'),
         ),
     ]
+
+
+
+

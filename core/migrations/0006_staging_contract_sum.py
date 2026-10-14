@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("reports", "0005_contract_sum"),
+        ("core", "0005_contract_sum"),
     ]
 
     operations = [
@@ -14,3 +14,7 @@ class Migration(migrations.Migration):
             field=models.TextField(null=True),
         ),
     ]
+
+
+
+

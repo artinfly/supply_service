@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("reports", "0036_stagingznpsapexcel_created_date_and_more"),
+        ("core", "0036_stagingznpsapexcel_created_date_and_more"),
     ]
 
     operations = [
@@ -18,3 +18,7 @@ class Migration(migrations.Migration):
             ),
         ),
     ]
+
+
+
+

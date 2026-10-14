@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('reports', '0028_gozcontractvat'),
+        ('core', '0028_gozcontractvat'),
     ]
 
     operations = [
@@ -27,3 +27,7 @@ class Migration(migrations.Migration):
             field=models.DecimalField(decimal_places=1, default=Decimal('22.0'), max_digits=4, verbose_name='Ставка НДС, %'),
         ),
     ]
+
+
+
+

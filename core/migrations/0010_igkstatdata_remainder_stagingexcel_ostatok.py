@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("reports", "0009_delete_testtable"),
+        ("core", "0009_delete_testtable"),
     ]
 
     operations = [
@@ -21,3 +21,7 @@ class Migration(migrations.Migration):
             field=models.TextField(null=True),
         ),
     ]
+
+
+
+

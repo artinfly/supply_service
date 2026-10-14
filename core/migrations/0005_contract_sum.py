@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("reports", "0004_znp_status"),
+        ("core", "0004_znp_status"),
     ]
 
     operations = [
@@ -24,3 +24,7 @@ class Migration(migrations.Migration):
             field=models.FloatField(null=True),
         ),
     ]
+
+
+
+

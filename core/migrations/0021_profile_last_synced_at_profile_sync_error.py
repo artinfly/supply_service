@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('reports', '0020_profile'),
+        ('core', '0020_profile'),
     ]
 
     operations = [
@@ -21,3 +21,7 @@ class Migration(migrations.Migration):
             field=models.TextField(blank=True, verbose_name='Ошибка последней синхронизации'),
         ),
     ]
+
+
+
+

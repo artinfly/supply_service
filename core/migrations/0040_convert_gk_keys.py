@@ -7,7 +7,7 @@ _GK_RE = re.compile(r"(\d{4})(?!\d)\s*[/_\s\-]*\s*(\d+)\s*[сc]б", re.IGNORECAS
 
 def convert_keys(apps, schema_editor):
     """«6066 162сб» -> «6066/162сб». Если новый ключ уже занят — запись не трогаем."""
-    Gk = apps.get_model("reports", "GozContractVat")
+    Gk = apps.get_model("core", "GozContractVat")
     taken = set(Gk.objects.values_list("igk", flat=True))
     for rec in Gk.objects.all().order_by("id"):
         m = _GK_RE.search(rec.igk or "")
@@ -25,9 +25,13 @@ def convert_keys(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("reports", "0039_gozcontractvat_contract_date_and_more"),
+        ("core", "0039_gozcontractvat_contract_date_and_more"),
     ]
 
     operations = [
         migrations.RunPython(convert_keys, migrations.RunPython.noop),
     ]
+
+
+
+

@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("reports", "0007_drop_staging_sozdan"),
+        ("core", "0007_drop_staging_sozdan"),
     ]
 
     operations = [
@@ -26,3 +26,7 @@ class Migration(migrations.Migration):
             ],
         ),
     ]
+
+
+
+

@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("reports", "0012_stagingznpexcel_znp_date_znpdata_znp_date"),
+        ("core", "0012_stagingznpexcel_znp_date_znpdata_znp_date"),
     ]
 
     operations = [
@@ -18,3 +18,7 @@ class Migration(migrations.Migration):
             name="is_deleted",
         ),
     ]
+
+
+
+

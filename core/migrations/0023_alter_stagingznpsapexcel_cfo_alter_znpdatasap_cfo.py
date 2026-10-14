@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('reports', '0022_alter_profile_api_key'),
+        ('core', '0022_alter_profile_api_key'),
     ]
 
     operations = [
@@ -21,3 +21,7 @@ class Migration(migrations.Migration):
             field=models.CharField(max_length=256, null=True),
         ),
     ]
+
+
+
+
