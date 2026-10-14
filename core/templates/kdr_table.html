@@ -1,0 +1,60 @@
+{# Шаблон страницы "КДР — заключение договоров". #}
+{# Отображает таблицу контрактации по ИГК с переключателем годов. #}
+{# Использует глобальную функцию loadTable из base.html. #}
+
+{% extends 'base.html' %}
+{% block title %}КДР {{ year }}{% endblock %}
+
+{% block content %}
+{# --- Заголовок и переключатель годов --- #}
+<div class="page-header">
+    <h5>Заключение договоров — {{ year }}</h5>
+    <div class="d-flex gap-2 align-items-center">
+        <span class="filter-label" style="margin:0">Год:</span>
+        {% for y in years %}
+        <a href="{% url 'kdr_table' y|stringformat:'s' %}"
+           class="idx-btn{% if y == year %} idx-btn-active{% endif %}">{{ y }}</a>
+        {% endfor %}
+    </div>
+</div>
+
+{# --- Контейнер для таблицы, заполняемый через JS --- #}
+<div class="table-container" id="table-wrapper"></div>
+
+{# --- Скрытый элемент для передачи URL API в JavaScript --- #}
+<div id="page-data" data-api-url="{% url 'api_kdr' year %}" style="display:none"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+"use strict";
+
+// Конфигурация колонок таблицы КДР (контроль договорной работы)
+// Колонки сгруппированы: общие показатели → показатели за текущий год → проценты
+const COLS = [
+    { field: 'igk',                               title: 'ИГК' },
+    { field: 'orders',                            title: 'Всего договоров',                   format: 'int' },
+    { field: 'order_sum',                         title: 'Сумма, млн руб.',                   format: 'number' },
+    { field: 'count_concluded',                   title: 'Заключено',                         format: 'int' },
+    { field: 'concluded_order_sum',               title: 'Сумма заключённых, млн',            format: 'number' },
+    { field: 'count_curr_year',                   title: 'Договоров {{ year }}',              format: 'int' },
+    { field: 'order_sum_curr_year',               title: 'Сумма {{ year }}, млн',             format: 'number' },
+    { field: 'count_concluded_curr_year',         title: 'Заключено {{ year }}',              format: 'int' },
+    { field: 'concluded_order_sum_curr_year',     title: 'Сумма заключённых {{ year }}, млн', format: 'number' },
+    { field: 'pp_sum_plan',                       title: 'АП план {{ year }}, млн',           format: 'number' },
+    { field: 'pp_sum_fact',                       title: 'АП факт {{ year }}, млн',           format: 'number' },
+    { field: 'count_not_concluded_curr_year',     title: 'Не заключено {{ year }}',           format: 'int' },
+    { field: 'not_concluded_order_sum_curr_year', title: 'Сумма незаключённых {{ year }}, млн', format: 'number' },
+    { field: 'count_concluded_percent_curr_year', title: '% заключено (кол-во)',              format: 'percent' },
+    { field: 'order_sum_percent_curr_year',       title: '% заключено (сумма)',               format: 'percent' },
+    { field: 'pp_percent',                        title: '% АП',                              format: 'percent' },
+];
+
+// Загрузка данных при инициализации страницы
+// Функция loadTable определена в base.html и сама обрабатывает состояния загрузки и ошибок
+document.addEventListener('DOMContentLoaded', () => {
+    const apiUrl = document.getElementById('page-data').dataset.apiUrl;
+    loadTable(apiUrl, 'table-wrapper', COLS);
+});
+</script>
+{% endblock %}

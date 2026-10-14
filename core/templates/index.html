@@ -1,0 +1,132 @@
+{# Главная страница приложения — обзор всех доступных разделов. #}
+{# Карточки отображаются в зависимости от прав доступа пользователя. #}
+
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Главная — МТО{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h5>МТО — Материально-техническое обеспечение УВЗ</h5>
+</div>
+
+<div class="idx-grid">
+
+    {# --- Баннер с изображением --- #}
+    <div class="idx-banner">
+        <img src="{% static 'img/tank.png' %}" alt="УВЗ">
+    </div>
+
+    {# --- Карточки дашбордов (основные сводки) --- #}
+    
+    {% if perms.core.access_dashboard %}
+    <div class="idx-card idx-card-accent">
+        <div class="idx-label">Договорная работа</div>
+        <div class="idx-desc">Всего / заключено / не заключено договоров, % контрактации и авансирования, разрез по ЦФО</div>
+        <div class="idx-row">
+            <a href="{% url 'dashboard' %}" class="idx-btn">Открыть дашборд</a>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if perms.core.access_znp %}
+    <div class="idx-card idx-card-accent">
+        <div class="idx-label">Заявки на платёж (ФЗД)</div>
+        <div class="idx-desc">Оформлено / оплачено по авансу и постоплате, разрез по ЦФО</div>
+        <div class="idx-row">
+            <a href="{% url 'znp_table' %}" class="idx-btn">Открыть дашборд</a>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if perms.core.access_znp_sap %}
+    <div class="idx-card idx-card-accent">
+        <div class="idx-label">Заявки на платёж (SAP)</div>
+        <div class="idx-desc">Этап согласования: 421 отдел → 18 отдел → согласовано → оплата возможна</div>
+        <div class="idx-row">
+            <a href="{% url 'znp_sap_table' %}" class="idx-btn">Открыть дашборд</a>
+        </div>
+    </div>
+    {% endif %}
+
+    {# --- Карточки реестров и отчётов --- #}
+
+    {% if perms.core.access_kdr %}
+    <div class="idx-card idx-card-accent">
+        <div class="idx-label">КДР — контроль договорной работы</div>
+        <div class="idx-desc">По каждому ИГК и ЦФО: договоры, суммы, % контрактации, авансирование</div>
+        <div class="idx-row">
+            <a href="{% url 'kdr_table_default' %}" class="idx-btn">Открыть</a>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if perms.core.access_igk %}
+    <div class="idx-card idx-card-accent">
+        <div class="idx-label">ИГК по годам</div>
+        <div class="idx-desc">Реестры заключённых, незаключённых и расторгнутых договоров. Год переключается внутри раздела</div>
+        <div class="idx-row">
+            <a href="{% url 'igk_concluded_table_default' %}" class="idx-btn">Заключённые</a>
+            <a href="{% url 'igk_not_concluded_table_default' %}" class="idx-btn">Незаключённые</a>
+            <a href="{% url 'igk_terminated_table_default' %}" class="idx-btn">Расторгнутые</a>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if perms.core.access_dashboard %}
+    <div class="idx-card">
+        <div class="idx-label">Все договоры</div>
+        <div class="idx-desc">Фильтрация по контрагенту, ИГК, году, статусу</div>
+        <div class="idx-row">
+            <a href="{% url 'all_contracts_table' %}" class="idx-btn">Открыть</a>
+        </div>
+    </div>
+    {% endif %}
+
+    {# --- Карточки служебных разделов --- #}
+
+    {% if perms.core.access_history %}
+    <div class="idx-card">
+        <div class="idx-label">История изменений</div>
+        <div class="idx-row">
+            <a href="{% url 'history_status_table' %}" class="idx-btn">Статусы</a>
+            <a href="{% url 'history_plan_table' %}" class="idx-btn">План</a>
+            <a href="{% url 'history_fact_table' %}" class="idx-btn">Факт</a>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if perms.core.access_dupes %}
+    <div class="idx-card">
+        <div class="idx-label">Контроль качества</div>
+        <div class="idx-desc">Дубликаты по комбинации ИГК + договор + предмет + заказ + этап</div>
+        <div class="idx-row">
+            <a href="{% url 'contract_dupes_table' %}" class="idx-btn">Дубли договоров</a>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if perms.core.access_upload %}
+    <div class="idx-card">
+        <div class="idx-label">Загрузка данных</div>
+        <div class="idx-row">
+            <a href="{% url 'upload_excel' %}" class="idx-btn">Загрузить Excel</a>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if perms.core.access_export %}
+    <div class="idx-card idx-card-wide idx-card-accent">
+        <div class="idx-label">Скачивание отчётов</div>
+        <div class="idx-row">
+            <span class="idx-group-label">ИГК авансы</span>
+            {% for y in years %}
+            <a href="{% url 'export_advances' y|stringformat:'s' %}" class="idx-btn">{{ y }} ↓</a>
+            {% endfor %}
+            <span class="idx-sep"></span>
+            <a href="{% url 'export_page' %}" class="idx-btn idx-btn-dashed">Все отчёты →</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

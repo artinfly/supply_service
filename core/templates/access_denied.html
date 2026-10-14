@@ -1,0 +1,24 @@
+{# Страница ошибки 403: отображается при отсутствии прав доступа к разделу. #}
+{# Используется middleware SectionAccessMiddleware для HTML-запросов. #}
+{# Для API-запросов возвращается JSON с кодом 403 (см. middleware.py). #}
+
+{% extends 'base.html' %}
+{% block title %}Доступ запрещён{% endblock %}
+
+{% block content %}
+<div class="access-denied">
+    {# Иконка замка (SVG) #}
+    <div class="access-denied-icon">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="11" width="16" height="10" rx="2"/>
+            <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+        </svg>
+    </div>
+    <h2 class="access-denied-title">Недостаточно прав</h2>
+    <p class="access-denied-text">
+        У вашей роли нет доступа к этой странице.<br>
+        Обратитесь к администратору, если считаете это ошибкой.
+    </p>
+</div>
+{% endblock %}
