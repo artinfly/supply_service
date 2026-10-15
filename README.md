@@ -16,7 +16,6 @@ pip install -r requirements.txt
 copy .env.example .env            # и заполните значения
 python manage.py migrate
 python manage.py createsuperuser
-python manage.py generate_demo_data   # демо-данные для всех разделов (только при DEBUG=True)
 python manage.py runserver
 ```
 
@@ -47,8 +46,7 @@ core/                   единственное приложение проек
     dashboards/           карточки сводок, графики, статусы SAP
     goz/                  ключи ГК, справочник ГК, отчёт по архиву ЕИС
     reports/              Excel-файлы: общий конструктор, авансы, краткая справка
-  management/commands/  load_contracts, load_znp, load_znp_sap — загрузка из консоли;
-                        generate_demo_data — заполнить базу вымышленными данными
+  management/commands/  load_contracts, load_znp, load_znp_sap — загрузка из консоли
   templates/            HTML-шаблоны страниц
   static/               CSS, JS, шрифт Golos Text (fonts/, лицензия OFL),
                         шаблоны отчётов (files/templateIGK.xlsx, templateSum.xlsx)

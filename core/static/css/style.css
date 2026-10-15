@@ -498,13 +498,6 @@ body {
     border-bottom: 1px solid #d4a97a;
 }
 
-.truncate-cell {
-    max-width: 90px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 /* --- Пагинация --- */
 
 .pgn-btn {
@@ -748,28 +741,6 @@ body {
     display: flex;
     align-items: center;
     padding-right: 0.3rem;
-}
-
-.idx-dates {
-    display: flex;
-    align-items: flex-end;
-    gap: 0.5rem;
-    margin-bottom: 0.6rem;
-    flex-wrap: wrap;
-}
-
-.idx-date-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-}
-
-.idx-date-label {
-    font-size: 0.64rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--text-muted);
 }
 
 /* --- Карточки индекса --- */
