@@ -268,7 +268,9 @@
     const holder = canvas.parentElement;
     try {
       const resp = await fetch(url);
-      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      if (!resp.ok) {
+        throw new Error(window.apiError ? window.apiError(resp) : "HTTP " + resp.status);
+      }
       renderBars(canvasId, await resp.json());
     } catch (e) {
       // Canvas не удаляем (раньше здесь был holder.innerHTML = ...): иначе после

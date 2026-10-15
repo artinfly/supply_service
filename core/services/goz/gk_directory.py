@@ -176,7 +176,7 @@ def is_extended_directory(rows):
     """
     for row in rows[:10]:
         text = " ".join(str(c).lower() for c in row if c is not None)
-        if "предприятие" in text or "договор" in text or "догово/" in text:
+        if "предприятие" in text or "договор" in text:
             return True
         if len(row) >= 4 and parse_gk_key(row[3]):
             return True
