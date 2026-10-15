@@ -99,8 +99,7 @@
     {% endif %}
     {% endif %}
 
-    {# Кнопка выхода: форма POST, а не ссылка — так выход нельзя вызвать
-       с чужого сайта (ссылкой или картинкой) #}
+    {# Кнопка выхода: форма POST, а не ссылка — так выход нельзя вызвать с чужого сайта #}
     <form class="sidebar-logout" method="post" action="{% url 'logout' %}">
         {% csrf_token %}
         <button type="submit">
@@ -113,7 +112,8 @@
 </nav>
 
 {# --- Основной контент --- #}
-<div class="main-content">
+{# main_class: дополнительный класс контента, например «main-fit» — страница ровно в высоту окна #}
+<div class="main-content {% block main_class %}{% endblock %}">
     {% block content %}{% endblock %}
 </div>
 

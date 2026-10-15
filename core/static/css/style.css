@@ -114,8 +114,10 @@ body {
     border-radius: 2px;
 }
 
+/* Вертикальные отступы меню зависят от высоты окна (vh): на большом мониторе
+   свободнее, на ноутбуке плотнее — все пункты помещаются без прокрутки. */
 .sidebar-logo {
-    padding: 1rem 1.1rem 0.85rem;
+    padding: clamp(0.55rem, 1.4vh, 1rem) 1.1rem clamp(0.5rem, 1.2vh, 0.85rem);
     border-bottom: 1px solid #333;
     display: flex;
     align-items: center;
@@ -141,7 +143,7 @@ body {
 
 .sidebar-logo-text {
     font-size: 0.95rem;
-    font-weight: 700;
+    font-weight: 600;
     color: #fff;
     line-height: 1.2;
     letter-spacing: 0.01em;
@@ -149,14 +151,14 @@ body {
 
 .sidebar-logo-text span {
     display: block;
-    font-weight: 500;
+    font-weight: 400;
     color: #9a9a9a;
     font-size: 0.75rem;
 }
 
 .sidebar-logout {
     margin-top: auto;
-    padding: 0.75rem 1.1rem;
+    padding: clamp(0.4rem, 1.1vh, 0.75rem) 1.1rem;
     border-top: 1px solid #333;
 }
 
@@ -184,9 +186,10 @@ body {
 /* --- Навигация --- */
 
 .nav-section {
-    padding: 1rem 1.1rem 0.3rem;
+    padding: clamp(0.3rem, 1.6vh - 6px, 1rem) 1.1rem 0.2rem;
+    line-height: 1.2;
     font-size: 0.68rem;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: #7c7c7c;
@@ -198,10 +201,12 @@ body {
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0.4rem 1.1rem 0.4rem 1.4rem;
+    /* при высоте окна 760px отступ ~3px, при 1080px ~7px */
+    padding: clamp(0.15rem, 1.2vh - 6px, 0.45rem) 1.1rem clamp(0.15rem, 1.2vh - 6px, 0.45rem) 1.4rem;
+    line-height: 1.3;
     color: #d0d0d0;
     font-size: 0.875rem;
-    font-weight: 500;
+    font-weight: 400;
     text-decoration: none;
     transition: background 0.12s, color 0.12s;
     border-left: 3px solid transparent;
@@ -246,7 +251,7 @@ body {
 .page-header h5 {
     margin: 0;
     font-size: 1.3rem;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: -0.01em;
     color: var(--text);
 }
@@ -279,7 +284,7 @@ body {
 
 .filter-label {
     font-size: 0.7rem;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.07em;
     color: var(--text-muted);
@@ -354,7 +359,7 @@ body {
     padding: 0.4rem 1.1rem;
     font-size: 0.875rem;
     font-family: inherit;
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
     transition: background 0.15s;
 }
@@ -379,7 +384,7 @@ body {
     border-radius: 6px;
     padding: 0.4rem 1rem;
     font-size: 0.875rem;
-    font-weight: 500;
+    font-weight: 400;
     font-family: inherit;
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
@@ -449,7 +454,7 @@ body {
     top: 0;
     z-index: 10;
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 500;
     white-space: nowrap;
     padding: 0.6rem 0.85rem;
     border-right: 1px solid #444;
@@ -487,13 +492,13 @@ body {
 
 .row-total td {
     background: var(--total-bg) !important;
-    font-weight: 700;
+    font-weight: 600;
     border-top: 2px solid var(--orange);
 }
 
 .row-subtotal td {
     background: var(--subtotal-bg) !important;
-    font-weight: 600;
+    font-weight: 500;
     border-top: 1px solid #e0c9b5;
     border-bottom: 1px solid #d4a97a;
 }
@@ -569,7 +574,7 @@ body {
 
 .no-data-title {
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 500;
     margin-bottom: 6px;
 }
 
@@ -609,7 +614,7 @@ body {
 
 .access-denied-title {
     font-size: 20px;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text-primary);
     margin: 0 0 8px;
 }
@@ -637,6 +642,36 @@ body {
     background: var(--header-bg);
 }
 
+/* Страница ровно в высоту окна (главная): контент — колонка на 100vh, сетка плиток
+   занимает остаток под заголовком. Первая строка сетки (баннер) получает всё
+   свободное место и сжимается первой, поэтому плитки всегда помещаются без прокрутки. */
+.main-fit {
+    /* min-height, а не height: на очень маленьком экране плитки не обрезаются,
+       а страница просто прокручивается */
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.main-fit .idx-grid {
+    flex: 1;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+    grid-auto-rows: auto;
+}
+
+.main-fit .idx-banner {
+    height: auto;
+    min-height: 0;
+    background: transparent; /* тёмный фон без картинки дал бы полоску */
+}
+
+/* Затемнение через filter, а не прозрачность: под картинкой теперь нет тёмного фона */
+.main-fit .idx-banner img {
+    opacity: 1;
+    filter: brightness(0.6);
+}
+
 .idx-banner img {
     width: 100%;
     height: 100%;
@@ -646,12 +681,25 @@ body {
     display: block;
 }
 
+/* Если на баннер осталось меньше 70px (невысокий экран), картинку не показываем:
+   узкая полоска танка смотрится как ошибка вёрстки. Баннер — контейнер, и правило
+   срабатывает от его собственной высоты, а не от размера окна. */
+.main-fit .idx-banner {
+    container-type: size;
+}
+
+@container (max-height: 70px) {
+    .idx-banner img {
+        display: none;
+    }
+}
+
 .idx-card {
     background: #fff;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     border-top: 3px solid var(--orange);
-    padding: 1rem 1.1rem;
+    padding: 0.85rem 1rem;
     min-height: 80px;
     display: flex;
     flex-direction: column;
@@ -662,10 +710,6 @@ body {
     margin-top: auto;
 }
 
-.idx-card-wide {
-    grid-column: 1 / -1;
-}
-
 /* Раньше у «главных» плиток была ещё левая рамка; плитки выглядели
    неодинаково, поэтому оформление теперь общее для всех. */
 .idx-card-accent {
@@ -674,16 +718,17 @@ body {
 
 .idx-label {
     font-size: 1rem;
-    font-weight: 700;
+    font-weight: 600;
+    line-height: 1.3;
     color: var(--text);
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.3rem;
 }
 
 .idx-desc {
-    font-size: 0.875rem;
+    font-size: 0.84rem;
     color: var(--text-muted);
-    margin-bottom: 0.8rem;
-    line-height: 1.45;
+    margin-bottom: 0.7rem;
+    line-height: 1.4;
 }
 
 .idx-row {
@@ -694,10 +739,10 @@ body {
 }
 
 .idx-btn {
-    padding: 0.36rem 0.85rem;
+    padding: 0.28rem 0.7rem;
     border-radius: 6px;
-    font-size: 0.85rem;
-    font-weight: 500;
+    font-size: 0.82rem;
+    font-weight: 400;
     text-decoration: none;
     color: var(--orange);
     border: 1px solid var(--orange);
@@ -727,22 +772,6 @@ body {
     cursor: default;
 }
 
-.idx-sep {
-    width: 1px;
-    height: 20px;
-    background: #e0e0e0;
-    margin: 0 2px;
-}
-
-.idx-group-label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-soft);
-    display: flex;
-    align-items: center;
-    padding-right: 0.3rem;
-}
-
 /* --- Карточки индекса --- */
 
 .index-card {
@@ -755,7 +784,7 @@ body {
 
 .index-card-title {
     font-size: 1rem;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text);
     margin-bottom: 0.75rem;
 }
@@ -765,7 +794,7 @@ body {
     padding: 0.4rem 0.85rem;
     border-radius: 6px;
     font-size: 0.875rem;
-    font-weight: 500;
+    font-weight: 400;
     text-decoration: none;
     font-family: inherit;
     color: var(--orange);
@@ -847,14 +876,14 @@ body.login-page {
 .login-title {
     color: #fff;
     font-size: 0.95rem;
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1.2;
 }
 
 .login-title span {
     display: block;
     font-size: 0.7rem;
-    font-weight: 500;
+    font-weight: 400;
     color: #a3a3a3;
     margin-top: 0.1rem;
 }
@@ -865,7 +894,7 @@ body.login-page {
 
 .form-label {
     font-size: 0.72rem;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.07em;
     color: var(--text-muted);
@@ -908,7 +937,7 @@ body.login-page {
     padding: 0.6rem;
     font-size: 0.9375rem;
     font-family: inherit;
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
     transition: background 0.15s;
     margin-top: 0.25rem;
@@ -939,7 +968,7 @@ body.login-page {
 
 .block-title {
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.07em;
     color: var(--text-muted);
@@ -1012,14 +1041,14 @@ body.login-page {
 
 .dash-card-title {
     font-size: 13.5px;
-    font-weight: 500;
+    font-weight: 400;
     line-height: 1.3;
     color: var(--text-soft);
 }
 
 .dash-card-num {
     font-size: 26px;
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1.15;
     letter-spacing: -0.01em;
     margin-top: 4px;
@@ -1030,7 +1059,7 @@ body.login-page {
 /* Единицы («млн ₽») мельче самого числа — иначе крупная сумма переносится на 3 строки */
 .dash-card-unit {
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 500;
     letter-spacing: 0;
     color: var(--text-muted);
 }
@@ -1135,7 +1164,7 @@ body.login-page {
 .dupes-head h6 {
     margin: 0;
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text);
 }
 
@@ -1170,7 +1199,7 @@ body.login-page {
 
 .format-note-ext {
     font-size: 1.9rem;
-    font-weight: 800;
+    font-weight: 700;
     letter-spacing: 0.02em;
     color: var(--orange-dark);
     line-height: 1;
@@ -1274,7 +1303,7 @@ body.login-page {
 .chart-block-title {
     margin: 0 0 2px;
     font-size: 15px;
-    font-weight: 700;
+    font-weight: 600;
 }
 
 .chart-block-hint {
@@ -1312,7 +1341,7 @@ body.login-page {
 .goz-card-title {
     margin: 0 0 0.75rem;
     font-size: 1rem;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text);
 }
 
@@ -1367,7 +1396,7 @@ body.login-page {
 .gk-editor-title {
     margin: 0 0 0.65rem;
     font-size: 0.9rem;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text);
 }
 
@@ -1424,7 +1453,7 @@ body.login-page {
     padding: 0.1rem 0.6rem;
     border-radius: 10px;
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 500;
     white-space: nowrap;
 }
 
@@ -1478,11 +1507,21 @@ body.login-page {
     .idx-grid {
         grid-template-columns: repeat(2, 1fr);
     }
-    
-    .idx-card-wide {
-        grid-column: 1 / -1;
+
+    /* На телефоне плитки идут в 2 колонки и обычная прокрутка удобнее */
+    .main-fit {
+        height: auto;
+        display: block;
     }
-    
+
+    .main-fit .idx-grid {
+        grid-template-rows: none;
+    }
+
+    .main-fit .idx-banner {
+        height: 120px;
+    }
+
     .gk-editor-grid {
         grid-template-columns: 1fr 1fr;
     }
@@ -1504,7 +1543,7 @@ body.login-page {
         padding: 0 1rem;
         background: var(--sidebar-bg);
         color: #fff;
-        font-weight: 700;
+        font-weight: 600;
         font-size: 0.85rem;
     }
 
