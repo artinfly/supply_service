@@ -353,9 +353,12 @@ def all_contracts(where):
 def advances(year):
     """Возвращает SQL для экспорта отчёта по авансам."""
     yc = YEAR_COL.get(str(year))
+    # «Заключён» — если хотя бы одна позиция договора в статусе из CONCLUDED,
+    # как на сводках. Раньше бралось MAX(status) (по алфавиту), и «Приостановлен»
+    # считался незаключённым, хотя на сводках он заключённый.
     return f"""
         SELECT MAX(igk) AS igk, MAX(c_agent) AS c_agent, MAX(cfo) AS cfo, contract,
-            CASE WHEN MAX(status) IN ('Черновик','Приостановлен') THEN 'Не заключён' ELSE 'Заключён' END AS state,
+            CASE WHEN BOOL_OR(status IN ({_sl(CONCLUDED)})) THEN 'Заключён' ELSE 'Не заключён' END AS state,
             MAX(payment_type) AS payment_type, MAX(item) AS item, "order" AS qty,
             ROUND(CAST(SUM(CASE WHEN tolerance>0 THEN plan*(1+tolerance/100.0) ELSE plan END) AS numeric),2) AS spec_sum,
             ROUND(CAST(SUM(CASE WHEN payment_type='{ADVANCE}' AND tolerance>0 THEN plan*(1+tolerance/100.0)

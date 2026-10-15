@@ -218,6 +218,29 @@ def _zip_name(info):
     return name
 
 
+def same_key_numbers(archive_file):
+    """Разные длинные номера ИГК, у которых совпал ключ ГК (последние 4 цифры).
+
+    Пример: «…2224…209741» и «…2525…209741» — разные ИГК, но оба дают ключ «9741».
+    В отчёте и справочнике такие файлы не различаются, поэтому пользователю
+    показывается предупреждение.
+
+    Returns:
+        {ключ ГК: [длинный номер, длинный номер, ...]} — только ключи с 2+ номерами
+    """
+    numbers = {}
+    with zipfile.ZipFile(archive_file) as zf:
+        for info in zf.infolist():
+            name = _zip_name(info)
+            if name.endswith("/") or not name.lower().endswith(".xls"):
+                continue
+            filename = _PAGE_RE.sub("", name.rsplit("/", 1)[-1])
+            num = _NUM_RE.search(filename)
+            if num:
+                numbers.setdefault(_contract_label(filename), set()).add(num.group(1))
+    return {k: sorted(v) for k, v in numbers.items() if len(v) > 1}
+
+
 def read_archive(archive_file):
     """Читает .xls файлы из ZIP-архива. Файлы «Стр. N» с нечётным N пропускаются.
 

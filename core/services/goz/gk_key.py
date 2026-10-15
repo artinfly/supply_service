@@ -10,7 +10,11 @@
     5. …4238_3_3_6_30-2014-ДГОЗ          —                                             4238_3_3_6_30-2014-ДГОЗ
     6. …0998_439сб_19                    …0998/439сб/19 от …                           0998/439сб 19
 
-Число после пробела — спецификация. «137» — номер договора: в ключ не пишется нигде.
+Число после пробела — спецификация. «137» — номер договора: в ключ не пишется,
+если стоит сразу после «сб» (…_334сб_137) или после ИГК в договоре (…1493/137 от …).
+Но спецификация тоже может иметь номер 137: в имени файла без «сб» (…000262_137)
+и в договоре после слова «спец» (…/255сб/137 от …, спец…./137) — это ключ «0262 137»
+(файл) и «0262/255сб 137» (справочник), они находятся друг по другу.
 «1493», «1493 5», «1493/34сб», «1493/34сб 5» — разные ГК.
 """
 
@@ -80,10 +84,9 @@ def key_from_contract(text):
         return None
     igk, rest = m.group(1), text[m.end():]
 
+    # Число после слова «спец» — всегда спецификация, даже если это 137
     spec_word = _SPEC_WORD_RE.search(text)
     spec_word = spec_word.group(1) if spec_word else None
-    if spec_word == CONTRACT_NO:
-        spec_word = None
 
     sb_m = _CONTRACT_SB_RE.match(rest)
     if sb_m:
@@ -100,20 +103,22 @@ def _key_from_label(text):
     m = re.match(r"^\s*(\d{4})(.*)$", text)
     if not m:
         return None
-    igk, rest = m.group(1), _drop_contract_no(m.group(2).rstrip())
+    igk, raw = m.group(1), m.group(2)
+    rest = re.sub(r"[_/\s]+$", "", raw.rstrip())
 
     if not rest:
         return igk  # 1. просто ГК
 
     sb_m = _FILE_SB_RE.match(rest)
-    if sb_m:  # 3, 4, 6
+    if sb_m:  # 3, 4, 6: «137» после сб — номер договора, отбрасывается в _spec_after_sb
         return _compose(igk, sb_m.group(1), _spec_after_sb([sb_m.group(2), sb_m.group(3)]))
 
     spec_m = _FILE_SPEC_RE.match(rest)
-    if spec_m:  # 2. ГК_число — спец
+    if spec_m:  # 2. ГК_число — спец (в том числе «_137»: без сб это номер спецификации)
         return _compose(igk, spec=spec_m.group(1))
 
     # 5. «_3_3_6_30-2014-ДГОЗ» и прочие длинные — целиком, через «_»
+    rest = _drop_contract_no(raw.rstrip())
     return f"{igk}_{rest.lstrip('_/ ')}"
 
 
@@ -124,9 +129,9 @@ def parse_gk_key(value):
         return None
 
     key_m = _KEY_RE.match(text)
-    if key_m:  # уже готовый ключ; спец «137» отбрасываем
+    if key_m:  # уже готовый ключ — берём как есть (спецификация может быть и 137)
         igk, sb, spec = key_m.groups()
-        return _compose(igk, sb, None if spec == CONTRACT_NO else spec)
+        return _compose(igk, sb, spec)
 
     if re.search(r"\sот\s|спец", text, re.IGNORECASE):
         return key_from_contract(text)

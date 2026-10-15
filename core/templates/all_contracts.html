@@ -173,7 +173,7 @@ async function loadData() {
         '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка…</div>';
     try {
         const resp = await fetch(buildUrl());
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        if (!resp.ok) throw new Error(apiError(resp));
         loadedData = await resp.json();
         currentPage = 1;
         renderPage();

@@ -11,6 +11,8 @@
     только суперпользователю. Так новая страница закрыта, пока её явно
     не добавят в таблицу ниже.
 Суперпользователь проходит везде (has_perm у него всегда True).
+Запросы данных (api_*, AJAX) получают JSON: 401 — если сессия истекла,
+403 — если нет права; обычные страницы — вход или страницу «Недостаточно прав».
 """
 
 import logging
@@ -92,8 +94,8 @@ _SECTIONS = {
     "access_upload": ("upload_excel",),
     "access_goz_report": (
         "goz_report",
-        # Загрузка и правка справочника ГК дополнительно требуют суперпользователя
-        # (декоратор superuser_required во views/goz.py)
+        # Загрузка справочника из файла дополнительно требует суперпользователя
+        # (декоратор superuser_required во views/goz.py); правка записей — нет
         "upload_gk_directory",
         "gk_directory_save",
         "gk_directory_delete",
@@ -116,12 +118,27 @@ class SectionAccessMiddleware(MiddlewareMixin):
         if match is None or not match.url_name or match.namespace:
             return None
 
-        # Анонимного пользователя перенаправит на вход login_required во view
-        if not request.user.is_authenticated:
-            return None
-
         url_name = match.url_name
         if url_name in PUBLIC_ROUTES:
+            return None
+
+        # Запросы данных (их делает JavaScript страниц) ждут JSON. Если сессия
+        # истекла, перенаправление на вход вернуло бы HTML-страницу логина, и
+        # таблица показала бы непонятную ошибку — поэтому отвечаем 401 с текстом.
+        wants_json = (
+            url_name.startswith("api_")
+            or url_name == "sum_report_upload"
+            or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        )
+
+        # Обычную страницу для анонимного пользователя перенаправит на вход
+        # login_required во view
+        if not request.user.is_authenticated:
+            if wants_json:
+                return JsonResponse(
+                    {"error": "Сессия истекла — обновите страницу и войдите заново"},
+                    status=401,
+                )
             return None
 
         perm = ROUTE_PERMISSIONS.get(url_name)
@@ -133,10 +150,7 @@ class SectionAccessMiddleware(MiddlewareMixin):
         elif request.user.has_perm(perm):
             return None
 
-        wants_json = url_name.startswith("api_") or (
-            request.headers.get("X-Requested-With") == "XMLHttpRequest"
-        )
-        if wants_json or url_name == "sum_report_upload":
+        if wants_json:
             return JsonResponse({"error": "Нет доступа к разделу"}, status=403)
 
         return render(request, "access_denied.html", {"years": YEARS}, status=403)

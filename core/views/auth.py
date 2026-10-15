@@ -45,7 +45,13 @@ def login_view(request):
 
 
 def logout_view(request):
-    """Выход из системы."""
+    """Выход из системы — только POST-запросом (кнопка «Выйти» в меню).
+
+    GET (открыли адрес /logout/ напрямую или по чужой ссылке) не разлогинивает,
+    а просто возвращает на главную.
+    """
+    if request.method != "POST":
+        return redirect("root")
     logout(request)
     return redirect("login")
 
