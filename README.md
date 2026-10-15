@@ -16,6 +16,7 @@ pip install -r requirements.txt
 copy .env.example .env            # и заполните значения
 python manage.py migrate
 python manage.py createsuperuser
+python manage.py generate_demo_data   # демо-данные для всех разделов (только при DEBUG=True)
 python manage.py runserver
 ```
 
@@ -46,9 +47,11 @@ core/                   единственное приложение проек
     dashboards/           карточки сводок, графики, статусы SAP
     goz/                  ключи ГК, справочник ГК, отчёт по архиву ЕИС
     reports/              Excel-файлы: общий конструктор, авансы, краткая справка
-  management/commands/  load_contracts, load_znp, load_znp_sap — загрузка из консоли
+  management/commands/  load_contracts, load_znp, load_znp_sap — загрузка из консоли;
+                        generate_demo_data — заполнить базу вымышленными данными
   templates/            HTML-шаблоны страниц
-  static/               CSS, JS, шаблоны отчётов (files/templateIGK.xlsx, templateSum.xlsx)
+  static/               CSS, JS, шрифт Golos Text (fonts/, лицензия OFL),
+                        шаблоны отчётов (files/templateIGK.xlsx, templateSum.xlsx)
   migrations/           миграции БД
 ```
 
@@ -116,10 +119,3 @@ python manage.py load_znp_sap путь\к\знп_sap.xlsx
 - Краткая справка «Длинноцикловая» строится только по договорам с «Да» в колонке
   «Длинноцикловые» (столбец G); «Обычная» — по всем договорам.
 - КДР на экране считает только позиции с заказом, выгрузка КДР в Excel — все позиции (так задумано).
-
-## Резервная копия и восстановление базы
-
-```bash
-pg_dump -h localhost -U root -d supply_service_test -F c -f backup.dump
-pg_restore -h localhost -U root -d supply_service_test --clean backup.dump
-```
