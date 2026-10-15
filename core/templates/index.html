@@ -5,6 +5,8 @@
 {% load static %}
 {% block title %}Главная — МТО{% endblock %}
 
+{% block main_class %}main-fit{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h5>МТО — Материально-техническое обеспечение УВЗ</h5>
@@ -138,14 +140,13 @@
     {% endif %}
 
     {% if perms.core.access_export %}
-    <div class="idx-card idx-card-wide idx-card-accent">
+    <div class="idx-card idx-card-accent">
         <div class="idx-label">Скачивание отчётов</div>
+        <div class="idx-desc">Авансы по ИГК за год — одной кнопкой, остальные отчёты — в разделе «Отчёты в Excel»</div>
         <div class="idx-row">
-            <span class="idx-group-label">Авансы по ИГК</span>
             {% for y in years %}
             <a href="{% url 'export_advances' y|stringformat:'s' %}" class="idx-btn">{{ y }} ↓</a>
             {% endfor %}
-            <span class="idx-sep"></span>
             <a href="{% url 'export_page' %}" class="idx-btn idx-btn-dashed">Все отчёты →</a>
         </div>
     </div>
