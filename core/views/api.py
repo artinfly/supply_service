@@ -111,12 +111,40 @@ def _get_filters(request):
 # --- API: КДР и ИГК ---
 
 
+# Проценты строки «ИТОГО» КДР: поле -> (числитель, знаменатель)
+_KDR_TOTAL_PERCENTS = {
+    "count_concluded_percent_curr_year": ("count_concluded_curr_year", "count_curr_year"),
+    "order_sum_percent_curr_year": ("concluded_order_sum_curr_year", "order_sum_curr_year"),
+    "pp_percent": ("pp_sum_fact", "pp_sum_plan"),
+}
+
+
+def _kdr_total_row(rows):
+    """Строка «ИТОГО» для КДР: суммы колонок и проценты, пересчитанные от сумм.
+
+    Проценты нельзя складывать, поэтому они считаются заново из итоговых чисел
+    (округление до целого — как в SQL-запросе kdr()).
+    """
+    total = {"igk": "ИТОГО"}
+    for key in rows[0]:
+        if key != "igk" and key not in _KDR_TOTAL_PERCENTS:
+            total[key] = round(sum(r[key] or 0 for r in rows), 2)
+    for key, (part, whole) in _KDR_TOTAL_PERCENTS.items():
+        total[key] = round(total[part] * 100 / total[whole]) if total[whole] else 0
+    return total
+
+
 @login_required
 def api_kdr(request, year):
-    """API для таблицы КДР."""
+    """API для таблицы КДР: строки по ИГК и итоговая строка «ИТОГО»."""
     if year not in YEAR_COL:
         return JsonResponse({"error": "недопустимый год"}, status=400)
-    return _json_response(kdr(year))
+    with connection.cursor() as cur:
+        cur.execute(kdr(year))
+        rows = _json_rows(cur)
+    if rows:
+        rows.append(_kdr_total_row(rows))
+    return JsonResponse(rows, safe=False, json_dumps_params={"ensure_ascii": False})
 
 
 @login_required

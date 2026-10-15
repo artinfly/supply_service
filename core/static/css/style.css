@@ -123,7 +123,13 @@ body {
     border-top: 1px solid #333;
 }
 
-.sidebar-logout a {
+.sidebar-logout a,
+.sidebar-logout button {
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit; /* у кнопок свой шрифт по умолчанию */
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -133,7 +139,8 @@ body {
     transition: color 0.15s;
 }
 
-.sidebar-logout a:hover {
+.sidebar-logout a:hover,
+.sidebar-logout button:hover {
     color: #fff;
 }
 

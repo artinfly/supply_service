@@ -235,6 +235,13 @@ def goz_report(request):
                 ctx["gk_list"] = _archive_gk_list(archive_path)
                 ctx["temp_zip_path"] = os.path.basename(archive_path)
                 ctx["step2"] = True
+                # Разные ИГК с одинаковыми последними 4 цифрами склеиваются в один ключ
+                for key, nums in goz_analysis.same_key_numbers(archive_path).items():
+                    messages.warning(
+                        request,
+                        f"ГК «{key}»: в архиве разные ИГК с одинаковыми последними "
+                        f"4 цифрами ({', '.join(nums)}). В отчёте они не различаются.",
+                    )
             except zipfile.BadZipFile:
                 messages.error(request, "Файл не является ZIP-архивом")
             except Exception as e:
@@ -256,7 +263,7 @@ def goz_report(request):
 @login_required
 @superuser_required
 def upload_gk_directory(request):
-    """Загрузка справочника ГК из Word (.docx) или Excel (.xlsx, .xls)."""
+    """Загрузка справочника ГК из Word (.docx) или Excel (.xlsx, .xls). Только суперпользователь."""
     if request.method != "POST" or not request.FILES.get("doc_file"):
         return redirect("goz_report")
 
@@ -297,9 +304,12 @@ def upload_gk_directory(request):
 
 
 @login_required
-@superuser_required
 def gk_directory_save(request):
-    """Сохранение записи справочника ГК из формы (создание или правка)."""
+    """Сохранение записи справочника ГК из формы (создание или правка).
+
+    Доступно всем, у кого есть доступ к разделу «Анализ ГОЗ» (право проверяет
+    middleware). Загрузка справочника из файла — только суперпользователю.
+    """
     if request.method == "POST":
         record_id = request.POST.get("record_id", "").strip()
         igk = gk_key(request.POST.get("igk", ""))
@@ -343,9 +353,8 @@ def gk_directory_save(request):
 
 
 @login_required
-@superuser_required
 def gk_directory_delete(request):
-    """Удаление записи справочника ГК."""
+    """Удаление записи справочника ГК (доступно всем с доступом к разделу)."""
     if request.method == "POST":
         record_id = request.POST.get("record_id", "").strip()
         if record_id:

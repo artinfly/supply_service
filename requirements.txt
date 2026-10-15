@@ -1,11 +1,31 @@
+# Зависимости проекта. Версии — как установлены на сервере (pip list, 15.10.2026).
+# Установка: pip install -r requirements.txt
+# Без интернета: на машине с интернетом
+#   pip download -r requirements.txt -d wheels
+# перенести папку wheels и выполнить
+#   pip install --no-index --find-links wheels -r requirements.txt
+
 # --- Каркас и окружение ---
-django==6.0.2                  # веб-фреймворк
-psycopg2-binary==2.9.11        # драйвер PostgreSQL
-whitenoise==6.12.0             # раздача статики в продакшне
-python-dotenv==1.2.2           # чтение .env
-requests==2.34.2               # синхронизация с HR-сервисом
+Django==6.1.1                  # веб-фреймворк
+psycopg2-binary==2.9.13        # драйвер PostgreSQL
+whitenoise==6.12.0             # раздача статики без отдельного веб-сервера
+python-dotenv==1.2.3           # чтение настроек из .env
+requests==2.34.2               # синхронизация с HR-сервисом (админка)
 
 # --- Документы: чтение и формирование ---
 openpyxl==3.1.5                # .xlsx (договоры, ЗнП, выгрузки)
-xlrd==2.0.2                    # .xls (отчёты ЕИС ГОЗ)
-python-docx==1.2.0             # .docx (справочник ГК)
+xlrd==2.0.2                    # .xls (отчёты ЕИС ГОЗ, старые выгрузки)
+python-docx==1.2.0             # .docx (справочник ГК из Word)
+
+# --- Устанавливаются автоматически вместе с пакетами выше ---
+# Закреплены, чтобы на всех машинах стояли одинаковые версии.
+asgiref==3.12.1                # Django
+sqlparse==0.5.5                # Django
+tzdata==2026.4                 # Django (часовые пояса на Windows)
+et_xmlfile==2.0.0              # openpyxl
+lxml==6.1.3                    # python-docx
+typing_extensions==4.16.0      # python-docx
+certifi==2026.7.22             # requests
+charset-normalizer==3.5.1      # requests
+idna==3.19                     # requests
+urllib3==2.7.0                 # requests

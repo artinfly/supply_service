@@ -135,7 +135,7 @@ async function openDetail(igkCode) {
     
     try {
         const resp = await fetch(`${detailBase}${igkCode}/?type=${reportType}`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        if (!resp.ok) throw new Error(apiError(resp));
         renderTable(await resp.json(), DETAIL_COLS, container);
     } catch(e) {
         container.innerHTML = `<div class="error-msg">Ошибка загрузки: ${esc(e.message)}</div>`;
@@ -154,7 +154,7 @@ async function loadMain() {
     
     try {
         const resp = await fetch(apiUrl);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        if (!resp.ok) throw new Error(apiError(resp));
         const data = await resp.json();
         
         if (!data.length) { 

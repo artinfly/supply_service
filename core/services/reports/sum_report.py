@@ -118,7 +118,8 @@ class SumReportRow:
     sum_issued_znp: float = 0.0
     period_reg_date: str = ""
     plan_date_contract: str = ""
-    is_cycle: bool = False
+    is_cycle: bool = False  # в колонке «Длинноцикловые» стоит «Да»
+    has_cycle_column: bool = False  # на листе вообще есть колонка «Длинноцикловые»
     igk_title: str = ""
 
 
@@ -289,6 +290,7 @@ def parse_sum_report_file(file_stream) -> List[SumReportRow]:
                         row_vals[COL_PLAN_DATE_CONTRACT - 1]
                     ),
                     is_cycle=is_cycle,
+                    has_cycle_column=is_cycle_format,
                     igk_title=igk_title,
                 )
             )
@@ -490,22 +492,33 @@ def _aggregate_table1(rows):
 
 
 def _filter_table2(rows):
-    """Фильтрует строки для таблицы 2: ЗнП оформлена или заключен, с ненулевыми остатками."""
+    """Таблица 2 «оформленные и неоплаченные ЗнП»: заключённые договоры с ненулевыми
+    остатком к оплате и суммой аванса.
+
+    (Раньше здесь проверялся и статус «ЗнП оформлена», но до этой функции доходят
+    только «Заключен» и «Не заключен» — ТЗ п.6, см. generate_single_report.)
+    """
     result = []
     for r in rows:
         status = _normalize_condition(r.condition)
-        if status in ("знп оформлена", "заключен"):
+        if status == "заключен":
             if not (-1 <= r.remains_pay <= 1) and not (-1 <= r.sum_avans <= 1):
                 result.append(r)
     return result
 
 
 def _filter_table3(rows):
-    """Фильтрует строки для таблицы 3: ЗнП на оформлении или заключен, с ненулевыми суммами."""
+    """Таблица 3 «не оформленные ЗнП»: заключённые договоры с ненулевыми остатком
+    к оплате и суммой ЗнП на оформлении.
+
+    Один договор может попасть и в таблицу 2, и в таблицу 3 (часть аванса уже
+    в оформленной ЗнП, часть — в ЗнП на оформлении). Суммы аванса в таблицах
+    разные, а сумма самого договора в итоге «Всего по ГК» считается один раз.
+    """
     result = []
     for r in rows:
         status = _normalize_condition(r.condition)
-        if status in ("знп на оформлении", "заключен"):
+        if status == "заключен":
             if not (-1 <= r.remains_pay <= 1) and not (
                 -1 <= round(r.sum_issued_znp, 2) <= 1
             ):
@@ -805,7 +818,7 @@ def generate_single_report(rows, igk_title, is_cycle=False, igk=""):
         ws, "ИТОГО:", start_row=t1_total + 1, end_row=t1_total + 15
     ) or (t1_total + 4)
     rows2 = _filter_table2(rows)
-    t2_total, contract_sum_total, avans_sum_total = _write_detail_table(
+    t2_total, _, avans_sum_total = _write_detail_table(
         ws, t2_total, rows2, table_kind="table2"
     )
 
@@ -814,8 +827,7 @@ def generate_single_report(rows, igk_title, is_cycle=False, igk=""):
         ws, "ИТОГО:", start_row=t2_total + 1, end_row=t2_total + 15
     ) or (t2_total + 3)
     rows3 = _filter_table3(rows)
-    t3_total, c3, a3 = _write_detail_table(ws, t3_total, rows3, table_kind="table3")
-    contract_sum_total = round(contract_sum_total + c3, 2)
+    t3_total, _, a3 = _write_detail_table(ws, t3_total, rows3, table_kind="table3")
     avans_sum_total = round(avans_sum_total + a3, 2)
 
     # Таблица 4: не заключённые
@@ -823,11 +835,14 @@ def generate_single_report(rows, igk_title, is_cycle=False, igk=""):
         ws, "ИТОГО:", start_row=t3_total + 1, end_row=t3_total + 15
     ) or (t3_total + 3)
     rows4 = _filter_table4(rows)
-    t4_total, c4, a4 = _write_detail_table(ws, t4_total, rows4, table_kind="table4")
-    contract_sum_total = round(contract_sum_total + c4, 2)
+    t4_total, _, a4 = _write_detail_table(ws, t4_total, rows4, table_kind="table4")
     avans_sum_total = round(avans_sum_total + a4, 2)
 
-    # Финальные итоги
+    # Финальные итоги. Сумма договоров — по каждому договору один раз: договор,
+    # который есть и в таблице 2, и в таблице 3, раньше учитывался дважды.
+    # Суммы авансов складываются как есть — в таблицах 2 и 3 это разные деньги.
+    unique_rows = {id(r): r for r in rows2 + rows3 + rows4}.values()
+    contract_sum_total = round(sum(round(r.contract_sum, 2) for r in unique_rows), 2)
     final_total_row = t4_total + 1
     ws.cell(row=final_total_row, column=3).value = contract_sum_total
     ws.cell(row=final_total_row, column=4).value = avans_sum_total
@@ -858,9 +873,23 @@ def generate_single_report(rows, igk_title, is_cycle=False, igk=""):
     return buffer.getvalue()
 
 
-# Длинноцикловая справка: признак строки («Да» в колонке «Длинноцикловые»)
-# читается в SumReportRow.is_cycle, но строки по нему НЕ отбираются —
-# справки «Обычная» и «Длинноцикловая» сейчас отличаются только именем файла.
+def _select_cycle_rows(all_rows):
+    """Строки для длинноцикловой справки: только договоры с «Да» в колонке
+    «Длинноцикловые» (столбец G, на листе должна быть такая шапка).
+
+    Обычная справка строится по всем строкам — в неё входят и длинноцикловые.
+    """
+    if not any(r.has_cycle_column for r in all_rows):
+        raise ValueError(
+            "В файле нет колонки «Длинноцикловые» (столбец G во 2-й строке листа) — "
+            "длинноцикловую справку сформировать нельзя. Выберите тип «Обычная»."
+        )
+    rows = [r for r in all_rows if r.is_cycle]
+    if not rows:
+        raise ValueError(
+            "В колонке «Длинноцикловые» нет ни одного договора с отметкой «Да»."
+        )
+    return rows
 
 
 def build_sum_reports_zip(file_stream, is_cycle=False, username="user"):
@@ -877,6 +906,8 @@ def build_sum_reports_zip(file_stream, is_cycle=False, username="user"):
     all_rows = parse_sum_report_file(file_stream)
     if not all_rows:
         raise ValueError("Нет данных для формирования отчёта.")
+    if is_cycle:
+        all_rows = _select_cycle_rows(all_rows)
 
     sheet_groups = defaultdict(list)
     sheet_titles = {}

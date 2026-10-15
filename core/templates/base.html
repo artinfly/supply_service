@@ -99,15 +99,17 @@
     {% endif %}
     {% endif %}
 
-    {# Кнопка выхода #}
-    <div class="sidebar-logout">
-        <a href="{% url 'logout' %}">
+    {# Кнопка выхода: форма POST, а не ссылка — так выход нельзя вызвать
+       с чужого сайта (ссылкой или картинкой) #}
+    <form class="sidebar-logout" method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <button type="submit">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
             </svg>
             Выйти
-        </a>
-    </div>
+        </button>
+    </form>
 </nav>
 
 {# --- Основной контент --- #}
@@ -150,6 +152,17 @@ function fmt(val, format) {
     if (format === 'percent') return parseFloat(val).toLocaleString('ru-RU', {maximumFractionDigits:1}) + '%';
     if (format === 'date') return fmtDate(val);
     return val;
+}
+
+/**
+ * Понятный текст ошибки по ответу сервера (для fetch на страницах).
+ * 401 — сессия истекла (сервер отвечает так на запросы данных без входа),
+ * 403 — у пользователя нет права на раздел.
+ */
+function apiError(resp) {
+    if (resp.status === 401) return 'Сессия истекла — обновите страницу (F5) и войдите заново';
+    if (resp.status === 403) return 'Нет доступа к разделу';
+    return `Ошибка сервера (код ${resp.status})`;
 }
 
 /**
@@ -231,7 +244,7 @@ async function loadTable(apiUrl, containerId, cols) {
     container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка…</div>';
     try {
         const resp = await fetch(apiUrl);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        if (!resp.ok) throw new Error(apiError(resp));
         const data = await resp.json();
         
         if (!data || !data.length) { 
