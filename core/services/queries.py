@@ -66,7 +66,11 @@ def needs_znp(alias="i"):
 
 
 def _sl(statuses):
-    """Преобразует кортеж статусов в строку для SQL IN (...)."""
+    """Преобразует кортеж статусов в строку для SQL IN (...).
+
+    Только для констант из этого модуля (CONCLUDED, SAP_CFO и т.п.):
+    значения подставляются в SQL как есть. Ввод пользователя — только через %s.
+    """
     return ", ".join(f"'{s}'" for s in statuses)
 
 
@@ -81,7 +85,13 @@ def escape_like(value):
 
 
 def kdr(year):
-    """Возвращает SQL для сводки КДР по ИГК за указанный год."""
+    """SQL сводки КДР по ИГК за год (страница «КДР»).
+
+    Считаются только позиции с заполненным заказом (HAS_ORDER), группировка
+    по полному номеру ИГК. Выгрузка КДР в Excel (kdr_export) считает иначе:
+    все позиции и группировка по последним 4 цифрам — поэтому цифры
+    на экране и в файле могут расходиться.
+    """
     yc = YEAR_COL.get(str(year))
     cl = _sl(CONCLUDED)
     nl = _sl(NOT_CONCL)
@@ -294,8 +304,19 @@ def igk_detail(year, igk, statuses):
     """
 
 
+# Поля, по которым строки реестра «Все договоры» собираются в подытог по договору.
+# Должны совпадать в GROUP BY запроса итогов и в ключе группировки в api_all_contracts.
+ALL_CONTRACTS_GROUP = ("igk", "c_agent", "contract", "status", "item", "order")
+
+
 def all_contracts(where):
-    """Возвращает два SQL-запроса: детальный реестр и строки итогов для всех договоров."""
+    """Два SQL-запроса реестра «Все договоры»: строки позиций и подытоги по договору.
+
+    Подытог считается по договору целиком, через все годы: флаги y25/y26/y27
+    в нём — «есть хоть одна позиция в этом году» (BOOL_OR). Раньше годы были
+    в GROUP BY, и у договора с этапами в разных годах получалось несколько
+    подытогов, из которых на экран попадал только последний.
+    """
     detail = f"""
         SELECT igk, c_agent, contract, status,
             COALESCE(payment_type,'ИНОЕ') AS payment_type,
@@ -307,19 +328,20 @@ def all_contracts(where):
             0 AS is_subtotal
         FROM igk_stat_data {where}
         GROUP BY igk, c_agent, contract, status, payment_type, item, "order", stage, y25, y26, y27
-        ORDER BY igk NULLS LAST, contract, payment_type
+        ORDER BY igk NULLS LAST, contract, payment_type, stage
     """
     total = f"""
         SELECT igk, c_agent, contract, status,
             'ИТОГО' AS payment_type,
-            item, "order", NULL AS stage, y25, y26, y27,
+            item, "order", NULL AS stage,
+            BOOL_OR(y25) AS y25, BOOL_OR(y26) AS y26, BOOL_OR(y27) AS y27,
             ROUND(CAST(SUM(plan) AS numeric), 2) AS spec_sum,
             ROUND(CAST(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}') AS numeric), 2) AS pp_sum,
             ROUND(CAST(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}') AS numeric), 2) AS pp_fact,
             ROUND(CAST(SUM(plan) - SUM(COALESCE(fact,0)) AS numeric), 2) AS pp_remain,
             1 AS is_subtotal
         FROM igk_stat_data {where}
-        GROUP BY igk, c_agent, contract, status, item, "order", y25, y26, y27
+        GROUP BY igk, c_agent, contract, status, item, "order"
         ORDER BY igk NULLS LAST, contract
     """
     return detail, total
@@ -351,7 +373,10 @@ def advances(year):
 
 
 def kdr_export(year):
-    """Возвращает SQL для экспорта сводки КДР."""
+    """SQL выгрузки КДР в Excel: строки по ИГК (последние 4 цифры) и ЦФО.
+
+    В отличие от kdr() учитывает и позиции без заказа (см. комментарий там).
+    """
     yc = YEAR_COL.get(str(year))
     cl = _sl(CONCLUDED)
     nl = _sl(NOT_CONCL)

@@ -19,7 +19,7 @@
         <form method="get" class="d-flex gap-2 align-items-center">
             <select class="form-select form-select-sm filter-select-auto" name="igk" onchange="this.form.submit()">
                 {% for i in available_igk %}
-                <option value="{{ i }}" {% if selected_igk == i %}selected{% endif %}>{{ i }}</option>
+                <option value="{{ i }}" title="{{ i }}" {% if selected_igk == i %}selected{% endif %}>ИГК {{ i|slice:"-4:" }}</option>
                 {% endfor %}
             </select>
             <input type="date" name="date" class="filter-input filter-input-date"
@@ -33,7 +33,7 @@
     {% else %}
 
     {# --- Карточки: Все заявки --- #}
-    <div class="row g-3 mb-4">
+    <div class="dash-section">
         <div class="block-title">Все заявки</div>
         <div class="card-block">
             {% include "_sap_cards.html" with b=all %}
@@ -41,7 +41,7 @@
     </div>
 
     {# --- Карточки: Заявки за первую дату --- #}
-    <div class="row g-3 mb-4">
+    <div class="dash-section">
         <div class="block-title">Заявки за {{ first_date|date:"d.m.Y" }}</div>
         <div class="card-block">
             {% include "_sap_cards.html" with b=first_date_breakdown date=first_date %}
@@ -49,7 +49,7 @@
     </div>
 
     {# --- Карточки: Заявки за вторую дату --- #}
-    <div class="row g-3 mb-4">
+    <div class="dash-section">
         <div class="block-title">Заявки за {{ second_date|date:"d.m.Y" }}</div>
         <div class="card-block">
             {% include "_sap_cards.html" with b=second_date_breakdown date=second_date %}

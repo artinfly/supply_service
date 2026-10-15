@@ -123,7 +123,6 @@ HR_SERVICE_API_URL = os.getenv("HR_SERVICE_API_URL", "")
 
 # --- Безопасность в production ---
 if not DEBUG:
-    SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = "DENY"
     CSRF_COOKIE_HTTPONLY = True

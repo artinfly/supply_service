@@ -1,5 +1,6 @@
 """Создание Excel-файлов с форматированием и формирование HTTP-ответов для скачивания."""
 
+import re
 from io import BytesIO
 from urllib.parse import quote
 
@@ -121,8 +122,15 @@ def xlsx_response(data, filename_ru):
     """
     today = timezone.localdate().strftime("%d_%m_%Y")
 
-    # ASCII-версия имени для старых клиентов
-    fname_ascii = f"{filename_ru.translate(_TRANSLIT)}_{today}.xlsx"
+    # Символы, недопустимые в имени файла Windows и в заголовке ответа
+    # (в имени бывает название контрагента: ООО "Ромашка")
+    filename_ru = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", filename_ru)
+
+    # ASCII-версия имени для старых клиентов: всё, что не стало латиницей
+    # после транслитерации («», № и т.п.), заменяем на «_»
+    fname_ascii = re.sub(
+        r"[^A-Za-z0-9._-]", "_", f"{filename_ru.translate(_TRANSLIT)}_{today}.xlsx"
+    )
     # UTF-8 версия для современных клиентов (RFC 5987)
     fname_utf8 = quote(f"{filename_ru}_{today}.xlsx")
 

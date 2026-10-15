@@ -224,29 +224,34 @@ class UserWithSectionsAdmin(UserAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("profile")
 
+    # У пользователей, созданных до появления профилей, записи Profile может
+    # не быть: obj.profile тогда бросает исключение. getattr(obj, "profile", None)
+    # его гасит (RelatedObjectDoesNotExist — подкласс AttributeError).
+
     @admin.display(description="ФИО", ordering="last_name")
     def get_full_name(self, obj):
-        patronymic = (
-            getattr(obj.profile, "patronymic", "") if hasattr(obj, "profile") else ""
-        )
+        patronymic = getattr(getattr(obj, "profile", None), "patronymic", "")
         parts = [obj.last_name, obj.first_name, patronymic]
         return " ".join(p for p in parts if p)
 
     @admin.display(description="Уволен?", boolean=True, ordering="profile__is_fired")
     def get_is_fired(self, obj):
-        return bool(getattr(obj.profile, "is_fired", False))
+        return bool(getattr(getattr(obj, "profile", None), "is_fired", False))
 
     @admin.display(description="Дата синхронизации", ordering="profile__last_synced_at")
     def get_last_synced_at(self, obj):
-        return getattr(obj.profile, "last_synced_at", "")
+        return getattr(getattr(obj, "profile", None), "last_synced_at", "")
 
     def save_related(self, request, form, formsets, change):
+        """Права на разделы (access_*) берутся из галочек «Доступ к разделам»;
+        остальные права пользователя не трогаются."""
         super().save_related(request, form, formsets, change)
         user = form.instance
         keep = list(user.user_permissions.exclude(codename__startswith="access_"))
         user.user_permissions.set(keep + list(form.cleaned_data.get("sections") or []))
 
     def save_model(self, request, obj, form, change):
+        """Поля профиля (отчество, API-ключ, «уволен») лежат в отдельной модели Profile."""
         super().save_model(request, obj, form, change)
         Profile.objects.update_or_create(
             user=obj,
@@ -267,45 +272,47 @@ class UserWithSectionsAdmin(UserAdmin):
         ]
         return custom_urls + super().get_urls()
 
-    def _fetch_from_hr_api(self, tab_number):
-        """Запрос к HR API по табельному номеру. Возвращает (data, error_response)."""
+    @staticmethod
+    def _fetch_from_hr_api(tab_number, api_key):
+        """Запрос к HR API по табельному номеру.
+
+        API-ключ передаётся явно: объект админки один на всех пользователей,
+        поэтому хранить ключ в его атрибуте нельзя — запросы разных людей
+        перемешались бы.
+
+        Returns:
+            (data, None) при успехе или (None, (текст_ошибки, http_статус)).
+        """
         if not API_PATH:
-            return None, JsonResponse(
-                {"error": "HR_SERVICE_API_URL не задан"}, status=500
-            )
+            return None, ("HR_SERVICE_API_URL не задан", 500)
 
         url = f"{API_PATH}{tab_number}/"
         try:
-            response = requests.get(
-                url, headers={"X-API-Key": self._get_user_api_key()}, timeout=5
-            )
+            response = requests.get(url, headers={"X-API-Key": api_key}, timeout=5)
             response.raise_for_status()
             return response.json(), None
         except requests.RequestException as e:
-            return None, JsonResponse(
-                {"error": f"Ошибка обращения к API: {e}"}, status=502
-            )
+            return None, (f"Ошибка обращения к API: {e}", 502)
         except ValueError:
-            return None, JsonResponse(
-                {"error": "Некорректный ответ от API"}, status=502
-            )
+            return None, ("Некорректный ответ от API", 502)
 
-    def _get_user_api_key(self):
-        """Получить API-ключ текущего пользователя из профиля."""
-        # В контексте админки request доступен через self, но здесь упрощаем
-        return getattr(self, "_current_api_key", None)
+    @staticmethod
+    def _request_api_key(request):
+        """API-ключ текущего администратора (из его профиля) или None."""
+        return getattr(getattr(request.user, "profile", None), "api_key", None)
 
     def fetch_external_data(self, request, tab_number):
-        api_key = getattr(getattr(request.user, "profile", None), "api_key", None)
+        """Кнопка «Получить данные сотрудника» в форме пользователя (AJAX)."""
+        api_key = self._request_api_key(request)
         if not api_key:
             return JsonResponse(
-                {"error": "У текущего пользователя не задан API ключ"}, status=400
+                {"error": "У текущего пользователя не задан API-ключ"}, status=400
             )
 
-        self._current_api_key = api_key
-        data, error = self._fetch_from_hr_api(tab_number)
+        data, error = self._fetch_from_hr_api(tab_number, api_key)
         if error:
-            return error
+            text, status = error
+            return JsonResponse({"error": text}, status=status)
 
         return JsonResponse(
             {
@@ -334,12 +341,10 @@ class UserWithSectionsAdmin(UserAdmin):
         update_count = 0
         error_count = 0
 
-        api_key = getattr(getattr(request.user, "profile", None), "api_key", None)
+        api_key = self._request_api_key(request)
         if not api_key:
             self.message_user(request, "У вас не задан API-ключ!", level=messages.ERROR)
             return
-
-        self._current_api_key = api_key
 
         for user in to_process:
             profile, _ = Profile.objects.get_or_create(user=user)
@@ -351,9 +356,10 @@ class UserWithSectionsAdmin(UserAdmin):
                 error_count += 1
                 continue
 
-            data, error = self._fetch_from_hr_api(tab_number)
+            data, error = self._fetch_from_hr_api(tab_number, api_key)
             if error:
-                profile.sync_error = str(error)
+                # Раньше сюда попадал repr объекта JsonResponse, а не текст ошибки
+                profile.sync_error = error[0]
                 profile.save(update_fields=["sync_error"])
                 error_count += 1
                 continue
