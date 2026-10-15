@@ -833,6 +833,3 @@ class Migration(migrations.Migration):
             field=models.FloatField(null=True, verbose_name="Сумма ВВ"),
         ),
     ]
-
-
-

@@ -1,6 +1,6 @@
 """SQL-запросы для построения графиков по ЦФО."""
 
-from .queries import (
+from ..queries import (
     ADVANCE,
     CONCLUDED,
     NOT_CONCL,
@@ -28,7 +28,8 @@ ZNP_STAGES = (
     ("paid", "Оплачено"),
 )
 
-# Исключаем перекрывающиеся статусы SAP (например, "ready_18" входит в "sent_18")
+# На графике у каждой заявки ровно один статус (sap_status_sql), поэтому
+# «перекрывающиеся» статусы (сейчас это agreed_registry) в легенду не выводим
 SAP_STAGES = tuple(
     (key, label)
     for key, label in SAP_STAGE_LABELS.items()

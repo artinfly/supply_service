@@ -46,15 +46,15 @@
             </select>
         </div>
         <div class="filter-group">
-            <label class="filter-label">Статус ЗнП</label>
+            <label class="filter-label">Статус ЗнП (как на карточках сводки)</label>
             <div class="d-flex gap-2 flex-wrap">
-                <label class="status-check"><input type="checkbox" id="cb-not-issued-advance" checked> Не оформлена (аванс)</label>
-                <label class="status-check"><input type="checkbox" id="cb-not-issued-postpayment" checked> Не оформлена (постоплата)</label>
+                <label class="status-check"><input type="checkbox" id="cb-not-issued-advance" checked> Не оформлено (аванс)</label>
+                <label class="status-check"><input type="checkbox" id="cb-not-issued-postpayment" checked> Не оформлено (постоплата)</label>
                 <label class="status-check"><input type="checkbox" id="cb-in-progress" checked> На оформлении</label>
-                <label class="status-check"><input type="checkbox" id="cb-advance" checked> Аванс</label>
-                <label class="status-check"><input type="checkbox" id="cb-advance-paid" checked> Оплачен аванс</label>
-                <label class="status-check"><input type="checkbox" id="cb-postpayment" checked> Постоплата</label>
-                <label class="status-check"><input type="checkbox" id="cb-postpayment-paid" checked> Оплачена постоплата</label>
+                <label class="status-check"><input type="checkbox" id="cb-advance" checked> Оформлено (аванс)</label>
+                <label class="status-check"><input type="checkbox" id="cb-advance-paid" checked> Оплачено (аванс)</label>
+                <label class="status-check"><input type="checkbox" id="cb-postpayment" checked> Оформлено (постоплата)</label>
+                <label class="status-check"><input type="checkbox" id="cb-postpayment-paid" checked> Оплачено (постоплата)</label>
             </div>
         </div>
         <div class="filter-group">
@@ -173,7 +173,7 @@ function buildUrl() {
  */
 async function loadData() {
     document.getElementById('table-wrapper').innerHTML = 
-        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка...</div>';
+        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка…</div>';
     try {
         const resp = await fetch(buildUrl());
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

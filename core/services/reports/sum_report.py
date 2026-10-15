@@ -23,8 +23,9 @@ from openpyxl.styles import Alignment, Border, PatternFill, Side
 # --- Константы шаблона ---
 
 
+# core/services/reports/sum_report.py -> parents[2] = core/
 TEMPLATE_PATH = (
-    Path(__file__).resolve().parents[1] / "static" / "files" / "templateSum.xlsx"
+    Path(__file__).resolve().parents[2] / "static" / "files" / "templateSum.xlsx"
 )
 
 # Номера колонок во входном файле (нумерация с 1)
@@ -60,6 +61,21 @@ ALLOWED_DIFFERENCE = 1.0  # Допустимое расхождение для �
 # Стили отчёта
 REPORT_FONT_SIZE = 12
 REPORT_END_COLUMN = 11
+
+# В справке показываются только договоры с этими статусами (ТЗ п.6)
+ALLOWED_STATUSES = ("заключен", "не заключен")
+
+# Названия блоков (ТЗ п.2) и текст в «Срок оформления ЗнП» (ТЗ п.3–4)
+BLOCK_TITLES = (
+    "Краткая справка по оформленным и неоплаченным ЗнП",
+    "Краткая справка по не оформленным ЗнП",
+    "Краткая справка по заключению договоров",
+)
+ZNP_TERM_TEXT = {
+    "table2": "ЗнП оформлена",
+    "table3": "ЗнП на оформлении",
+}
+DETAIL_END_COLUMN = 9
 
 RED_FILL = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
 
@@ -131,7 +147,7 @@ def _to_int(val) -> int:
     if isinstance(val, (int, float)):
         return int(val)
     try:
-        cleaned = str(val).replace(" ", "").replace(",", ".")
+        cleaned = str(val).replace(" ", "").replace(" ", "").replace(",", ".")
         if cleaned in ("", "-", "None", "FALSE", "False", "false"):
             return 0
         return int(float(cleaned))
@@ -179,6 +195,7 @@ def _normalize_condition(value: str) -> str:
     text = value.replace("\xa0", " ").strip().lower()
     text = re.sub(r"\s+", " ", text)
     text = re.sub(r"\s*[\(\[,].*$", "", text)
+    text = re.sub(r"^незаключ", "не заключ", text)
     return text.strip()
 
 
@@ -654,7 +671,7 @@ def _write_detail_table(ws, total_row_idx, rows, table_kind="table2"):
             sum_avans,
             f"{int(percent_val)}%",
             sixth_getter(r),
-            r.period_reg_date,
+            ZNP_TERM_TEXT.get(table_kind, r.period_reg_date),
             r.note,
             r.dep,
         ]
@@ -692,6 +709,49 @@ def _write_detail_table(ws, total_row_idx, rows, table_kind="table2"):
     return total_row, total_contract, total_avans
 
 
+def _row_kind(ws, r):
+    """Тип строки по колонке A: 'header', 'total', 'block', 'data' или None (пустая)."""
+    a = str(ws.cell(row=r, column=1).value or "").strip()
+    a_l = a.lower()
+    if r in (3, 4) or a_l in ("отдел", "контрагент"):
+        return "header"
+    if a_l.startswith(("всего", "итого")):
+        return "total"
+    if a in BLOCK_TITLES:
+        return "block"
+    if any(
+        ws.cell(row=r, column=c).value not in (None, "")
+        for c in range(1, REPORT_END_COLUMN + 1)
+    ):
+        return "data"
+    return None
+
+
+def _set_bold(cell, bold):
+    f = copy(cell.font)
+    f.bold = bold
+    cell.font = f
+
+
+def _apply_report_layout(ws, start_row=5):
+    """ТЗ п.1–2: жирный шрифт только в заголовках столбцов и итогах,
+    названия блоков — по центру на всю ширину таблицы."""
+    for r in range(start_row, ws.max_row + 1):
+        kind = _row_kind(ws, r)
+        if kind is None or kind == "header":
+            continue
+        if kind == "block":
+            ws.merge_cells(
+                start_row=r, start_column=1, end_row=r, end_column=DETAIL_END_COLUMN
+            )
+            cell = ws.cell(row=r, column=1)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            _set_bold(cell, False)
+            continue
+        for c in range(1, REPORT_END_COLUMN + 1):
+            _set_bold(ws.cell(row=r, column=c), kind == "total")
+
+
 def _adjust_column_widths(ws):
     """Устанавливает ширины колонок для детальных таблиц."""
     ws.column_dimensions["A"].width = 30
@@ -708,19 +768,23 @@ def _adjust_column_widths(ws):
 # --- Генерация отчётов ---
 
 
-def generate_single_report(rows, igk_title, is_cycle=False):
+def generate_single_report(rows, igk_title, is_cycle=False, igk=""):
     """Генерирует отчёт по одному ИГК на основе шаблона.
 
     Args:
         rows: список строк данных для этого ИГК
         igk_title: заголовок ИГК из исходного файла
         is_cycle: флаг длинноциклового формата
+        igk: номер ИГК (имя листа), для строки «Всего по ГК NNNN:»
 
     Returns:
         bytes: содержимое Excel-файла
     """
     if not TEMPLATE_PATH.exists():
         raise FileNotFoundError(f"Шаблон {TEMPLATE_PATH} не найден")
+
+    # ТЗ п.6: только «Заключен» и «Не заключен»
+    rows = [r for r in rows if _normalize_condition(r.condition) in ALLOWED_STATUSES]
 
     wb = load_workbook(TEMPLATE_PATH)
     ws = wb["9022"] if "9022" in wb.sheetnames else wb.active
@@ -768,9 +832,10 @@ def generate_single_report(rows, igk_title, is_cycle=False):
     ws.cell(row=final_total_row, column=3).value = contract_sum_total
     ws.cell(row=final_total_row, column=4).value = avans_sum_total
 
-    final_title_cell = ws.cell(row=final_total_row, column=1)
-    if isinstance(final_title_cell.value, str):
-        final_title_cell.value = final_title_cell.value.replace("__g", igk_title)
+    # ТЗ п.5: «Всего по ГК 6110:» вместо полного заголовка справки
+    ws.cell(row=final_total_row, column=1).value = (
+        f"Всего по ГК {igk}:" if igk else "Всего по ГК:"
+    )
 
     # Проверки согласованности данных
     val10 = round(float(ws.cell(row=t1_total, column=10).value or 0), 2)
@@ -784,12 +849,18 @@ def generate_single_report(rows, igk_title, is_cycle=False):
         ws.cell(row=t1_total, column=11).fill = RED_FILL
 
     _finalize_sheet(ws, start_row=3, end_col=REPORT_END_COLUMN)
+    _apply_report_layout(ws, start_row=5)
     _adjust_column_widths(ws)
     ws.title = _safe_sheet_title(igk_title[:31])
 
     buffer = io.BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
+
+
+# Длинноцикловая справка: признак строки («Да» в колонке «Длинноцикловые»)
+# читается в SumReportRow.is_cycle, но строки по нему НЕ отбираются —
+# справки «Обычная» и «Длинноцикловая» сейчас отличаются только именем файла.
 
 
 def build_sum_reports_zip(file_stream, is_cycle=False, username="user"):
@@ -820,7 +891,9 @@ def build_sum_reports_zip(file_stream, is_cycle=False, username="user"):
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for sheet_name, rows in sheet_groups.items():
             try:
-                data = generate_single_report(rows, sheet_titles[sheet_name], is_cycle)
+                data = generate_single_report(
+                    rows, sheet_titles[sheet_name], is_cycle, igk=sheet_name.strip()
+                )
             except Exception as exc:
                 raise RuntimeError(
                     f"Ошибка формирования отчёта ИГК {sheet_name}: {exc}"

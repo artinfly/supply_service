@@ -1,67 +1,72 @@
-"""Маршруты приложения core."""
+"""Маршруты приложения core (все адреса начинаются с /reports/, см. config/urls.py).
+
+Имена маршрутов (name=...) используются в шаблонах ({% url %}) и в карте прав
+core/middleware.py. При добавлении страницы её имя нужно внести и туда,
+иначе страница будет доступна только суперпользователю.
+"""
 
 from django.urls import path
 
-from .views import api, exports, pages
+from .views import api, auth, contracts, exports, goz, upload, znp
 from .views import sum_report as sum_report_views
 
 urlpatterns = [
     # --- Аутентификация ---
-    path("", pages.index, name="root"),
-    path("login/", pages.login_view, name="login"),
-    path("logout/", pages.logout_view, name="logout"),
+    path("", auth.index, name="root"),
+    path("login/", auth.login_view, name="login"),
+    path("logout/", auth.logout_view, name="logout"),
     # --- Сводки и реестры ---
-    path("dashboard/", pages.dashboard, name="dashboard"),
-    path("all-contracts/", pages.all_contracts_table, name="all_contracts_table"),
-    path("contract-dupes/", pages.contract_dupes_table, name="contract_dupes_table"),
+    path("dashboard/", contracts.dashboard, name="dashboard"),
+    path("all-contracts/", contracts.all_contracts_table, name="all_contracts_table"),
+    path("contract-dupes/", contracts.contract_dupes_table, name="contract_dupes_table"),
     # --- Заявки на платёж ---
-    path("znp/", pages.znp_table, name="znp_table"),
-    path("znp-list/", pages.znp_list_table, name="znp_list_table"),
-    path("znp-sap/", pages.znp_sap_table, name="znp_sap_table"),
-    path("znp-sap-list/", pages.znp_sap_list_table, name="znp_sap_list_table"),
+    path("znp/", znp.znp_table, name="znp_table"),
+    path("znp-list/", znp.znp_list_table, name="znp_list_table"),
+    path("znp-sap/", znp.znp_sap_table, name="znp_sap_table"),
+    path("znp-sap-list/", znp.znp_sap_list_table, name="znp_sap_list_table"),
     # --- КДР и ИГК ---
-    path("kdr/", pages.kdr_table_default, name="kdr_table_default"),
-    path("kdr/<str:year>/", pages.kdr_table, name="kdr_table"),
+    path("kdr/", contracts.kdr_table_default, name="kdr_table_default"),
+    path("kdr/<str:year>/", contracts.kdr_table, name="kdr_table"),
     path(
         "igk-concluded/",
-        pages.igk_concluded_table_default,
+        contracts.igk_concluded_table_default,
         name="igk_concluded_table_default",
     ),
     path(
         "igk-concluded/<str:year>/",
-        pages.igk_concluded_table,
+        contracts.igk_concluded_table,
         name="igk_concluded_table",
     ),
     path(
         "igk-not-concluded/",
-        pages.igk_not_concluded_table_default,
+        contracts.igk_not_concluded_table_default,
         name="igk_not_concluded_table_default",
     ),
     path(
         "igk-not-concluded/<str:year>/",
-        pages.igk_not_concluded_table,
+        contracts.igk_not_concluded_table,
         name="igk_not_concluded_table",
     ),
     path(
         "igk-terminated/",
-        pages.igk_terminated_table_default,
+        contracts.igk_terminated_table_default,
         name="igk_terminated_table_default",
     ),
     path(
         "igk-terminated/<str:year>/",
-        pages.igk_terminated_table,
+        contracts.igk_terminated_table,
         name="igk_terminated_table",
     ),
     # --- История изменений ---
-    path("history-status/", pages.history_status_table, name="history_status_table"),
-    path("history-plan/", pages.history_plan_table, name="history_plan_table"),
-    path("history-fact/", pages.history_fact_table, name="history_fact_table"),
+    path("history-status/", contracts.history_status_table, name="history_status_table"),
+    path("history-plan/", contracts.history_plan_table, name="history_plan_table"),
+    path("history-fact/", contracts.history_fact_table, name="history_fact_table"),
     # --- Загрузка и справочники ---
-    path("upload/", pages.upload_excel, name="upload_excel"),
-    path("goz-report/", pages.goz_report, name="goz_report"),
-    path("upload-gk-directory/", pages.upload_gk_directory, name="upload_gk_directory"),
-    path("gk-directory-save/", pages.gk_directory_save, name="gk_directory_save"),
-    path("gk-directory-delete/", pages.gk_directory_delete, name="gk_directory_delete"),
+    path("upload/", upload.upload_excel, name="upload_excel"),
+    path("goz-report/", goz.goz_report, name="goz_report"),
+    path("upload-gk-directory/", goz.upload_gk_directory, name="upload_gk_directory"),
+    path("gk-directory-save/", goz.gk_directory_save, name="gk_directory_save"),
+    path("gk-directory-delete/", goz.gk_directory_delete, name="gk_directory_delete"),
     # --- Суммарные отчёты ---
     path("sum-report/", sum_report_views.sum_report_page, name="sum_report_page"),
     path(
@@ -70,7 +75,7 @@ urlpatterns = [
         name="sum_report_upload",
     ),
     # --- Экспорт в Excel ---
-    path("export/", pages.export_page, name="export_page"),
+    path("export/", exports.export_page, name="export_page"),
     path(
         "export/advances/<str:year>/", exports.export_advances, name="export_advances"
     ),

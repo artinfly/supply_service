@@ -35,7 +35,9 @@
             
             <form method="post" autocomplete="on">
                 {% csrf_token %}
-                
+                {# Страница, с которой пришли на вход: после входа вернёмся на неё #}
+                <input type="hidden" name="next" value="{{ next }}">
+
                 <div class="mb-3">
                     <label for="username" class="form-label">Логин</label>
                     <input type="text" 

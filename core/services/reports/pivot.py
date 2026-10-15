@@ -6,9 +6,9 @@
 """
 
 import io
-import os
 import re
 import zipfile
+from pathlib import Path
 
 from .excel import xlsx_response
 
@@ -37,12 +37,17 @@ TEXT_FIELDS = [
 # --- Вспомогательные функции ---
 
 
+# Управляющие символы, запрещённые в XML (кроме табуляции и переводов строки).
+# Иногда попадают в ячейки выгрузок; с ними Excel считает файл повреждённым.
+_XML_BAD_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
 def escape_xml(value):
     """Экранирует специальные символы для безопасной вставки в XML."""
     if value is None:
         return ""
     return (
-        str(value)
+        _XML_BAD_CHARS.sub("", str(value))
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
@@ -63,11 +68,9 @@ def build_advances_xlsx(rows, year):
     Returns:
         HttpResponse: объект ответа для скачивания файла
     """
-    template_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "static",
-        "files",
-        "templateIGK.xlsx",
+    # core/services/reports/pivot.py -> parents[2] = core/
+    template_path = (
+        Path(__file__).resolve().parents[2] / "static" / "files" / "templateIGK.xlsx"
     )
 
     # Читаем исходные XML из шаблона

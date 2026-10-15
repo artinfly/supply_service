@@ -60,8 +60,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || 'Ошибка запроса');
+                // При ошибке сервера (500) приходит HTML, а не JSON — тогда
+                // показываем код ответа вместо непонятной ошибки разбора JSON
+                let message = `Ошибка запроса (код ${response.status})`;
+                try {
+                    message = (await response.json()).error || message;
+                } catch (_) { /* ответ не JSON */ }
+                throw new Error(message);
             }
 
             const data = await response.json();

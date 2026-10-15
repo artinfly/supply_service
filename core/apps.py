@@ -8,4 +8,6 @@ class CoreConfig(AppConfig):
     name = "core"
 
     def ready(self):
-        import core.signals
+        # Импорт нужен ради побочного эффекта: при импорте модуля
+        # регистрируются обработчики сигналов (создание профиля пользователя).
+        import core.signals  # noqa: F401

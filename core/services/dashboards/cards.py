@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.db.models import Count, Q, Sum
 
-from .queries import ADVANCE, POSTPAYMENT, ZNP_APPROVED
+from ..queries import ADVANCE, POSTPAYMENT, ZNP_APPROVED
 from .sap_status import SAP_STAGE_PARAMS, sap_date_field, sap_status_conditions
 
 # --- Утилиты для работы с числами ---

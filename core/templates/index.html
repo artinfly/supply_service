@@ -42,7 +42,7 @@
     {% if perms.core.access_znp_sap %}
     <div class="idx-card idx-card-accent">
         <div class="idx-label">Заявки на платёж (SAP)</div>
-        <div class="idx-desc">Этап согласования: 421 отдел → 18 отдел → согласовано → оплата возможна</div>
+        <div class="idx-desc">Этапы: на согласовании → передано в 18 отдел → подтверждено 18 отделом → оплачено, разрез по ЦФО</div>
         <div class="idx-row">
             <a href="{% url 'znp_sap_table' %}" class="idx-btn">Открыть дашборд</a>
         </div>
@@ -88,6 +88,7 @@
     {% if perms.core.access_history %}
     <div class="idx-card">
         <div class="idx-label">История изменений</div>
+        <div class="idx-desc">Что изменилось в статусах, плане и факте между загрузками договоров</div>
         <div class="idx-row">
             <a href="{% url 'history_status_table' %}" class="idx-btn">Статусы</a>
             <a href="{% url 'history_plan_table' %}" class="idx-btn">План</a>
@@ -109,8 +110,29 @@
     {% if perms.core.access_upload %}
     <div class="idx-card">
         <div class="idx-label">Загрузка данных</div>
+        <div class="idx-desc">Выгрузки договоров, заявок ФЗД и заявок SAP</div>
         <div class="idx-row">
             <a href="{% url 'upload_excel' %}" class="idx-btn">Загрузить Excel</a>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if perms.core.access_goz_report %}
+    <div class="idx-card">
+        <div class="idx-label">Анализ ГОЗ</div>
+        <div class="idx-desc">Отчёт по архиву форм ЕИС ГОЗ: отгрузка, себестоимость, прибыль, рентабельность</div>
+        <div class="idx-row">
+            <a href="{% url 'goz_report' %}" class="idx-btn">Открыть</a>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if perms.core.access_export %}
+    <div class="idx-card">
+        <div class="idx-label">Краткая справка</div>
+        <div class="idx-desc">Справка по заключению договоров и оформлению ЗнП по каждому ИГК</div>
+        <div class="idx-row">
+            <a href="{% url 'sum_report_page' %}" class="idx-btn">Открыть</a>
         </div>
     </div>
     {% endif %}
@@ -119,7 +141,7 @@
     <div class="idx-card idx-card-wide idx-card-accent">
         <div class="idx-label">Скачивание отчётов</div>
         <div class="idx-row">
-            <span class="idx-group-label">ИГК авансы</span>
+            <span class="idx-group-label">Авансы по ИГК</span>
             {% for y in years %}
             <a href="{% url 'export_advances' y|stringformat:'s' %}" class="idx-btn">{{ y }} ↓</a>
             {% endfor %}

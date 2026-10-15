@@ -14,9 +14,8 @@
     <div class="d-flex flex-wrap gap-3 align-items-end">
         <div class="filter-group">
             <label class="filter-label">Контрагент или договор</label>
-            <input type="text" id="filter-agent" class="filter-input"
-                   placeholder="Часть названия или номера" autocomplete="off"
-                   style="width:260px">
+            <input type="text" id="filter-agent" class="filter-input filter-input-agent"
+                   placeholder="Часть названия или номера" autocomplete="off">
         </div>
         <div class="filter-group">
             <label class="filter-label">ИГК</label>
@@ -67,7 +66,7 @@
                 <option value="200">200</option>
             </select>
         </div>
-        <div class="filter-group" style="flex-direction:row;align-items:flex-end;gap:0.4rem">
+        <div class="filter-group filter-actions">
             <button id="btn-search" class="btn-orange">Найти</button>
             <button id="btn-reset" class="btn-ghost">Сбросить</button>
         </div>
@@ -123,79 +122,8 @@ const apiUrl = document.getElementById('page-data').dataset.apiUrl;
 let loadedData = [];
 let currentPage = 1;
 
-// --- Утилиты ---
-
-/**
- * Экранирует HTML-символы для предотвращения XSS.
- * Заменяет отсутствующую в оригинале функцию esc().
- */
-function escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    return String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
-
-/**
- * Возвращает текущее значение количества строк на странице.
- */
-function pageSize() {
-    return parseInt(document.getElementById('page-size').value, 10) || 100;
-}
-
-/**
- * Базовая реализация пагинации (восполняет отсутствующую в оригинале функцию).
- */
-function renderPagination(totalItems, itemsPerPage, currentPage, containerId) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-    
-    const totalPages = Math.ceil(totalItems / itemsPerPage);
-    if (totalPages <= 1) {
-        container.innerHTML = '';
-        return;
-    }
-
-    let html = '<nav><ul class="pagination pagination-sm mb-0">';
-    
-    // Кнопка "Назад"
-    html += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
-        <a class="page-link" href="#" data-page="${currentPage - 1}">&laquo;</a>
-    </li>`;
-
-    // Упрощённый вывод номеров страниц (можно расширить при необходимости)
-    for (let i = 1; i <= totalPages; i++) {
-        if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
-            html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
-                <a class="page-link" href="#" data-page="${i}">${i}</a>
-            </li>`;
-        } else if (i === currentPage - 2 || i === currentPage + 2) {
-            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
-        }
-    }
-
-    // Кнопка "Вперёд"
-    html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
-        <a class="page-link" href="#" data-page="${currentPage + 1}">&raquo;</a>
-    </li>`;
-    
-    html += '</ul></nav>';
-    container.innerHTML = html;
-
-    // Навешиваем обработчики на новые ссылки
-    container.querySelectorAll('a[data-page]').forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            currentPage = parseInt(link.dataset.page, 10);
-            renderPage();
-            // Прокрутка к началу таблицы
-            document.getElementById('table-wrapper').scrollIntoView({ behavior: 'smooth' });
-        });
-    });
-}
+// Экранирование (esc), размер страницы (pageSize) и кнопки страниц
+// (renderPagination) — общие функции из base.html, как в остальных реестрах.
 
 // --- Логика запросов ---
 
@@ -242,7 +170,7 @@ function buildUrl() {
  */
 async function loadData() {
     document.getElementById('table-wrapper').innerHTML = 
-        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка...</div>';
+        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка…</div>';
     try {
         const resp = await fetch(buildUrl());
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -251,7 +179,7 @@ async function loadData() {
         renderPage();
     } catch (e) {
         document.getElementById('table-wrapper').innerHTML = 
-            `<div class="error-msg">Ошибка загрузки данных: ${escapeHtml(e.message)}</div>`;
+            `<div class="error-msg">Ошибка загрузки данных: ${esc(e.message)}</div>`;
     }
 }
 
@@ -278,7 +206,7 @@ function renderPage() {
     }
 
     let html = '<table class="report-table" style="table-layout: auto;"><thead><tr>';
-    COLS.forEach(col => { html += `<th ${col.style || ''}>${escapeHtml(col.title)}</th>`; });
+    COLS.forEach(col => { html += `<th ${col.style || ''}>${esc(col.title)}</th>`; });
     html += '</tr></thead><tbody>';
 
     slice.forEach(row => {
@@ -302,7 +230,7 @@ function renderPage() {
             const wrap = (!col.format && !col.style) ? 'wrap' : '';
             const classes = [align, wrap].filter(Boolean).join(' ');
             
-            html += `<td class="${classes}">${escapeHtml(val)}</td>`;
+            html += `<td class="${classes}">${esc(val)}</td>`;
         });
         html += '</tr>';
     });

@@ -31,8 +31,13 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="filter-group" style="flex-direction:row;align-items:flex-end;gap:0.4rem">
+        <div class="filter-group filter-actions">
             <button type="button" id="filter-reset" class="btn-ghost">Сбросить</button>
+            {% if perms.core.access_export %}
+            {# Выгрузка с теми же фильтрами, что выбраны на странице #}
+            <button type="button" id="export-full" class="btn-ghost">Полные повторы ↓</button>
+            <button type="button" id="export-order" class="btn-ghost">По ИГК, предмету и заказу ↓</button>
+            {% endif %}
         </div>
     </div>
     <div class="dupes-hint">
@@ -63,6 +68,8 @@
 <div id="page-data"
      data-full-url="{% url 'api_contract_dupes' %}"
      data-order-url="{% url 'api_contract_dupes_by_order' %}"
+     data-export-full-url="{% url 'export_contract_dupes' %}"
+     data-export-order-url="{% url 'export_contract_dupes_by_order' %}"
      style="display:none"></div>
 {% endblock %}
 
@@ -132,6 +139,16 @@ document.getElementById('filter-reset').addEventListener('click', () => {
     document.getElementById('filter-cfo').value  = '';
     reloadOrder();
 });
+
+// Кнопки выгрузки: файл «По ИГК, предмету и заказу» — с фильтрами страницы,
+// «Полные повторы» — как в таблице на экране, без фильтров
+const exportFull = document.getElementById('export-full');
+if (exportFull) {
+    exportFull.addEventListener('click', () => { window.location.href = data.exportFullUrl; });
+    document.getElementById('export-order').addEventListener('click', () => {
+        window.location.href = data.exportOrderUrl + query();
+    });
+}
 
 // Загружаем обе таблицы при инициализации страницы
 loadTable(data.fullUrl, 'wrap-full', COLS_FULL);

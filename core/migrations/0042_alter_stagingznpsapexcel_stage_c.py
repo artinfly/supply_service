@@ -16,6 +16,3 @@ class Migration(migrations.Migration):
             field=models.DateField(null=True, verbose_name='Этап C'),
         ),
     ]
-
-
-

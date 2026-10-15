@@ -37,9 +37,10 @@
             <h6 class="goz-card-title">Загрузка справочника ГК из Word или Excel</h6>
             <p class="goz-hint">
                 Excel с 4 столбцами: № · Предприятие · Заказ · Договор/Дата. ГК берётся из договора
-                в формате игк/111сб (например, …6066/162сб/137 от 16.03.2021г. → 6066/162сб).
-                Word или Excel с 2 столбцами: № и код ГК. Год и изделие можно указать позже в справочнике.
-                Ставка НДС по умолчанию — 22%.
+                (например, …6066/162сб/137 от 16.03.2021г. → 6066/162сб; со спецификацией
+                «…, спец…/138» → 6066/162сб 138). Номер договора 137 в ГК не пишется.
+                Word или Excel с 2 столбцами: № и код ГК — добавляются только новые ГК, у уже
+                имеющихся ничего не меняется. Ставка НДС для новых ГК — 22%.
             </p>
             <form method="post" action="{% url 'upload_gk_directory' %}" enctype="multipart/form-data" id="gk-upload-form">
                 {% csrf_token %}
@@ -78,15 +79,15 @@
                             <label class="filter-label" for="form-igk">ГК</label>
                             <input type="text" name="igk" id="form-igk" class="filter-input field-fill" placeholder="6066/162сб" autocomplete="off" required>
                         </div>
-                        <div class="filter-group">
+                        <div class="filter-group span-3">
                             <label class="filter-label" for="form-enterprise">Предприятие</label>
                             <input type="text" name="enterprise" id="form-enterprise" class="filter-input field-fill" autocomplete="off">
                         </div>
-                        <div class="filter-group">
+                        <div class="filter-group span-2">
                             <label class="filter-label" for="form-order">Заказ</label>
                             <input type="text" name="order" id="form-order" class="filter-input field-fill" autocomplete="off">
                         </div>
-                        <div class="filter-group">
+                        <div class="filter-group span-3">
                             <label class="filter-label" for="form-contract">Договор/Дата</label>
                             <input type="text" name="contract_date" id="form-contract" class="filter-input field-fill" autocomplete="off">
                         </div>
@@ -172,6 +173,7 @@
     <p class="goz-hint">В архиве найдено контрактов: {{ gk_list|length }}. Откорректируйте ставки НДС при необходимости.</p>
     <form method="post" id="gk-report-form">
         {% csrf_token %}
+        {# Сам архив сервер берёт из сессии пользователя; поле оставлено для отладки #}
         <input type="hidden" name="temp_zip_path" value="{{ temp_zip_path }}">
         <input type="hidden" name="gk_data" id="gk_data_input" value="">
 
@@ -240,7 +242,9 @@
     <div class="format-note">
         <div class="format-note-ext">ZIP</div>
         <div class="format-note-text">
-            Архив с файлами <b>.xls</b> (форма ЕИС ГОЗ). Имя каждого файла — последние цифры ГК
+            Архив с файлами <b>.xls</b> (форма ЕИС ГОЗ). ГК берётся из имени файла,
+            например «… № …0087_334сб_137. Стр. 2.xls» → 0087/334сб.
+            Файлы с нечётной «Стр.» пропускаются.
         </div>
     </div>
 
@@ -251,7 +255,7 @@
             <input type="file" name="archive" accept=".zip" class="form-control goz-file-input mt-1">
         </div>
         <button type="submit" class="btn-orange btn-fixed" id="goz-btn">Загрузить и настроить НДС</button>
-        <div id="goz-progress" class="goz-progress" hidden>Обрабатываем архив, подождите...</div>
+        <div id="goz-progress" class="goz-progress" hidden>Обрабатываем архив, подождите…</div>
         <div id="goz-error" class="goz-error" hidden></div>
     </form>
 </div>
@@ -284,23 +288,30 @@ function checkArchive() {
         return fail('Файл не прикреплён — выберите ZIP-архив');
     }
     if (!input.files[0].name.toLowerCase().endsWith('.zip')) {
-        return fail('Это не .zip архив');
+        return fail('Это не ZIP-архив');
     }
     
     err.hidden = true;
     btn.disabled = true;
-    btn.textContent = 'Обработка...';
+    btn.textContent = 'Обработка…';
     progress.hidden = false;
-    
-    // Таймаут для разблокировки кнопки, если сервер долго не отвечает или произошла ошибка сети
-    setTimeout(function () {
+    // Кнопка остаётся заблокированной, пока сервер обрабатывает архив: после ответа
+    // страница перезагрузится сама. Раньше кнопка разблокировалась через 3 секунды,
+    // и большой архив можно было отправить повторно.
+    return true;
+}
+
+// Если вернуться на страницу кнопкой «Назад», браузер может показать её из кэша
+// с заблокированной кнопкой — возвращаем кнопку в исходное состояние
+window.addEventListener('pageshow', function () {
+    const btn = document.getElementById('goz-btn');
+    const progress = document.getElementById('goz-progress');
+    if (btn && progress) {
         btn.disabled = false;
         btn.textContent = 'Загрузить и настроить НДС';
         progress.hidden = true;
-    }, 3000);
-    
-    return true;
-}
+    }
+});
 
 // --- Шаг 2: Формирование отчёта с настройкой НДС ---
 
@@ -345,7 +356,7 @@ function checkArchive() {
         document.getElementById('gk_data_input').value = JSON.stringify(collectGkData());
         err.hidden = true;
         btn.disabled = true;
-        btn.textContent = 'Формирование...';
+        btn.textContent = 'Формирование…';
         
         try {
             const resp = await fetch(form.action || window.location.href, {

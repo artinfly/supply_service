@@ -12,6 +12,12 @@
 </head>
 <body>
 
+{# --- Полоса с кнопкой меню: видна только на узком экране (см. .mobile-bar в style.css) --- #}
+<div class="mobile-bar">
+    <button type="button" id="menu-toggle" aria-label="Открыть меню">☰</button>
+    <span>Отчёты МТО</span>
+</div>
+
 {# --- Боковое меню (Sidebar) --- #}
 <nav class="sidebar">
     <div class="sidebar-logo">
@@ -23,15 +29,15 @@
 
     {# Раздел: Сводки #}
     <div class="nav-section">Сводки</div>
-    <a href="{% url 'root' %}" class="nav-link">Обзор</a>
+    <a href="{% url 'root' %}" class="nav-sub-link">Обзор</a>
     {% if perms.core.access_dashboard %}
-    <a href="{% url 'dashboard' %}" class="nav-link">Договорная работа</a>
+    <a href="{% url 'dashboard' %}" class="nav-sub-link">Договорная работа</a>
     {% endif %}
     {% if perms.core.access_znp %}
-    <a href="{% url 'znp_table' %}" class="nav-link">Заявки на платёж (ФЗД)</a>
+    <a href="{% url 'znp_table' %}" class="nav-sub-link">Заявки на платёж (ФЗД)</a>
     {% endif %}
     {% if perms.core.access_znp_sap %}
-    <a href="{% url 'znp_sap_table' %}" class="nav-link">Заявки на платёж (SAP)</a>
+    <a href="{% url 'znp_sap_table' %}" class="nav-sub-link">Заявки на платёж (SAP)</a>
     {% endif %}
 
     {# Раздел: Реестры #}
@@ -141,7 +147,7 @@ function fmt(val, format) {
     if (val === null || val === undefined || val === '') return '';
     if (format === 'number')  return parseFloat(val).toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2});
     if (format === 'int')     return parseInt(val).toLocaleString('ru-RU');
-    if (format === 'percent') return val + '%';
+    if (format === 'percent') return parseFloat(val).toLocaleString('ru-RU', {maximumFractionDigits:1}) + '%';
     if (format === 'date') return fmtDate(val);
     return val;
 }
@@ -150,14 +156,19 @@ function fmt(val, format) {
  * Формирует URL для скачивания отчёта КДР с датами периода.
  */
 function downloadKDR(url, year, startId, endId) {
+    // Период необязателен: без дат КДР выгружается без столбца «Заключено за период»
     const start = document.getElementById(startId).value;
     const end = document.getElementById(endId).value;
-    if (!start || !end) {
-        alert('Для формирования КДР необходимо выбрать обе даты периода');
+    const base = url.replace('/0/', `/${year}/`);
+    if (!start && !end) {
+        window.location.href = base;
         return;
     }
-    const params = new URLSearchParams({start: start, end: end});
-    window.location.href = url.replace('/0/', `/${year}/`) + '?' + params;
+    if (!start || !end) {
+        alert('Укажите обе даты периода или очистите обе');
+        return;
+    }
+    window.location.href = base + '?' + new URLSearchParams({start: start, end: end});
 }
 
 /**
@@ -217,7 +228,7 @@ async function loadTable(apiUrl, containerId, cols) {
     const container = document.getElementById(containerId);
     if (!container) return;
     
-    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка...</div>';
+    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка…</div>';
     try {
         const resp = await fetch(apiUrl);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -271,20 +282,30 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 2. Подсветка активной ссылки в меню
+    // 2. Подсветка активной ссылки в меню.
+    // Ссылка раздела ведёт, например, на /reports/kdr/, а страница открывается
+    // как /reports/kdr/2026/ — поэтому сравниваем по началу пути.
     const curPath = window.location.pathname;
+    const rootPath = '{% url "root" %}';
     document.querySelectorAll('.sidebar a').forEach(link => {
         const linkPath = new URL(link.href, window.location.origin).pathname;
-        // "Обзор" (root) подсвечивается только при точном совпадении пути
-        const isRoot = linkPath === '/reports/' || linkPath === '/reports' || linkPath === '/';
-        const active = isRoot
-            ? (curPath === '/reports/' || curPath === '/reports' || curPath === '/')
-            : (curPath === linkPath || curPath.startsWith(linkPath + '/') || curPath.startsWith(linkPath + '?'));
-        
-        if (active) {
-            link.classList.add('active');
-        }
+        const active = linkPath === rootPath
+            ? curPath === rootPath                      // «Обзор» — только главная
+            : curPath.startsWith(linkPath);
+        if (active) link.classList.add('active');
     });
+
+    // 3. Кнопка ☰ на узком экране: открыть/закрыть меню, закрыть кликом мимо
+    const toggle = document.getElementById('menu-toggle');
+    if (toggle) {
+        toggle.addEventListener('click', e => {
+            e.stopPropagation();
+            document.body.classList.toggle('menu-open');
+        });
+        document.querySelector('.main-content').addEventListener('click', () => {
+            document.body.classList.remove('menu-open');
+        });
+    }
 });
 </script>
 

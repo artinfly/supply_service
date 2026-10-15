@@ -157,16 +157,16 @@ def _contract_label(filename):
     """Извлекает ключ ГК из имени файла.
 
     Примеры:
-        «№1234_5.xls» -> «1234 5»
+        «№…1234_5.xls» -> «1234 5»
+        «№…0087_334сб_137.xls» -> «0087/334сб»
         «ИГК 6066.xls» -> «6066»
-        «Стр. 1234_5.xls» -> «1234 5»
     """
     num_match = _NUM_RE.search(filename)
     if num_match:
         label = num_match.group(1)[-4:]
-        suffix = (num_match.group(2) or "").strip()
+        suffix = (num_match.group(2) or "").strip(" ._")
         if suffix:
-            label += f" {suffix}"
+            label += f"_{suffix}"
         return gk_key(label)
 
     igk_match = _IGK_RE.search(filename)

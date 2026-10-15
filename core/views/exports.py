@@ -1,4 +1,10 @@
-"""Экспорт данных в Excel: история, дубликаты, КДР, авансы, договоры."""
+"""Раздел «Отчёты в Excel»: страница выбора и все выгрузки .xlsx.
+
+Простые выгрузки (история, дубликаты, появившиеся договоры) — это SQL из
+services/queries.py, записанный в таблицу через _export_simple. КДР и
+договоры по контрагенту собираются здесь же, авансы — на шаблоне со
+сводной таблицей (services/reports/pivot.py).
+"""
 
 from collections import defaultdict
 from datetime import datetime
@@ -6,11 +12,11 @@ from datetime import datetime
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.http import JsonResponse
+from django.shortcuts import render
 
-from ..services.excel import make_wb, xlsx_response
-from ..services.pivot import build_advances_xlsx
 from ..services.queries import (
     YEAR_COL,
+    distinct_agents,
     advances,
     contract_dupes,
     contract_dupes_by_order,
@@ -26,6 +32,24 @@ from ..services.queries import (
     kdr_export,
     valid_date,
 )
+from ..services.reports.excel import make_wb, xlsx_response
+from ..services.reports.pivot import build_advances_xlsx
+from .common import base_context
+
+# --- Страница раздела ---
+
+
+@login_required
+def export_page(request):
+    """Страница выбора отчётов для экспорта в Excel."""
+    with connection.cursor() as cur:
+        cur.execute(distinct_agents())
+        agents = [r[0] for r in cur.fetchall()]
+
+    ctx = base_context()
+    ctx["agents"] = agents
+    return render(request, "export.html", ctx)
+
 
 # --- Вспомогательные функции ---
 
@@ -85,7 +109,7 @@ def export_history_status(request):
             "Факт, руб.",
             "Дата изменения",
             "Дата загрузки",
-            "Дата договора",
+            "Год ИГК",
         ],
         [10, 40, 8, 50, 25, 25, 15, 50, 16, 16, 12, 12, 12],
     )
@@ -110,7 +134,7 @@ def export_history_plan(request):
             "% от суммы (было)",
             "% от суммы (стало)",
             "Дата изменения",
-            "Дата договора",
+            "Год ИГК",
         ],
         [10, 40, 8, 50, 15, 50, 16, 16, 14, 14, 12, 12],
     )
@@ -133,7 +157,7 @@ def export_history_fact(request):
             "Факт (было), руб.",
             "Факт (стало), руб.",
             "Дата изменения",
-            "Дата договора",
+            "Год ИГК",
         ],
         [10, 40, 8, 50, 15, 50, 16, 16, 12, 12],
     )
@@ -346,16 +370,16 @@ def export_kdr(request, year):
         "Всего договоров, шт.",
         "Сумма всех договоров, млн.руб.",
         "Заключено, шт.",
-        "Сумма заключенных договоров (всех), млн.руб.",
+        "Сумма заключённых договоров (всех), млн.руб.",
         f"Всего договоров на {yy}г., шт.",
         f"Сумма договоров на {yy}г., млн.руб.",
         f"Заключено договоров на {yy}г., шт.",
-        f"% контрактации {yy}г.",
-        f"Сумма заключенных договоров на {yy}г., млн.руб.",
-        f"% контрактации {yy}г.",
+        f"% контрактации {yy}г. (по количеству)",
+        f"Сумма заключённых договоров на {yy}г., млн.руб.",
+        f"% контрактации {yy}г. (по сумме)",
         f"Заключено{period_text}, шт.",
-        "Не заключено, шт.",
-        "Сумма не заключенных договоров, млн.руб.",
+        f"Не заключено на {yy}г., шт.",
+        f"Сумма незаключённых договоров на {yy}г., млн.руб.",
         f"Плановая сумма аванса в {yy}г., млн.руб.",
         f"Фактическая сумма аванса на {yy}г., млн.руб.",
         f"% авансирования на {yy}г.",

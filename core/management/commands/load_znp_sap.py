@@ -5,8 +5,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.models import SystemEvent
-from core.services.excel_import import import_znp_sap
-from core.services.normalize import normalize_znp_sap
+from core.services.importing.excel_import import import_znp_sap
+from core.services.importing.normalize import normalize_znp_sap
 
 
 class Command(BaseCommand):

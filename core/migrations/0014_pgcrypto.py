@@ -11,6 +11,3 @@ class Migration(migrations.Migration):
         CreateExtension("pgcrypto"),
     ]
 
-
-
-
