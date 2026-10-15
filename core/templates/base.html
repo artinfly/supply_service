@@ -5,18 +5,11 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}МТО{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'vendor/bootstrap.min.css' %}">
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
 <body>
-
-{# --- Полоса с кнопкой меню: видна только на узком экране (см. .mobile-bar в style.css) --- #}
-<div class="mobile-bar">
-    <button type="button" id="menu-toggle" aria-label="Открыть меню">☰</button>
-    <span>МТО УВЗ</span>
-</div>
 
 {# --- Боковое меню (Sidebar) --- #}
 <nav class="sidebar">
@@ -307,18 +300,6 @@ document.addEventListener('DOMContentLoaded', () => {
             : curPath.startsWith(linkPath);
         if (active) link.classList.add('active');
     });
-
-    // 3. Кнопка ☰ на узком экране: открыть/закрыть меню, закрыть кликом мимо
-    const toggle = document.getElementById('menu-toggle');
-    if (toggle) {
-        toggle.addEventListener('click', e => {
-            e.stopPropagation();
-            document.body.classList.toggle('menu-open');
-        });
-        document.querySelector('.main-content').addEventListener('click', () => {
-            document.body.classList.remove('menu-open');
-        });
-    }
 });
 </script>
 
