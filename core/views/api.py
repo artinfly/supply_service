@@ -1,4 +1,10 @@
-"""JSON API для таблиц и графиков."""
+"""JSON API для таблиц и графиков.
+
+Страницы отдают только каркас, а строки таблиц и данные графиков JavaScript
+получает отсюда. Все ответы — списки/словари JSON; Decimal приводится к числам.
+Фильтры приходят в GET-параметрах; значения пользователя попадают в SQL
+только через параметры (%s), в текст запроса — только константы.
+"""
 
 from collections import defaultdict
 from decimal import Decimal
@@ -9,7 +15,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 
 from ..models import ZnpDataSAP
-from ..services.charts import (
+from ..services.dashboards.charts import (
     CONTRACT_AGE,
     SAP_STAGES,
     ZNP_STAGES,
@@ -19,6 +25,7 @@ from ..services.charts import (
 )
 from ..services.queries import (
     ADVANCE,
+    ALL_CONTRACTS_GROUP,
     CONCLUDED,
     NOT_CONCL,
     POSTPAYMENT,
@@ -42,7 +49,7 @@ from ..services.queries import (
     valid_year,
     znp_list,
 )
-from ..services.sap_status import (
+from ..services.dashboards.sap_status import (
     SAP_STAGE_LABELS,
     sap_date_field,
     sap_status_conditions,
@@ -206,8 +213,9 @@ def api_all_contracts(request):
         params.append(f"%{escape_like(f['igk'])}")
 
     if f["cfo"]:
-        conditions.append("cfo LIKE %s")
-        params.append(f"%{escape_like(f['cfo'])}")
+        # Точное совпадение: раньше было «оканчивается на», и ЦФО 42 находил 142
+        conditions.append("TRIM(cfo) = TRIM(%s)")
+        params.append(f["cfo"])
 
     if f["statuses"]:
         conditions.append(f"status IN ({','.join(['%s'] * len(f['statuses']))})")
@@ -226,12 +234,19 @@ def api_all_contracts(request):
         cols = [c[0] for c in cur.description]
         detail = [dict(zip(cols, r)) for r in cur.fetchall()]
         cur.execute(total_sql, params)
-        # Индексы: 0=igk, 2=contract, 6=order (для группировки итогов)
-        totals = {(r[0], r[2], r[6]): dict(zip(cols, r)) for r in cur.fetchall()}
+        total_cols = [c[0] for c in cur.description]
+        total_rows = [dict(zip(total_cols, r)) for r in cur.fetchall()]
 
+    # Ключ подытога — те же поля, что в GROUP BY запроса итогов
+    def group_key(row):
+        return tuple(row[f] for f in ALL_CONTRACTS_GROUP)
+
+    totals = {group_key(r): r for r in total_rows}
+
+    # Строки позиций договора, сразу за ними — его подытог
     groups = defaultdict(list)
     for row in detail:
-        groups[(row["igk"], row["contract"], row["order"])].append(row)
+        groups[group_key(row)].append(row)
 
     result = []
     for key, rows in groups.items():
@@ -277,8 +292,8 @@ def api_znp_list(request):
         params.append(f"%{escape_like(f['igk'])}")
 
     if f["cfo"]:
-        conditions.append("i.cfo LIKE %s")
-        params.append(f"%{escape_like(f['cfo'])}")
+        conditions.append("TRIM(i.cfo) = TRIM(%s)")
+        params.append(f["cfo"])
 
     if f["year"] in YEAR_COL:
         conditions.append(f"i.{YEAR_COL[f['year']]} = TRUE")
@@ -315,7 +330,7 @@ def api_znp_sap_list(request):
     if igk_filter:
         qs = qs.filter(igk__endswith=igk_filter)
     if cfo_filter:
-        qs = qs.filter(cfo__icontains=cfo_filter)
+        qs = qs.filter(cfo=cfo_filter)
 
     conditions = sap_status_conditions()
     date_ok = valid_date(date_filter)

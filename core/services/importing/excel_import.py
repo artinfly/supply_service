@@ -82,6 +82,24 @@ def _xlsx_rows(filepath):
     return wb.active.iter_rows(values_only=True), wb.close
 
 
+def _xls_value(cell, datemode):
+    """Значение ячейки .xls в том же виде, в каком его отдаёт openpyxl для .xlsx.
+
+    xlrd хранит даты числом (45678.0), а любые числа — как float (421 -> 421.0).
+    Без приведения в базу попадали «45678.0» вместо даты и «421.0» вместо ЦФО 421.
+    """
+    if cell.ctype == xlrd.XL_CELL_EMPTY or cell.value == "":
+        return None
+    if cell.ctype == xlrd.XL_CELL_DATE:
+        try:
+            return xlrd.xldate_as_datetime(cell.value, datemode)
+        except (ValueError, OverflowError, xlrd.xldate.XLDateError):
+            return cell.value
+    if cell.ctype == xlrd.XL_CELL_NUMBER and float(cell.value).is_integer():
+        return int(cell.value)
+    return cell.value
+
+
 def _xls_rows(filepath):
     """Открывает .xls через xlrd. Возвращает (итератор строк, функция закрытия)."""
     book = xlrd.open_workbook(filepath)
@@ -89,7 +107,7 @@ def _xls_rows(filepath):
 
     def _iter():
         for i in range(sheet.nrows):
-            yield tuple(v if v != "" else None for v in sheet.row_values(i))
+            yield tuple(_xls_value(c, book.datemode) for c in sheet.row(i))
 
     return _iter(), book.release_resources
 
@@ -102,10 +120,11 @@ def _sheet(filepath):
 
     try:
         rows, close = loader(filepath)
-    except FileNotFoundError:
-        raise CommandError(f"Файл не найден: {filepath}")
+    except FileNotFoundError as exc:
+        raise CommandError(f"Файл не найден: {filepath}") from exc
     except Exception as exc:
-        raise CommandError(str(exc))
+        # Битый или не Excel-файл: текст исключения показывается пользователю
+        raise CommandError(str(exc)) from exc
 
     try:
         yield rows

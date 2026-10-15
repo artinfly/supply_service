@@ -19,7 +19,10 @@
 
   const CATEGORICAL = ["#2a78d6", "#eb6834"];
   const ORDINAL = ["#86b6ef", "#2a78d6", "#104281"];
-  const STAGES = ["#be0c0c", "#eb6834", "#2a78d6", "#16a34a"];
+  // Цвета этапов по порядку наборов данных; совпадают с цветами карточек сводок.
+  // 5-й цвет нужен графику SAP («Готово к передаче в 18 отдел»), раньше
+  // он повторял 1-й красный и сливался с «На согласовании».
+  const STAGES = ["#be0c0c", "#eb6834", "#2a78d6", "#16a34a", "#ca8a04"];
 
   // --- Константы оформления ---
 
@@ -30,20 +33,6 @@
   const TICK_PADDING = 8;
 
   // --- Утилиты ---
-
-  const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-
-  /**
-   * Экранирует специальные HTML-символы для безопасной вставки в DOM.
-   * @param {*} value - Значение для экранирования
-   * @returns {string} Экранированная строка
-   */
-  function escape(value) {
-    if (value === null || value === undefined) return "";
-    return String(value).replace(/[&<>"']/g, function (ch) {
-      return ESC_MAP[ch];
-    });
-  }
 
   const nf1 = new Intl.NumberFormat("ru-RU", {
     minimumFractionDigits: 1,
@@ -112,18 +101,20 @@
   const EMPTY_MSG_CLASS = "chart-empty-msg";
 
   /**
-   * Показывает сообщение "За выбранный период данных нет" и скрывает canvas.
+   * Показывает сообщение вместо графика и скрывает canvas.
    * @param {HTMLCanvasElement} canvas - Элемент canvas графика
    * @param {HTMLElement} holder - Контейнер графика
+   * @param {string} [text] - Текст; по умолчанию «За выбранный период данных нет»
    */
-  function showEmpty(canvas, holder) {
+  function showEmpty(canvas, holder, text) {
     let msg = holder.querySelector("." + EMPTY_MSG_CLASS);
     if (!msg) {
       msg = document.createElement("div");
       msg.className = EMPTY_MSG_CLASS;
-      msg.textContent = "За выбранный период данных нет";
       holder.appendChild(msg);
     }
+    // Текст задаётся каждый раз: одно и то же место показывает и «нет данных», и ошибку
+    msg.textContent = text || "За выбранный период данных нет";
     msg.hidden = false;
     canvas.hidden = true;
   }
@@ -280,10 +271,12 @@
       if (!resp.ok) throw new Error("HTTP " + resp.status);
       renderBars(canvasId, await resp.json());
     } catch (e) {
-      holder.innerHTML =
-        '<div class="error-msg">Не удалось построить график: ' +
-        escape(e.message) +
-        "</div>";
+      // Canvas не удаляем (раньше здесь был holder.innerHTML = ...): иначе после
+      // ошибки график нельзя перестроить, например при смене периода на ЗнП (ФЗД).
+      // Текст выводится через textContent, поэтому HTML в нём не сработает.
+      const existing = Chart.getChart(canvas);
+      if (existing) existing.destroy();
+      showEmpty(canvas, holder, "Не удалось построить график: " + e.message);
     }
   }
 

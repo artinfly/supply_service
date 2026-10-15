@@ -7,8 +7,8 @@ from decimal import Decimal, InvalidOperation
 from django.db import connection, transaction
 from django.utils import timezone
 
-from core.services.linking import contract_hash, relink_znp_parents
-from core.services.queries import (
+from .linking import contract_hash, relink_znp_parents
+from ..queries import (
     ADVANCE,
     CONCLUDED,
     NOT_CONCL,
@@ -75,10 +75,21 @@ def norm(value):
 
 
 def plan_month(value):
-    """Преобразует дату в формат «ГГГГ.ММ» из различных форматов (ДД.ММ.ГГГГ, ГГГГ.ММ.ДД)."""
+    """Месяц плановой даты в виде «ГГГГ.ММ».
+
+    Принимает:
+        «15.03.2025»            — дата текстом (ДД.ММ.ГГГГ)
+        «2025.03»               — уже готовый месяц (ГГГГ.ММ)
+        «2025-03-15 00:00:00»   — ячейка Excel с настоящей датой: при импорте
+                                  она превращается в такую строку (str(datetime))
+    """
     text = norm(value)
     if not text:
         return None
+
+    # Ячейка Excel типа «дата» (раньше такие даты терялись и plan_date был пустым)
+    if len(text) >= 7 and text[4] == "-" and text[:4].isdigit() and text[5:7].isdigit():
+        return f"{text[:4]}.{text[5:7]}"
 
     parts = text.split(".")
 
@@ -86,7 +97,7 @@ def plan_month(value):
     if len(parts) == 3 and len(parts[2]) == 4:
         return f"{parts[2]}.{parts[1].zfill(2)}"
 
-    # Формат ГГГГ.ММ.ДД
+    # Формат ГГГГ.ММ
     if len(parts) == 2 and len(parts[0]) == 4:
         return f"{parts[0]}.{parts[1].zfill(2)}"
 
@@ -256,7 +267,7 @@ def normalize_contracts():
                     y26,  # y26
                     y27,  # y27
                     plan_month(r[12]),  # plan_date
-                    norm(r[14]),  # c_date
+                    norm(r[14]),  # c_date: год из «ГодИГК» (имя поля историческое)
                     to_decimal(r[13]),  # contract_sum
                     contract_hash(
                         norm(r[0]), norm(r[1]), norm(r[3]), norm(r[11])

@@ -32,6 +32,3 @@ class Migration(migrations.Migration):
         migrations.RunPython(convert_keys, migrations.RunPython.noop),
     ]
 
-
-
-

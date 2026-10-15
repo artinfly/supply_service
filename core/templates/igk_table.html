@@ -127,9 +127,11 @@ function renderTable(data, cols, container) {
 async function openDetail(igkCode) {
     document.getElementById('igkModalTitle').textContent = `ИГК ${igkCode} — ${year}`;
     const container = document.getElementById('modal-table-wrapper');
-    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка...</div>';
+    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка…</div>';
     
-    new bootstrap.Modal(document.getElementById('igkModal')).show();
+    // getOrCreateInstance: одно окно на страницу. Раньше на каждый клик создавался
+    // новый объект Modal, и после нескольких открытий затемнение фона «залипало».
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('igkModal')).show();
     
     try {
         const resp = await fetch(`${detailBase}${igkCode}/?type=${reportType}`);
@@ -148,7 +150,7 @@ async function openDetail(igkCode) {
  */
 async function loadMain() {
     const container = document.getElementById('table-wrapper');
-    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка...</div>';
+    container.innerHTML = '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка…</div>';
     
     try {
         const resp = await fetch(apiUrl);

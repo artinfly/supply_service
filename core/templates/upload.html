@@ -24,7 +24,7 @@
         <div class="format-note">
             <div class="format-note-ext">XLSX</div>
             <div class="format-note-text">
-                Принимается <b>.xlsx</b> и старый формат <b>.xls</b>
+                Принимаются <b>.xlsx</b> и старый формат <b>.xls</b>
             </div>
         </div>
 
@@ -32,7 +32,7 @@
             {% csrf_token %}
             
             <div class="mb-3">
-                <label for="excel-file" class="filter-label">Excel файл (.xlsx или .xls)</label>
+                <label for="excel-file" class="filter-label">Excel-файл (.xlsx или .xls)</label>
                 <input type="file" 
                        id="excel-file"
                        name="excel_file" 
@@ -66,10 +66,14 @@
 
     {# --- Список обязательных колонок для каждого типа файла --- #}
     <div class="upload-card upload-card-cols">
-        <div class="filter-label mb-2">Обязательные колонки в шапке файла</div>
+        <div class="filter-label mb-2">Какие колонки нужны в файле</div>
         {% for type, cols in file_columns.items %}
         <div class="req-cols" data-type="{{ type }}" hidden>
+            {% if type == "znp_sap" %}
+            <div class="upload-cols-note">Колонки берутся по положению (буква столбца), первая строка — шапка</div>
+            {% else %}
             <div class="upload-cols-note">{{ cols|length }} колонок, порядок значения не имеет</div>
+            {% endif %}
             <ul class="upload-cols-list">
                 {% for c in cols %}<li>{{ c }}</li>{% endfor %}
             </ul>
@@ -118,7 +122,7 @@ function checkFile() {
     // Файл валиден — скрываем ошибку и блокируем кнопку
     err.hidden = true;
     btn.disabled = true;
-    btn.textContent = 'Загрузка...';
+    btn.textContent = 'Загрузка…';
     return true;
 }
 

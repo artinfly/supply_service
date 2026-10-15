@@ -99,10 +99,13 @@ class IgkStatData(models.Model):
     y26 = models.BooleanField(null=True, verbose_name="Флаг 2026 года")
     y27 = models.BooleanField(null=True, verbose_name="Флаг 2027 года")
 
+    # Месяц плановой даты в виде «ГГГГ.ММ» (см. normalize.plan_month)
     plan_date = models.CharField(max_length=50, null=True, verbose_name="Плановая дата")
-    c_date = models.CharField(max_length=50, null=True, verbose_name="Дата заключения")
+    # Историческое имя: на самом деле здесь год из колонки «ГодИГК», а не дата договора
+    c_date = models.CharField(max_length=50, null=True, verbose_name="Год ИГК")
 
-    # Имя колонки историческое (ранее CRC32), фактически хранится MD5 64 бита.
+    # CRC32 от склейки ИГК+контрагент+договор+этап (services/importing/linking.py).
+    # По нему заявки ФЗД привязываются к позициям договоров.
     crc32_hash = models.BigIntegerField(verbose_name="CRC32 хеш")
 
     class Meta:
@@ -223,6 +226,8 @@ class ZnpDataSAP(models.Model):
 class ContractsHistory(models.Model):
     """История изменений статуса, плана и факта договоров между загрузками."""
 
+    # MD5 от склейки ИГК+контрагент+договор+предмет+заказ+этап+плановый месяц.
+    # Связь с igk_stat_data — через тот же digest() в SQL (queries._HISTORY_JOIN).
     hash = models.BinaryField(verbose_name="MD5 хеш позиции")
 
     old_status = models.CharField(
@@ -491,6 +496,9 @@ class Profile(models.Model):
     sync_error = models.TextField(blank=True, verbose_name="Ошибка синхронизации")
 
     class Meta:
+        # Имя таблицы задано явно: без него Django строит его из имени
+        # приложения, и после переименования reports → core таблица «потерялась».
+        db_table = "core_profile"
         verbose_name = "Профиль пользователя"
         verbose_name_plural = "Профили пользователей"
 

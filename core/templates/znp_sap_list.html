@@ -17,7 +17,7 @@
         <div class="filter-group">
             <label class="filter-label">Контрагент / рег. номер</label>
             <input type="text" id="filter-agent" class="filter-input filter-input-agent"
-                   placeholder="Поиск..." autocomplete="off">
+                   placeholder="Поиск…" autocomplete="off">
         </div>
         <div class="filter-group">
             <label class="filter-label">ИГК</label>
@@ -65,7 +65,7 @@
 
 {# --- Инфо-панель и пагинация --- #}
 <div class="d-flex align-items-center justify-content-between mb-2">
-    <span class="row-count-label">Показано: <strong id="row-count">0</strong> записей</span>
+    <span class="row-count-label">Показано: <strong id="row-count">0</strong> записей<span id="date-note"></span></span>
     <div id="pagination-top"></div>
 </div>
 
@@ -155,7 +155,7 @@ function buildUrl() {
  */
 async function loadData() {
     document.getElementById('table-wrapper').innerHTML = 
-        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка...</div>';
+        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка…</div>';
     try {
         const resp = await fetch(buildUrl());
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -179,6 +179,10 @@ function renderPage() {
     const slice = isFinite(ps) ? loadedData.slice(start, start + ps) : loadedData;
     
     document.getElementById('row-count').textContent = loadedData.length;
+    // Фильтр по дате приходит только из ссылки карточки сводки, полей для него нет,
+    // поэтому показываем его рядом со счётчиком (снимается кнопкой «Сбросить»)
+    document.getElementById('date-note').textContent =
+        selectedDate ? ` · за ${fmtDate(selectedDate)}` : '';
     renderPagination(loadedData.length, ps, currentPage, 'pagination-top');
     renderPagination(loadedData.length, ps, currentPage, 'pagination-bot');
 

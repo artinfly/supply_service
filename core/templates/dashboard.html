@@ -20,7 +20,7 @@
             </select>
             <select class="form-select form-select-sm filter-select-auto" name="igk" onchange="this.form.submit()">
                 {% for i in available_igk %}
-                <option value="{{ i }}" {% if selected_igk == i|stringformat:"s" %}selected{% endif %}>{{ i }}</option>
+                <option value="{{ i }}" title="{{ i }}" {% if selected_igk == i|stringformat:"s" %}selected{% endif %}>ИГК {{ i|stringformat:"s"|slice:"-4:" }}</option>
                 {% endfor %}
             </select>
         </form>
@@ -33,7 +33,7 @@
     {% else %}
 
     {# --- Карточки: Всего по всем годам --- #}
-    <div class="row g-3 mb-4">
+    <div class="dash-section">
         <div class="block-title">Всего по всем годам</div>
         <div class="card-block">
             <div class="dash-row">
@@ -42,9 +42,10 @@
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
                         </div>
-                        <div>
-                            <div class="dash-card-num">Всего договоров: {{ all_contracts_count }}</div>
-                            <div class="dash-card-lbl">на сумму {{ all_contracts_sum|floatformat:2|intspace }} млн. &#8381</div>
+                        <div class="dash-card-body">
+                            <div class="dash-card-title">Всего договоров</div>
+                            <div class="dash-card-num">{{ all_contracts_count }}</div>
+                            <div class="dash-card-lbl">на сумму {{ all_contracts_sum|floatformat:2|intspace }} млн ₽</div>
                         </div>
                     </div>
                 </a>
@@ -53,9 +54,10 @@
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
                         </div>
-                        <div>
-                            <div class="dash-card-num">Всего закл.: {{ all_concluded_count }}</div>
-                            <div class="dash-card-lbl">на сумму {{ all_concluded_sum|floatformat:2|intspace }} млн. &#8381</div>
+                        <div class="dash-card-body">
+                            <div class="dash-card-title">Заключено</div>
+                            <div class="dash-card-num">{{ all_concluded_count }}</div>
+                            <div class="dash-card-lbl">на сумму {{ all_concluded_sum|floatformat:2|intspace }} млн ₽</div>
                         </div>
                     </div>
                 </a>
@@ -64,9 +66,10 @@
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
                         </div>
-                        <div>
-                            <div class="dash-card-num">Всего не закл.: {{ all_not_concluded_count }}</div>
-                            <div class="dash-card-lbl">на сумму {{ all_not_concluded_sum|floatformat:2|intspace }} млн. &#8381</div>
+                        <div class="dash-card-body">
+                            <div class="dash-card-title">Не заключено</div>
+                            <div class="dash-card-num">{{ all_not_concluded_count }}</div>
+                            <div class="dash-card-lbl">на сумму {{ all_not_concluded_sum|floatformat:2|intspace }} млн ₽</div>
                         </div>
                     </div>
                 </a>
@@ -82,9 +85,10 @@
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
                         </div>
-                        <div>
-                            <div class="dash-card-num">Всего договоров на {{ selected_year }}г.: {{ curr_year_contracts_count }}</div>
-                            <div class="dash-card-lbl">на сумму {{ curr_year_contracts_sum|floatformat:2|intspace }} млн. &#8381</div>
+                        <div class="dash-card-body">
+                            <div class="dash-card-title">Всего договоров</div>
+                            <div class="dash-card-num">{{ curr_year_contracts_count }}</div>
+                            <div class="dash-card-lbl">на сумму {{ curr_year_contracts_sum|floatformat:2|intspace }} млн ₽</div>
                         </div>
                     </div>
                 </a>
@@ -93,9 +97,10 @@
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
                         </div>
-                        <div>
-                            <div class="dash-card-num">Заключено договоров на {{ selected_year }}г.: {{ curr_year_concluded_count }}</div>
-                            <div class="dash-card-lbl">на сумму {{ curr_year_concluded_sum|floatformat:2|intspace }} млн. &#8381</div>
+                        <div class="dash-card-body">
+                            <div class="dash-card-title">Заключено</div>
+                            <div class="dash-card-num">{{ curr_year_concluded_count }}</div>
+                            <div class="dash-card-lbl">на сумму {{ curr_year_concluded_sum|floatformat:2|intspace }} млн ₽</div>
                         </div>
                     </div>
                 </a>
@@ -104,9 +109,10 @@
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
                         </div>
-                        <div>
-                            <div class="dash-card-num">Не заключено на {{ selected_year }}г.: {{ curr_year_not_concluded_count }}</div>
-                            <div class="dash-card-lbl">на сумму {{ curr_year_not_concluded_sum|floatformat:2|intspace }} млн. &#8381</div>
+                        <div class="dash-card-body">
+                            <div class="dash-card-title">Не заключено</div>
+                            <div class="dash-card-num">{{ curr_year_not_concluded_count }}</div>
+                            <div class="dash-card-lbl">на сумму {{ curr_year_not_concluded_sum|floatformat:2|intspace }} млн ₽</div>
                         </div>
                     </div>
                 </a>
@@ -115,9 +121,9 @@
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M16 12h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3a2 2 0 0 1 0-4z"/></svg>
                         </div>
-                        <div>
-                            <div class="dash-card-num">{{ curr_year_plan|floatformat:2|intspace }} млн. &#8381</div>
-                            <div class="dash-card-lbl">Плановая сумма аванса на {{ selected_year }}</div>
+                        <div class="dash-card-body">
+                            <div class="dash-card-title">Аванс по плану</div>
+                            <div class="dash-card-num">{{ curr_year_plan|floatformat:2|intspace }} млн ₽</div>
                         </div>
                     </div>
                 </div>
@@ -130,9 +136,9 @@
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>
                         </div>
-                        <div>
-                            <div class="dash-card-num">{{ curr_year_fact|floatformat:2|intspace }} млн. &#8381</div>
-                            <div class="dash-card-lbl">Фактическая сумма аванса на {{ selected_year }}</div>
+                        <div class="dash-card-body">
+                            <div class="dash-card-title">Аванс оплачен</div>
+                            <div class="dash-card-num">{{ curr_year_fact|floatformat:2|intspace }} млн ₽</div>
                         </div>
                     </div>
                 </div>
@@ -141,9 +147,9 @@
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
                         </div>
-                        <div>
+                        <div class="dash-card-body">
+                            <div class="dash-card-title">Контрактация по количеству</div>
                             <div class="dash-card-num">{{ curr_year_percent_count|floatformat:2 }}%</div>
-                            <div class="dash-card-lbl">% контрактации {{ selected_year }} (кол-во)</div>
                         </div>
                     </div>
                 </div>
@@ -152,9 +158,9 @@
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
                         </div>
-                        <div>
+                        <div class="dash-card-body">
+                            <div class="dash-card-title">Контрактация по сумме</div>
                             <div class="dash-card-num">{{ curr_year_percent_sum|floatformat:2 }}%</div>
-                            <div class="dash-card-lbl">% контрактации {{ selected_year }} (руб)</div>
                         </div>
                     </div>
                 </div>
@@ -163,9 +169,9 @@
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
                         </div>
-                        <div>
+                        <div class="dash-card-body">
+                            <div class="dash-card-title">Авансирование</div>
                             <div class="dash-card-num">{{ curr_year_percent_prepaid|floatformat:2 }}%</div>
-                            <div class="dash-card-lbl">% авансирования на {{ selected_year }}</div>
                         </div>
                     </div>
                 </div>
@@ -180,20 +186,20 @@
                 <tr>
                     <th>ЦФО</th>
                     <th>Всего договоров, шт.</th>
-                    <th>Сумма всех договоров, млн.руб.</th>
+                    <th>Сумма всех договоров, млн руб.</th>
                     <th>Заключено, шт.</th>
-                    <th>Сумма заключенных договоров, млн.руб.</th>
-                    <th>Всего договоров на {{ selected_year }}г.</th>
-                    <th>Сумма договоров на {{ selected_year }}г., млн.руб.</th>
-                    <th>Заключено договоров на {{ selected_year }}г., шт.</th>
-                    <th>% контрактации {{ selected_year }}г. (кол-во)</th>
-                    <th>Сумма заключенных договоров на {{ selected_year }}г., млн.руб.</th>
-                    <th>% контрактации {{ selected_year }}г. (Сумма)</th>
-                    <th>Не заключено, шт</th>
-                    <th>Сумма не заключенных договоров, млн.руб.</th>
-                    <th>Плановая сумма аванса в {{ selected_year }} г., млн.руб.</th>
-                    <th>Фактическая сумма аванса на {{ selected_year }}г., млн.руб.</th>
-                    <th>% авансирования на {{ selected_year }}г.</th>
+                    <th>Сумма заключённых договоров, млн руб.</th>
+                    <th>Всего договоров на {{ selected_year }}&nbsp;г., шт.</th>
+                    <th>Сумма договоров на {{ selected_year }}&nbsp;г., млн руб.</th>
+                    <th>Заключено договоров на {{ selected_year }}&nbsp;г., шт.</th>
+                    <th>% контрактации {{ selected_year }}&nbsp;г. (по количеству)</th>
+                    <th>Сумма заключённых договоров на {{ selected_year }}&nbsp;г., млн руб.</th>
+                    <th>% контрактации {{ selected_year }}&nbsp;г. (по сумме)</th>
+                    <th>Не заключено на {{ selected_year }}&nbsp;г., шт.</th>
+                    <th>Сумма незаключённых на {{ selected_year }}&nbsp;г., млн руб.</th>
+                    <th>Аванс по плану на {{ selected_year }}&nbsp;г., млн руб.</th>
+                    <th>Аванс оплачен на {{ selected_year }}&nbsp;г., млн руб.</th>
+                    <th>% авансирования на {{ selected_year }}&nbsp;г.</th>
                 </tr>
             </thead>
             <tbody>

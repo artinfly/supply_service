@@ -2,8 +2,8 @@
  * Основные стили интерфейса supply_service.
  * 
  * Цветовая схема: оранжевый акцент (#e07b2a) на тёмной боковой панели.
- * Шрифт: Golos Text (подключается отдельно).
- * Адаптивность: брейкпоинты 900px и 560px.
+ * Шрифт: Golos Text, если установлен в системе; иначе Segoe UI / системный.
+ * Адаптивность: до 900px боковое меню прячется за кнопку ☰ (см. .mobile-bar).
  */
 
 /* --- CSS-переменные --- */
@@ -40,7 +40,7 @@
 }
 
 body {
-    font-family: 'Golos Text', sans-serif;
+    font-family: 'Golos Text', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
     font-size: 0.875rem;
     background: #f2f2f2;
     color: var(--text);
@@ -148,7 +148,9 @@ body {
     color: #555;
 }
 
-.nav-link, .nav-sub-link {
+/* Пункт меню. Все пункты одного вида и с одним отступом.
+   (Класс nav-link не используем: он занят Bootstrap и тянет его стили.) */
+.nav-sub-link {
     display: flex;
     align-items: center;
     gap: 0.4rem;
@@ -160,17 +162,12 @@ body {
     border-left: 3px solid transparent;
 }
 
-.nav-link {
-    padding-left: 1.1rem;
-    font-weight: 500;
-}
-
-.nav-link:hover, .nav-sub-link:hover {
+.nav-sub-link:hover {
     background: var(--sidebar-sec);
     color: #fff;
 }
 
-.nav-link.active, .nav-sub-link.active {
+.nav-sub-link.active {
     background: var(--sidebar-sec);
     color: var(--orange);
     border-left-color: var(--orange);
@@ -618,16 +615,21 @@ body {
     min-height: 80px;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+}
+
+/* Кнопки плитки прижаты к низу, подписи у всех плиток начинаются на одной высоте */
+.idx-card > .idx-row {
+    margin-top: auto;
 }
 
 .idx-card-wide {
     grid-column: 1 / -1;
 }
 
+/* Раньше у «главных» плиток была ещё левая рамка; плитки выглядели
+   неодинаково, поэтому оформление теперь общее для всех. */
 .idx-card-accent {
     border-top-color: var(--orange);
-    border-left: 3px solid var(--orange);
 }
 
 .idx-label {
@@ -931,6 +933,10 @@ body.login-page {
     margin-top: 18px;
 }
 
+.dash-section > .block-title {
+    margin-bottom: 8px;
+}
+
 .dash-row {
     display: flex;
     flex-wrap: wrap;
@@ -982,17 +988,35 @@ body.login-page {
     flex-shrink: 0;
 }
 
+/* Карточка: подпись (что считаем) -> крупное число -> пояснение (сумма, %) */
+.dash-card-body {
+    min-width: 0;
+}
+
+.dash-card-title {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--text-secondary);
+}
+
 .dash-card-num {
     font-size: 24px;
     font-weight: 700;
-    line-height: 1.1;
+    line-height: 1.15;
+    margin-top: 2px;
     color: var(--text-primary);
 }
 
 .dash-card-lbl {
-    font-size: 16px;
+    font-size: 13px;
     color: var(--text-secondary);
     margin-top: 2px;
+}
+
+/* Блок «подзаголовок + белая панель с карточками» на сводках */
+.dash-section {
+    margin-bottom: 1.5rem;
 }
 
 .dash-slot-empty {
@@ -1320,12 +1344,17 @@ body.login-page {
     color: var(--text);
 }
 
+/* Форма записи справочника ГК: 6 колонок, длинные поля занимают по 2–3.
+   Ряд 1: ГК | Предприятие (3) | Заказ (2); ряд 2: Договор/Дата (3) | Год | Изделие | НДС */
 .gk-editor-grid {
     display: grid;
     gap: 0.65rem;
     margin-bottom: 0.75rem;
-    grid-template-columns: 1.3fr 0.6fr 2fr 0.7fr;
+    grid-template-columns: repeat(6, 1fr);
 }
+
+.gk-editor-grid .span-2 { grid-column: span 2; }
+.gk-editor-grid .span-3 { grid-column: span 3; }
 
 .gk-editor-actions {
     display: flex;
@@ -1413,6 +1442,11 @@ body.login-page {
     }
 }
 
+/* Верхняя полоса с кнопкой меню — только на узком экране */
+.mobile-bar {
+    display: none;
+}
+
 @media (max-width: 900px) {
     .idx-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -1424,6 +1458,60 @@ body.login-page {
     
     .gk-editor-grid {
         grid-template-columns: 1fr 1fr;
+    }
+
+    .gk-editor-grid .span-2,
+    .gk-editor-grid .span-3 {
+        grid-column: 1 / -1;
+    }
+
+    /* Меню выезжает слева по кнопке ☰, контент занимает всю ширину */
+    .mobile-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        position: sticky;
+        top: 0;
+        z-index: 90;
+        height: 48px;
+        padding: 0 1rem;
+        background: var(--sidebar-bg);
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.85rem;
+    }
+
+    .mobile-bar button {
+        background: none;
+        border: none;
+        color: #fff;
+        font-size: 1.3rem;
+        line-height: 1;
+        padding: 0.25rem;
+        cursor: pointer;
+    }
+
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.2s;
+        box-shadow: 4px 0 16px rgba(0, 0, 0, 0.3);
+    }
+
+    body.menu-open .sidebar {
+        transform: none;
+    }
+
+    .main-content {
+        margin-left: 0;
+        padding: 1rem;
+    }
+
+    .page-header {
+        position: static;
+        margin-top: 0;
+        padding-top: 0;
+        flex-wrap: wrap;
+        gap: 0.5rem;
     }
 }
 

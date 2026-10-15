@@ -24,7 +24,7 @@
     {# --- КДР (заключение договоров) --- #}
     <div class="index-card">
         <div class="index-card-title">КДР — заключение договоров</div>
-        <p class="export-hint">Укажите период — добавится столбец «Заключено за период»</p>
+        <p class="export-hint">Период необязателен: если указать обе даты, в файл добавится столбец «Заключено за период».</p>
         <div class="d-flex gap-3 flex-wrap align-items-end mb-2">
             <div class="filter-group">
                 <label class="filter-label">С</label>
@@ -63,7 +63,7 @@
     <div class="index-card">
         <div class="index-card-title">История статусов</div>
         <div class="d-flex gap-2 flex-wrap">
-            <a href="{% url 'export_history_status' %}" class="btn-index">Скачать xlsx ↓</a>
+            <a href="{% url 'export_history_status' %}" class="btn-index">Скачать ↓</a>
         </div>
     </div>
 
@@ -79,7 +79,7 @@
     {# --- Дубликаты --- #}
     <div class="index-card">
         <div class="index-card-title">Дубликаты</div>
-        <p class="export-hint">Фильтры года и ЦФО задаются на странице «Дубликаты» и переносятся в файл</p>
+        <p class="export-hint">Здесь выгружаются все дубликаты. Чтобы выгрузить с фильтром по году и ЦФО — кнопки на странице «Дубликаты».</p>
         <div class="d-flex gap-2 flex-wrap">
             <a href="{% url 'export_contract_dupes' %}" class="btn-index">Полные повторы ↓</a>
             <a href="{% url 'export_contract_dupes_by_order' %}" class="btn-index">По ИГК, предмету и заказу ↓</a>
@@ -89,7 +89,7 @@
     {# --- Появившиеся договоры --- #}
     <div class="index-card">
         <div class="index-card-title">Появившиеся договоры</div>
-        <p class="export-hint">Позиции, которые стали заключёнными и незаключёнными с прошлой загрузки</p>
+        <p class="export-hint">Позиции, которые появились или сменили статус на заключённый / незаключённый при загрузках договоров</p>
         <div class="d-flex gap-2 flex-wrap">
             <a href="{% url 'export_appeared_concluded' %}" class="btn-index">Новые заключённые ↓</a>
             <a href="{% url 'export_appeared_not_concluded' %}" class="btn-index">Новые незаключённые ↓</a>
