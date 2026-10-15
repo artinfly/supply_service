@@ -1,9 +1,4 @@
-# Зависимости проекта. Версии — как установлены на сервере (pip list, 15.10.2026).
-# Установка: pip install -r requirements.txt
-# Без интернета: на машине с интернетом
-#   pip download -r requirements.txt -d wheels
-# перенести папку wheels и выполнить
-#   pip install --no-index --find-links wheels -r requirements.txt
+# Зависимости проекта. Установка: pip install -r requirements.txt
 
 # --- Каркас и окружение ---
 Django==6.1.1                  # веб-фреймворк
