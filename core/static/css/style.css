@@ -488,6 +488,39 @@ body {
     border-right: none;
 }
 
+/* Компактные таблицы: реестры «Все договоры», «Все ЗнП (ФЗД)», «Все ЗнП (SAP)»
+   и таблицы через loadTable (КДР, история, дубликаты). Колонок много, поэтому
+   компактнее, чтобы таблица помещалась в экран без боковой прокрутки:
+   заголовки переносятся на 2 строки, отступы меньше, длинный текст переносится. */
+.report-table.registry-table thead th {
+    white-space: normal;
+    line-height: 1.25;
+    vertical-align: bottom;
+    padding: 0.5rem 0.4rem;
+}
+
+.report-table.registry-table tbody td {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.4rem;
+}
+
+/* Контрагент, предмет, назначение и т.п. — переносятся по словам */
+.report-table.registry-table tbody td.wrap {
+    min-width: 70px;
+    max-width: 260px;
+}
+
+/* Короткие колонки (статус, тип, этап): перенос по словам, ширина — по заголовку */
+.report-table.registry-table tbody td.wrap-sm {
+    white-space: normal;
+    line-height: 1.3;
+}
+
+/* Номер договора — в одну строку: «МТО-25/0009» нельзя разрывать посередине */
+.report-table.registry-table tbody td.nobreak {
+    white-space: nowrap;
+}
+
 .report-table tbody tr:hover td {
     background: #fbf6f1;
 }

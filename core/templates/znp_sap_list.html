@@ -87,9 +87,9 @@ const COLS = [
     { field: 'igk',                title: 'ИГК',                      style: 'style="width: 55px;"' },
     { field: 'cfo',                title: 'ЦФО',                      style: 'style="width: 50px;"' },
     { field: 'c_agent',            title: 'Контрагент' },
-    { field: 'reg_num',            title: 'Рег. номер' },
-    { field: 'items',              title: 'Текст' },
-    { field: 'sap_status',         title: 'Этап',                     style: 'style="width: 120px;"' },
+    { field: 'reg_num',            title: 'Рег. номер',               style: 'style="width: 80px;"', wrap: 'wrap-sm' },
+    { field: 'items',              title: 'Текст',                    style: 'style="width: 180px;"', wrap: 'wrap-sm' },
+    { field: 'sap_status',         title: 'Этап',                     style: 'style="width: 100px;"', wrap: 'wrap-sm' },
     { field: 'bank_name',          title: 'Банк' },
     { field: 'stage_c',            title: 'В реестре',                style: 'style="width: 80px;"', format: 'date' },
     { field: 'stage_e',            title: 'Передано в 18 отдел',      style: 'style="width: 80px;"', format: 'date' },
@@ -192,7 +192,7 @@ function renderPage() {
         return;
     }
 
-    let html = '<table class="report-table" style="table-layout: auto;"><thead><tr>';
+    let html = '<table class="report-table registry-table" style="table-layout: auto;"><thead><tr>';
     COLS.forEach(col => { html += `<th ${col.style || ''}>${esc(col.title)}</th>`; });
     html += '</tr></thead><tbody>';
 
@@ -209,7 +209,8 @@ function renderPage() {
             }
             
             const align = (col.format && col.format !== 'date') ? 'text-end' : '';
-            const wrap = (!col.format && !col.style) ? 'wrap' : '';
+            // col.wrap — свой режим переноса колонки; иначе длинный текст без ширины переносится
+            const wrap = col.wrap || ((!col.format && !col.style) ? 'wrap' : '');
             html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${esc(val)}</td>`;
         });
         html += '</tr>';

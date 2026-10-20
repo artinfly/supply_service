@@ -101,14 +101,14 @@ const NOT_CONCL_STATUSES  = JSON.parse(document.getElementById('not-concl-status
 const TERMINATED_STATUSES = JSON.parse(document.getElementById('terminated-statuses').textContent);
 
 const COLS = [
-    { field: 'igk',          title: 'ИГК',                   style: 'style="width: 80px;"' },
+    { field: 'igk',          title: 'ИГК',                   style: 'style="width: 48px;"' },
     { field: 'c_agent',      title: 'Контрагент' },
-    { field: 'contract',     title: 'Договор' },
-    { field: 'status',       title: 'Состояние',             style: 'style="width: 120px;"' },
-    { field: 'payment_type', title: 'Тип платежа',           style: 'style="width: 100px;"' },
+    { field: 'contract',     title: 'Договор',               wrap: 'nobreak' },
+    { field: 'status',       title: 'Состояние',             style: 'style="width: 90px;"', wrap: 'wrap-sm' },
+    { field: 'payment_type', title: 'Тип платежа',           style: 'style="width: 80px;"', wrap: 'wrap-sm' },
     { field: 'item',         title: 'Предмет' },
-    { field: 'order',        title: 'Заказ' },
-    { field: 'stage',        title: 'Этап' },
+    { field: 'order',        title: 'Заказ',                 style: 'style="width: 70px;"', wrap: 'wrap-sm' },
+    { field: 'stage',        title: 'Этап',                  style: 'style="width: 60px;"', wrap: 'wrap-sm' },
     { field: 'spec_sum',     title: 'Сумма договора, руб.',  format: 'number' },
     { field: 'pp_sum',       title: 'План, руб.',            format: 'number' },
     { field: 'pp_fact',      title: 'Факт, руб.',            format: 'number' },
@@ -205,7 +205,7 @@ function renderPage() {
         return;
     }
 
-    let html = '<table class="report-table" style="table-layout: auto;"><thead><tr>';
+    let html = '<table class="report-table registry-table" style="table-layout: auto;"><thead><tr>';
     COLS.forEach(col => { html += `<th ${col.style || ''}>${esc(col.title)}</th>`; });
     html += '</tr></thead><tbody>';
 
@@ -227,7 +227,8 @@ function renderPage() {
             }
             
             const align = col.format ? 'text-end' : '';
-            const wrap = (!col.format && !col.style) ? 'wrap' : '';
+            // col.wrap — свой режим переноса колонки; иначе длинный текст без ширины переносится
+            const wrap = col.wrap || ((!col.format && !col.style) ? 'wrap' : '');
             const classes = [align, wrap].filter(Boolean).join(' ');
             
             html += `<td class="${classes}">${esc(val)}</td>`;

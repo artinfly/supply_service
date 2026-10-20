@@ -96,11 +96,11 @@ const COLS = [
     { field: 'igk',               title: 'ИГК дог.',         style: 'style="width: 40px;"' },
     { field: 'znp_igk',           title: 'ИГК опл.',         style: 'style="width: 40px;"' },
     { field: 'c_agent',           title: 'Контрагент' },
-    { field: 'contract',          title: 'Договор' },
+    { field: 'contract',          title: 'Договор',          wrap: 'nobreak' },
     { field: 'cfo',               title: 'ЦФО',              style: 'style="width: 40px;"' },
-    { field: 'payment_type',      title: 'Тип',              style: 'style="width: 60px;"' },
-    { field: 'znp_status',        title: 'Статус',           style: 'style="width: 80px;"' },
-    { field: 'plan_doc',          title: 'Док. план.',       style: 'style="width: 80px;"' },
+    { field: 'payment_type',      title: 'Тип',              style: 'style="width: 60px;"', wrap: 'wrap-sm' },
+    { field: 'znp_status',        title: 'Статус',           style: 'style="width: 140px;"', wrap: 'wrap-sm' },
+    { field: 'plan_doc',          title: 'Док. план.',       style: 'style="width: 60px;"', wrap: 'wrap-sm' },
     { field: 'payment_purpose',   title: 'Назначение' },
     { field: 'plan_payment_date', title: 'Дата план',        style: 'style="width: 80px;"', format: 'date' },
     { field: 'fact_payment_date', title: 'Дата факт',        style: 'style="width: 80px;"', format: 'date' },
@@ -206,7 +206,7 @@ function renderPage() {
         return;
     }
 
-    let html = '<table class="report-table" style="table-layout: auto;"><thead><tr>';
+    let html = '<table class="report-table registry-table" style="table-layout: auto;"><thead><tr>';
     COLS.forEach(col => { html += `<th ${col.style || ''}>${esc(col.title)}</th>`; });
     html += '</tr></thead><tbody>';
 
@@ -225,7 +225,8 @@ function renderPage() {
             }
             
             const align = (col.format && col.format !== 'date') ? 'text-end' : '';
-            const wrap = (!col.format && !col.style) ? 'wrap' : '';
+            // col.wrap — свой режим переноса колонки; иначе длинный текст без ширины переносится
+            const wrap = col.wrap || ((!col.format && !col.style) ? 'wrap' : '');
             html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${esc(val)}</td>`;
         });
         html += '</tr>';
