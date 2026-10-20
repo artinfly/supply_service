@@ -80,7 +80,7 @@
         <div class="block-title">За {{ selected_year }} год</div>
         <div class="card-block">
             <div class="dash-row">
-                <a href="{% url 'all_contracts_table' %}?year={{ selected_year }}&statuses=concluded,not_concluded,terminated" class="text-decoration-none">
+                <a href="{% url 'all_contracts_table' %}?year={{ selected_year }}&statuses=concluded,not_concluded" class="text-decoration-none">
                     <div class="dash-card stage-total">
                         <div class="dash-card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M5 7v13a1 1 0 0 0 1 1h9" stroke-opacity="0.5"/></svg>
@@ -208,7 +208,7 @@
                         {# Клик по ячейке ЦФО ведёт в реестр с фильтром по выбранному ИГК (последние 4 символа) и ЦФО #}
                         <td class="clickable-cell">
                             <div class="cell-content">{{ r.cfo }}</div>
-                            <a href="{% url 'all_contracts_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&statuses=concluded,not_concluded,terminated{% if r.cfo != 'ИТОГО' %}&cfo={{ r.cfo }}{% endif %}"
+                            <a href="{% url 'all_contracts_table' %}?igk={{ selected_igk|slice:"-4:" }}&year={{ selected_year }}&statuses=concluded,not_concluded{% if r.cfo != 'ИТОГО' %}&cfo={{ r.cfo }}{% endif %}"
                                class="text-decoration-none" title="Перейти к реестру">
                             </a>
                         </td>

@@ -92,7 +92,13 @@ def znp_by_cfo(year_col, igk, start=None, end=None):
                        WHEN z.fact_sum IS NOT NULL THEN 'paid'
                        ELSE 'issued'
                    END AS stage,
-                   COALESCE(z.plan_sum, i.plan) AS amount
+                   -- Как на карточках: оплаченные — по факту оплаты,
+                   -- остальные заявки — по плану заявки, без заявки — по плану позиции
+                   CASE
+                       WHEN z.znp_status = '{ZNP_APPROVED}' AND z.fact_sum IS NOT NULL
+                           THEN z.fact_sum
+                       ELSE COALESCE(z.plan_sum, i.plan)
+                   END AS amount
             FROM igk_stat_data i
             LEFT JOIN znp_data z ON z.parent_id = i.pp_id
             WHERE i.igk = %s

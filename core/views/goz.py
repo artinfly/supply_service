@@ -233,7 +233,6 @@ def goz_report(request):
             archive_path = _save_archive(request, request.FILES["archive"])
             try:
                 ctx["gk_list"] = _archive_gk_list(archive_path)
-                ctx["temp_zip_path"] = os.path.basename(archive_path)
                 ctx["step2"] = True
                 # Разные ИГК с одинаковыми последними 4 цифрами склеиваются в один ключ
                 for key, nums in goz_analysis.same_key_numbers(archive_path).items():

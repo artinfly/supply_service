@@ -83,15 +83,15 @@
                     {# Кликабельные ячейки: каждая ведёт в реестр с фильтром по статусу #}
                     <td class="clickable-cell">
                         <div class="cell-content">{{ row.cfo }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid,ready_18"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,agreed_registry,sent_18,confirmed_18,paid,ready_18"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ row.total_count }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid,ready_18"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,agreed_registry,sent_18,confirmed_18,paid,ready_18"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ row.total_sum|floatformat:2|intspace }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,sent_18,confirmed_18,paid,ready_18"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&cfo={{ row.cfo }}&statuses=waiting_agreement,agreed_registry,sent_18,confirmed_18,paid,ready_18"></a>
                     </td>
                     {# Ячейки по этапам согласования #}
                     {% for cell in row.cells %}
@@ -111,15 +111,15 @@
                 <tr class="row-total">
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cfo_total_row.cfo }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,sent_18,confirmed_18,paid,ready_18"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,agreed_registry,sent_18,confirmed_18,paid,ready_18"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cfo_total_row.total_count }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,sent_18,confirmed_18,paid,ready_18"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,agreed_registry,sent_18,confirmed_18,paid,ready_18"></a>
                     </td>
                     <td class="clickable-cell">
                         <div class="cell-content">{{ cfo_total_row.total_sum|floatformat:2|intspace }}</div>
-                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,sent_18,confirmed_18,paid,ready_18"></a>
+                        <a href="{% url 'znp_sap_list_table' %}?igk={{ selected_igk|slice:"-4:" }}&statuses=waiting_agreement,agreed_registry,sent_18,confirmed_18,paid,ready_18"></a>
                     </td>
                     {% for cell in cfo_total_row.cells %}
                     <td class="clickable-cell">

@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
+from django.core.management.base import CommandError
 from django.db import connection, transaction
 from django.utils import timezone
 
@@ -242,6 +243,13 @@ def normalize_contracts():
             [ADVANCE, POSTPAYMENT],
         )
         staging_rows = cur.fetchall()
+        # Пустой файл не должен стирать загруженные договоры: ошибка откатывает
+        # всю загрузку (транзакция команды load_contracts), данные остаются прежними
+        if not staging_rows:
+            raise CommandError(
+                f"В файле нет строк с типом платежа «{ADVANCE}» или «{POSTPAYMENT}» — "
+                "данные не изменены. Проверьте, что выбран нужный тип файла."
+            )
 
         # Шаг 3: Преобразуем данные в формат рабочей таблицы
         new_data = []
@@ -475,6 +483,11 @@ def normalize_znp():
             FROM staging_znp_excel
         """)
         staging_rows = cur.fetchall()
+        if not staging_rows:
+            raise CommandError(
+                "В файле нет ни одной заявки с номером планового документа — "
+                "данные не изменены. Проверьте, что выбран нужный тип файла."
+            )
 
         new_data = []
 
@@ -540,6 +553,13 @@ def normalize_znp_sap():
             WHERE c_type = 'ГОЗ'
         """)
         staging_rows = cur.fetchall()
+        # Колонки SAP берутся по номерам, без проверки шапки: если выбрать не тот
+        # файл, строк «ГОЗ» не найдётся — тогда не очищаем загруженные заявки
+        if not staging_rows:
+            raise CommandError(
+                "В файле нет заявок с типом «ГОЗ» (столбец I) — данные не изменены. "
+                "Проверьте, что выбран файл выгрузки ЗнП (SAP)."
+            )
 
         new_data = []
         no_igk_count = 0

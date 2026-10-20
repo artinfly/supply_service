@@ -148,7 +148,7 @@ def _to_int(val) -> int:
     if isinstance(val, (int, float)):
         return int(val)
     try:
-        cleaned = str(val).replace(" ", "").replace(" ", "").replace(",", ".")
+        cleaned = str(val).replace(" ", "").replace("\xa0", "").replace(",", ".")
         if cleaned in ("", "-", "None", "FALSE", "False", "false"):
             return 0
         return int(float(cleaned))

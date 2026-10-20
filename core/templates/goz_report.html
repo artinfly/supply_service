@@ -173,8 +173,7 @@
     <p class="goz-hint">В архиве найдено контрактов: {{ gk_list|length }}. Откорректируйте ставки НДС при необходимости.</p>
     <form method="post" id="gk-report-form">
         {% csrf_token %}
-        {# Сам архив сервер берёт из сессии пользователя; поле оставлено для отладки #}
-        <input type="hidden" name="temp_zip_path" value="{{ temp_zip_path }}">
+        {# Архив с шага 1 сервер берёт из сессии пользователя #}
         <input type="hidden" name="gk_data" id="gk_data_input" value="">
 
         <div class="table-container goz-scroll mb-3">

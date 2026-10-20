@@ -139,6 +139,14 @@ function showCols() {
     });
 }
 
+// Если вернуться на страницу кнопкой «Назад», браузер может показать её из кэша
+// с заблокированной кнопкой «Загрузка…» — возвращаем кнопку в исходное состояние
+window.addEventListener('pageshow', function () {
+    const btn = document.getElementById('upload-btn');
+    btn.disabled = false;
+    btn.textContent = 'Загрузить и нормализовать';
+});
+
 // Навешиваем обработчик на изменение типа файла и вызываем сразу при загрузке
 document.querySelector('select[name="file_type"]').addEventListener('change', showCols);
 showCols();
