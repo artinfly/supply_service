@@ -245,7 +245,8 @@ async function loadTable(apiUrl, containerId, cols) {
             return; 
         }
 
-        let html = '<table class="report-table"><thead><tr>';
+        // registry-table — компактный вид: заголовки в 2 строки, чтобы таблица влезала в экран
+        let html = '<table class="report-table registry-table"><thead><tr>';
         cols.forEach(col => { html += `<th>${esc(col.title)}</th>`; });
         html += '</tr></thead><tbody>';
 
