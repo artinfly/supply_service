@@ -19,7 +19,7 @@ class Command(BaseCommand):
     help = "Загрузка заявок ЗнП (SAP) из файла Excel"
 
     def add_arguments(self, parser):
-        parser.add_argument("filepath", type=str, help="Путь к файлу .xlsx")
+        parser.add_argument("filepath", type=str, help="Путь к файлу .xlsx или .xls")
 
     def handle(self, *args, **options):
         """Основная логика: импорт → нормализация → обновление SystemEvent."""

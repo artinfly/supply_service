@@ -174,9 +174,9 @@ class ZnpData(models.Model):
         db_table = "znp_data"
         verbose_name = "Заявка на платёж (ФЗД)"
         verbose_name_plural = "Заявки на платёж (ФЗД)"
+        # Индекс по parent_id отдельно не нужен: ForeignKey создаёт его сам
         indexes = [
             models.Index(fields=["crc32_hash"], name="idx_znp_crc32"),
-            models.Index(fields=["parent_id"], name="idx_znp_parent"),
         ]
 
     def __str__(self):
