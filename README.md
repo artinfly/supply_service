@@ -18,7 +18,7 @@
 
 ## Быстрый старт
 
-Нужны Python 3.13 и PostgreSQL 16+ с расширением `pgcrypto` (его включает миграция `0014_pgcrypto`;
+Нужны Python 3.14 и PostgreSQL 16+ с расширением `pgcrypto` (его включает миграция `0014_pgcrypto`;
 пользователю БД нужны права на `CREATE EXTENSION`, либо включите расширение заранее).
 
 ```bash
@@ -55,12 +55,13 @@ core/                   единственное приложение проек
   services/             логика без HTTP
     queries.py            статусы, годы, SQL-запросы
     importing/            Excel -> staging -> рабочие таблицы, история, привязка ЗнП
-    dashboards/           карточки сводок, графики, статусы SAP
+    dashboards/           сводки (contracts.py, znp.py), карточки, графики, статусы SAP
     goz/                  ключи ГК, справочник ГК, отчёт по архиву ЕИС
     reports/              Excel-файлы: общий конструктор, авансы, краткая справка
   management/commands/  load_contracts, load_znp, load_znp_sap — загрузка из консоли
-  templates/            HTML-шаблоны страниц
-  static/               CSS, JS, шрифт Golos Text (fonts/, лицензия OFL),
+  tests/                тесты: разбор файлов, права, загрузка, отчёты, ГОЗ
+  templates/            HTML-шаблоны страниц; _dash_card.html — карточка сводок
+  static/               CSS, JS (js/registry.js — общий код реестров), шрифт Golos Text (fonts/, лицензия OFL),
                         шаблоны отчётов (files/templateIGK.xlsx, templateSum.xlsx)
   migrations/           миграции БД
 ```
@@ -86,7 +87,9 @@ python manage.py load_znp_sap путь\к\знп_sap.xlsx
 
 Порядок колонок не важен (кроме SAP — там колонки по номерам, см. `ZNP_SAP_COLUMNS`
 в `services/importing/excel_import.py`). При повторной загрузке договоров изменения статуса,
-плана и факта записываются в историю.
+плана и факта записываются в историю, а справочник ИГК приводится к ИГК из файла.
+Если в файле нет ни одной подходящей строки (например, выбран не тот тип файла),
+загрузка отменяется и прежние данные остаются.
 
 ## Анализ ГОЗ
 
@@ -98,10 +101,19 @@ python manage.py load_znp_sap путь\к\знп_sap.xlsx
 
 1. `core/services/queries.py`: `YEARS = [2025, 2026, 2027, 2028]`.
 2. `core/models.py`, модель `IgkStatData`: поле `y28 = models.BooleanField(null=True, ...)`.
-3. `core/services/importing/normalize.py`: в `normalize_contracts` добавить `y28` в разбор
-   `year_flags`, в кортеж строки и в `INSERT INTO igk_stat_data`.
+3. `core/services/importing/normalize.py`: добавить `y28` в `Position`, в `_read_contract_staging`
+   и в `INSERT INTO igk_stat_data` (`_write_positions`).
 4. Поиском по проекту найти `y27` и добавить `y28` рядом (SQL в `queries.py`, шаблоны).
 5. `python manage.py makemigrations` и `python manage.py migrate`, затем перезагрузить файл договоров.
+
+## Тесты и форматирование
+
+```bash
+python manage.py test
+```
+
+Django создаёт временную тестовую базу, поэтому пользователю PostgreSQL нужно право
+`CREATEDB`. Код отформатирован black и isort (настройки в `pyproject.toml`).
 
 ## Известные ограничения
 
