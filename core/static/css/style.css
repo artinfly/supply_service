@@ -516,9 +516,13 @@ body {
     line-height: 1.3;
 }
 
-/* Номер договора — в одну строку: «МТО-25/0009» нельзя разрывать посередине */
-.report-table.registry-table tbody td.nobreak {
-    white-space: nowrap;
+/* Номер договора переносится только после «/» (в JS туда вставляется <wbr>),
+   чтобы «МТО-25/0009» не разрывался посреди цифр */
+.report-table.registry-table tbody td.contract-cell {
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: normal;
+    line-height: 1.3;
 }
 
 .report-table tbody tr:hover td {

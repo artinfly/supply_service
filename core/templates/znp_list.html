@@ -96,7 +96,7 @@ const COLS = [
     { field: 'igk',               title: 'ИГК дог.',         style: 'style="width: 40px;"' },
     { field: 'znp_igk',           title: 'ИГК опл.',         style: 'style="width: 40px;"' },
     { field: 'c_agent',           title: 'Контрагент' },
-    { field: 'contract',          title: 'Договор',          wrap: 'nobreak' },
+    { field: 'contract',          title: 'Договор',          wrap: 'contract-cell' },
     { field: 'cfo',               title: 'ЦФО',              style: 'style="width: 40px;"' },
     { field: 'payment_type',      title: 'Тип',              style: 'style="width: 60px;"', wrap: 'wrap-sm' },
     { field: 'znp_status',        title: 'Статус',           style: 'style="width: 140px;"', wrap: 'wrap-sm' },
@@ -227,7 +227,9 @@ function renderPage() {
             const align = (col.format && col.format !== 'date') ? 'text-end' : '';
             // col.wrap — свой режим переноса колонки; иначе длинный текст без ширины переносится
             const wrap = col.wrap || ((!col.format && !col.style) ? 'wrap' : '');
-            html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${esc(val)}</td>`;
+            // Номер договора: место переноса — только после «/»
+            const text = col.field === 'contract' ? esc(val).replace(/\//g, '/<wbr>') : esc(val);
+            html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${text}</td>`;
         });
         html += '</tr>';
     });
