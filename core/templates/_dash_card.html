@@ -1,0 +1,28 @@
+{% load custom_filters %}
+{% comment %}
+Карточка сводки (договоры, ФЗД, SAP). Подключается с «only», параметры:
+  url        — реестр, куда ведёт карточка (без url карточка не кликабельна);
+  period     — значение фильтра year (all или год), date — фильтр по дате;
+  statuses   — фильтр статусов реестра через запятую;
+  stage      — цвет: total, wait, late, move, ready, done, metric, upnext, registry;
+  icon       — имя иконки из _icon.html; title — заголовок;
+  count, amount — число и сумма (млн ₽); total — подпись «на сумму …»;
+  percent    — доля в % после суммы (не передаётся — не показывается);
+  money / pct — карточка-метрика: крупно сумма в млн ₽ или процент.
+{% endcomment %}
+{% if url %}<a href="{{ url }}?{% if period %}year={{ period }}&{% endif %}{% if date %}date={{ date|date:'Y-m-d' }}&{% endif %}statuses={{ statuses }}" class="text-decoration-none">{% else %}<div>{% endif %}
+    <div class="dash-card stage-{{ stage }}">
+        <div class="dash-card-icon">{% include "_icon.html" with name=icon %}</div>
+        <div class="dash-card-body">
+            <div class="dash-card-title">{{ title }}</div>
+            {% if money is not None %}
+            <div class="dash-card-num">{{ money|floatformat:2|intspace }} <span class="dash-card-unit">млн ₽</span></div>
+            {% elif pct is not None %}
+            <div class="dash-card-num">{{ pct|floatformat:2 }}%</div>
+            {% else %}
+            <div class="dash-card-num">{{ count }}</div>
+            <div class="dash-card-lbl">{% if total %}на сумму {% endif %}{{ amount|floatformat:2|intspace }} млн ₽{% if percent is not None %} &middot; {{ percent|floatformat:1 }}%{% endif %}</div>
+            {% endif %}
+        </div>
+    </div>
+{% if url %}</a>{% else %}</div>{% endif %}
