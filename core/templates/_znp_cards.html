@@ -1,0 +1,25 @@
+{# Карточки сводки ФЗД. Параметры: b — карточки (breakdown_from_stats), period — фильтр year реестра. #}
+{% url 'znp_list_table' as list_url %}
+
+{# Строка 1: общие итоги #}
+<div class="dash-row">
+    {% include "_dash_card.html" with url=list_url period=period statuses="not_issued,in_progress,advance,postpayment" stage="total" icon="doc" title="Всего ЗнП" count=b.total_count amount=b.total_sum total=True only %}
+    {% include "_dash_card.html" with url=list_url period=period statuses="in_progress" stage="move" icon="doc_lines" title="На оформлении" count=b.in_progress.count amount=b.in_progress.sum percent=b.in_progress.percent only %}
+    {% include "_dash_card.html" with url=list_url period=period statuses="advance,postpayment" stage="ready" icon="doc_check" title="Оформлено" count=b.issued.count amount=b.issued.sum percent=b.issued.percent only %}
+</div>
+
+{# Строка 2: по типам платежа #}
+<div class="dash-row">
+    {% include "_dash_card.html" with url=list_url period=period statuses="advance" stage="ready" icon="doc_check" title="Оформлено (аванс)" count=b.advance.count amount=b.advance.sum percent=b.advance.percent only %}
+    {% include "_dash_card.html" with url=list_url period=period statuses="not_issued_advance" stage="wait" icon="cross" title="Не оформлено (аванс)" count=b.not_issued_advance.count amount=b.not_issued_advance.sum percent=b.not_issued_advance.percent only %}
+    {% include "_dash_card.html" with url=list_url period=period statuses="postpayment" stage="ready" icon="doc_check" title="Оформлено (постоплата)" count=b.postpayment.count amount=b.postpayment.sum percent=b.postpayment.percent only %}
+    {% include "_dash_card.html" with url=list_url period=period statuses="not_issued_postpayment" stage="wait" icon="cross" title="Не оформлено (постоплата)" count=b.not_issued_postpayment.count amount=b.not_issued_postpayment.sum percent=b.not_issued_postpayment.percent only %}
+</div>
+
+{# Строка 3: оплаченные (пустые слоты выравнивают сетку под строку 2) #}
+<div class="dash-row">
+    {% include "_dash_card.html" with url=list_url period=period statuses="advance_paid" stage="done" icon="check" title="Оплачено (аванс)" count=b.advance_paid.count amount=b.advance_paid.sum percent=b.advance_paid.percent only %}
+    <div class="dash-slot-empty"></div>
+    {% include "_dash_card.html" with url=list_url period=period statuses="postpayment_paid" stage="done" icon="check" title="Оплачено (постоплата)" count=b.postpayment_paid.count amount=b.postpayment_paid.sum percent=b.postpayment_paid.percent only %}
+    <div class="dash-slot-empty"></div>
+</div>

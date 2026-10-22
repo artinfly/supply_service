@@ -10,40 +10,17 @@ from datetime import datetime
 
 from django.contrib.auth.decorators import login_required
 from django.db import connection
-from django.db.models import Exists, OuterRef
-from django.db.models.expressions import RawSQL
 from django.shortcuts import render
 from django.utils import timezone
 
-from ..models import IgkStatData, NsiIgk, SystemEvent, ZnpData, ZnpDataSAP
-from ..services.dashboards.cards import (
-    EMPTY_NOT_ISSUED,
-    EMPTY_SAP,
-    EMPTY_STAGES,
-    EMPTY_ZNP,
-    ZNP_STAGE_LABELS,
-    ZNP_STAGE_NAMES,
-    breakdown_from_stats,
-    cfo_breakdown_row,
-    filter_by_year,
-    not_issued_aggregates,
-    sap_aggregates,
-    sap_cards,
-    stage_aggregates,
-    znp_aggregates,
-)
-from ..services.dashboards.sap_status import (
-    SAP_STAGE_NAMES,
-    SAP_STAGE_PARAMS,
-    sap_second_date,
-)
+from ..models import NsiIgk, SystemEvent
+from ..services.dashboards import znp as znp_cards
+from ..services.dashboards.cards import ZNP_STAGE_NAMES
+from ..services.dashboards.sap_status import SAP_STAGE_NAMES, sap_second_date
 from ..services.queries import (
-    CONCLUDED,
-    SAP_CFO,
     YEARS,
     distinct_sap_cfo,
     distinct_sap_igk,
-    needs_znp,
     valid_date,
     valid_year,
 )
@@ -81,114 +58,21 @@ def znp_sap_list_table(request):
 
 @login_required
 def znp_table(request):
-    """Сводка по заявкам ФЗД: карточки (всего и за год) и таблица по ЦФО.
-
-    Учитываются только позиции заключённых договоров. «Не оформлено» —
-    позиции без заявки, у которых остаток больше допуска (needs_znp).
-    """
+    """Сводка по заявкам ФЗД: карточки (всего и за год) и таблица по ЦФО."""
     available_igk = NsiIgk.objects.all()
     year = valid_year(request.GET.get("year"))
     selected_igk = request.GET.get("igk", "") or str(available_igk.first() or "")
 
-    ctx = base_context()
-    has_znp = Exists(ZnpData.objects.filter(parent=OuterRef("pk")))
+    all_breakdown, year_breakdown = znp_cards.znp_breakdowns(year)
+    cfo_table, cfo_total_row = znp_cards.znp_cfo_table(selected_igk, year)
 
-    # Позиции заключённых договоров, по которым заявки ещё нет, а она нужна
-    def _not_issued_qs(igk=None):
-        qs = (
-            IgkStatData.objects.filter(status__in=CONCLUDED)
-            .annotate(has_znp=has_znp)
-            .filter(has_znp=False)
-            .annotate(needs_znp=RawSQL(needs_znp("igk_stat_data"), []))
-            .filter(needs_znp=True)
-        )
-        if igk is not None:
-            qs = qs.filter(igk=igk)
-        return qs
-
-    # Заявки, привязанные к позициям заключённых договоров
-    def _znp_qs(igk=None):
-        qs = ZnpData.objects.filter(parent__status__in=CONCLUDED)
-        if igk is not None:
-            qs = qs.filter(parent__igk=igk)
-        return qs
-
-    # Все позиции заключённых договоров (знаменатель для процентов)
-    def _stages_qs(igk=None):
-        qs = IgkStatData.objects.filter(status__in=CONCLUDED)
-        if igk is not None:
-            qs = qs.filter(igk=igk)
-        return qs
-
-    all_not_issued_qs = _not_issued_qs()
-    all_znp_qs = _znp_qs()
-    all_stages_qs = _stages_qs()
-
-    year_not_issued_qs = filter_by_year(all_not_issued_qs, year)
-    year_znp_qs = filter_by_year(all_znp_qs, year, field_prefix="parent__")
-    year_stages_qs = filter_by_year(all_stages_qs, year)
-
-    def _breakdown(not_issued_qs, znp_qs, stages_qs):
-        return breakdown_from_stats(
-            not_issued_qs.aggregate(**not_issued_aggregates()),
-            znp_qs.aggregate(**znp_aggregates()),
-            stages_qs.aggregate(**stage_aggregates()),
-        )
-
-    all_breakdown = _breakdown(all_not_issued_qs, all_znp_qs, all_stages_qs)
-    year_breakdown = _breakdown(year_not_issued_qs, year_znp_qs, year_stages_qs)
-
-    available_cfo = list(
-        IgkStatData.objects.filter(igk=selected_igk)
-        .values_list("cfo", flat=True)
-        .distinct()
-        .order_by("cfo")
-    )
-
-    igk_not_issued_qs = filter_by_year(_not_issued_qs(igk=selected_igk), year)
-    igk_znp_qs = filter_by_year(
-        _znp_qs(igk=selected_igk), year, field_prefix="parent__"
-    )
-    igk_stages_qs = filter_by_year(_stages_qs(igk=selected_igk), year)
-
-    not_issued_stats = {
-        row["cfo"]: row
-        for row in igk_not_issued_qs.values("cfo").annotate(**not_issued_aggregates())
-    }
-    znp_stats = {
-        row["parent__cfo"]: row
-        for row in igk_znp_qs.values("parent__cfo").annotate(**znp_aggregates())
-    }
-    stage_stats = {
-        row["cfo"]: row
-        for row in igk_stages_qs.values("cfo").annotate(**stage_aggregates())
-    }
-
-    cfo_table = [
-        cfo_breakdown_row(
-            cfo,
-            breakdown_from_stats(
-                not_issued_stats.get(cfo, EMPTY_NOT_ISSUED),
-                znp_stats.get(cfo, EMPTY_ZNP),
-                stage_stats.get(cfo, EMPTY_STAGES),
-            ),
-            ZNP_STAGE_LABELS,
-        )
-        for cfo in available_cfo
-    ]
-
-    cfo_total_row = cfo_breakdown_row(
-        "ИТОГО",
-        _breakdown(igk_not_issued_qs, igk_znp_qs, igk_stages_qs),
-        ZNP_STAGE_LABELS,
-    )
-
+    # Период графика оплат: оба конца или ни одного
     chart_start = request.GET.get("start", "").strip()
     chart_end = request.GET.get("end", "").strip()
-
     if not (valid_date(chart_start) and valid_date(chart_end)):
         chart_start = chart_end = ""
 
+    ctx = base_context()
     ctx.update(
         {
             "available_years": YEARS,
@@ -215,14 +99,6 @@ def znp_sap_table(request):
 
     Вторая дата — предыдущий рабочий день от выбранной (sap_second_date).
     """
-    ctx = base_context()
-    qs = ZnpDataSAP.objects.filter(cfo__in=SAP_CFO)
-
-    def _breakdown(queryset, date=None):
-        return sap_cards(queryset.aggregate(**sap_aggregates(date)))
-
-    all_breakdown = _breakdown(qs)
-
     date_param = request.GET.get("date", "")
     first_date = (
         datetime.strptime(date_param, "%Y-%m-%d").date()
@@ -231,38 +107,15 @@ def znp_sap_table(request):
     )
     second_date = sap_second_date(first_date)
 
-    first_date_breakdown = _breakdown(qs, first_date)
-    second_date_breakdown = _breakdown(qs, second_date)
+    available_igk = znp_cards.sap_igk_list()
+    selected_igk = request.GET.get("igk", "") or (available_igk[0] if available_igk else "")
+    all_breakdown = znp_cards.sap_breakdown()
+    cfo_table, cfo_total_row = znp_cards.sap_cfo_table(selected_igk)
 
-    available_igk = list(
-        qs.exclude(igk__isnull=True)
-        .exclude(igk="")
-        .values_list("igk", flat=True)
-        .distinct()
-        .order_by("igk")
-    )
-    selected_igk = request.GET.get("igk", "") or (
-        available_igk[0] if available_igk else ""
-    )
+    # Время последней загрузки SAP — для надписи «Актуально на …»
+    sap_load_event = SystemEvent.objects.filter(event_key="sap_load").first()
 
-    cfo_qs = qs.filter(igk=selected_igk) if selected_igk else qs
-    available_cfo = list(
-        cfo_qs.values_list("cfo", flat=True).distinct().order_by("cfo")
-    )
-    cfo_stats = {
-        row["cfo"]: row for row in cfo_qs.values("cfo").annotate(**sap_aggregates())
-    }
-
-    cfo_table = [
-        cfo_breakdown_row(
-            cfo,
-            sap_cards(cfo_stats.get(cfo, EMPTY_SAP)),
-            SAP_STAGE_PARAMS,
-        )
-        for cfo in available_cfo
-    ]
-    cfo_total_row = cfo_breakdown_row("ИТОГО", _breakdown(cfo_qs), SAP_STAGE_PARAMS)
-
+    ctx = base_context()
     ctx.update(
         {
             "stage_names": SAP_STAGE_NAMES,
@@ -271,17 +124,13 @@ def znp_sap_table(request):
             "all": all_breakdown,
             "first_date": first_date,
             "second_date": second_date,
-            "first_date_breakdown": first_date_breakdown,
-            "second_date_breakdown": second_date_breakdown,
+            "first_date_breakdown": znp_cards.sap_breakdown(first_date),
+            "second_date_breakdown": znp_cards.sap_breakdown(second_date),
             "cfo_table": cfo_table,
             "cfo_total_row": cfo_total_row,
             "has_data": all_breakdown["total_count"] > 0,
             "no_data_hint": "Заявки на платёж из SAP ещё не загружены. Нужен файл выгрузки ЗнП (SAP).",
+            "sap_load_time": sap_load_event.event_time if sap_load_event else None,
         }
     )
-
-    # Время последней загрузки SAP — для надписи «Актуально на …»
-    sap_load_event = SystemEvent.objects.filter(event_key="sap_load").first()
-    ctx["sap_load_time"] = sap_load_event.event_time if sap_load_event else None
-
     return render(request, "znp_sap_table.html", ctx)
