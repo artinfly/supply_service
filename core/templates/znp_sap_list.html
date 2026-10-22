@@ -4,6 +4,7 @@
 {# Особенность: поддерживает фильтрацию по дате этапа согласования. #}
 
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Реестр ЗнП (SAP){% endblock %}
 
 {% block content %}
@@ -78,196 +79,36 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/registry.js' %}"></script>
 <script>
 "use strict";
 
-// --- Конфигурация колонок таблицы ---
-
-const COLS = [
-    { field: 'igk',                title: 'ИГК',                      style: 'style="width: 55px;"' },
-    { field: 'cfo',                title: 'ЦФО',                      style: 'style="width: 50px;"' },
-    { field: 'c_agent',            title: 'Контрагент' },
-    { field: 'reg_num',            title: 'Рег. номер',               style: 'style="width: 80px;"', wrap: 'wrap-sm' },
-    { field: 'items',              title: 'Текст',                    style: 'style="width: 180px;"', wrap: 'wrap-sm' },
-    { field: 'sap_status',         title: 'Этап',                     style: 'style="width: 100px;"', wrap: 'wrap-sm' },
-    { field: 'bank_name',          title: 'Банк' },
-    { field: 'stage_c',            title: 'В реестре',                style: 'style="width: 80px;"', format: 'date' },
-    { field: 'stage_e',            title: 'Передано в 18 отдел',      style: 'style="width: 80px;"', format: 'date' },
-    { field: 'stage_f',            title: 'Подтверждено 18 отделом',  style: 'style="width: 80px;"', format: 'date' },
-    { field: 'payment_possible',   title: 'Дата оплаты',              style: 'style="width: 80px;"', format: 'date' },
-    { field: 'vv_sum',             title: 'Сумма ВВ, руб.',           format: 'number' },
-];
-
-// --- Состояние приложения ---
-
-const apiUrl = document.getElementById('page-data').dataset.apiUrl;
-let loadedData = [];
-let currentPage = 1;
-let selectedDate = '';  // Дата для фильтрации по этапам согласования (опционально)
-
-// --- Маппинг чекбоксов статусов на значения API ---
-
-// Пары [ID чекбокса, значение статуса для API]
-const STATUS_BOXES = [
-    ['cb-waiting-agreement', 'waiting_agreement'],
-    ['cb-agreed-registry',   'agreed_registry'],
-    ['cb-sent-18',           'sent_18'],
-    ['cb-confirmed-18',      'confirmed_18'],
-    ['cb-paid',              'paid'],
-    ['cb-ready-18',          'ready_18'],
-];
-
-// --- Логика запросов ---
-
-/**
- * Формирует URL для API-запроса на основе текущих значений фильтров.
- * @returns {string} URL с query-параметрами
- */
-function buildUrl() {
-    const params = new URLSearchParams();
-    const agent = document.getElementById('filter-agent').value.trim();
-    const igk = document.getElementById('filter-igk').value.trim();
-    const cfo = document.getElementById('filter-cfo').value.trim();
-    
-    if (agent) params.append('agent', agent);
-    if (igk) params.append('igk', igk);
-    if (cfo) params.append('cfo', cfo);
-    if (selectedDate) params.append('date', selectedDate);
-    
-    // Добавляем выбранные статусы
-    for (const [id, status] of STATUS_BOXES) {
-        if (document.getElementById(id).checked) {
-            params.append('status', status);
-        }
-    }
-    
-    // Если ни один статус не выбран, отправляем пустой параметр
-    if (!params.has('status')) {
-        params.append('status', '');
-    }
-    
-    const qs = params.toString();
-    return apiUrl + (qs ? '?' + qs : '');
-}
-
-/**
- * Выполняет запрос к API и обновляет состояние данных.
- */
-async function loadData() {
-    document.getElementById('table-wrapper').innerHTML = 
-        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка…</div>';
-    try {
-        const resp = await fetch(buildUrl());
-        if (!resp.ok) throw new Error(apiError(resp));
-        loadedData = await resp.json();
-        currentPage = 1;
-        renderPage();
-    } catch (e) {
-        document.getElementById('table-wrapper').innerHTML = 
-            `<div class="error-msg">Ошибка загрузки: ${esc(e.message)}</div>`;
-    }
-}
-
-// --- Рендеринг ---
-
-/**
- * Отрисовывает текущую страницу таблицы на основе loadedData.
- */
-function renderPage() {
-    const ps = pageSize();
-    const start = isFinite(ps) ? (currentPage - 1) * ps : 0;
-    const slice = isFinite(ps) ? loadedData.slice(start, start + ps) : loadedData;
-    
-    document.getElementById('row-count').textContent = loadedData.length;
-    // Фильтр по дате приходит только из ссылки карточки сводки, полей для него нет,
-    // поэтому показываем его рядом со счётчиком (снимается кнопкой «Сбросить»)
-    document.getElementById('date-note').textContent =
-        selectedDate ? ` · за ${fmtDate(selectedDate)}` : '';
-    renderPagination(loadedData.length, ps, currentPage, 'pagination-top');
-    renderPagination(loadedData.length, ps, currentPage, 'pagination-bot');
-
-    const container = document.getElementById('table-wrapper');
-    if (!slice.length) {
-        container.innerHTML = '<div class="p-4 text-muted text-center">Нет данных по заданным фильтрам</div>';
-        return;
-    }
-
-    let html = '<table class="report-table registry-table" style="table-layout: auto;"><thead><tr>';
-    COLS.forEach(col => { html += `<th ${col.style || ''}>${esc(col.title)}</th>`; });
-    html += '</tr></thead><tbody>';
-
-    slice.forEach(row => {
-        html += '<tr>';
-        COLS.forEach(col => {
-            let val = row[col.field] ?? '';
-            
-            // Форматирование значений
-            if (col.format === 'number' && val !== '') {
-                val = parseFloat(val).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            } else if (col.format === 'date' && val !== '') {
-                val = fmtDate(val);
-            }
-            
-            const align = (col.format && col.format !== 'date') ? 'text-end' : '';
-            // col.wrap — свой режим переноса колонки; иначе длинный текст без ширины переносится
-            const wrap = col.wrap || ((!col.format && !col.style) ? 'wrap' : '');
-            html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${esc(val)}</td>`;
-        });
-        html += '</tr>';
-    });
-
-    html += '</tbody></table>';
-    container.innerHTML = html;
-}
-
-/**
- * Инициализирует значения фильтров из параметров URL (для сохранения состояния).
- */
-function loadFiltersFromURL() {
-    const params = new URLSearchParams(window.location.search);
-    
-    if (params.has('agent')) document.getElementById('filter-agent').value = params.get('agent');
-    if (params.has('igk')) document.getElementById('filter-igk').value = params.get('igk');
-    if (params.has('cfo')) document.getElementById('filter-cfo').value = params.get('cfo');
-    if (params.has('date')) selectedDate = params.get('date');
-    
-    if (params.has('statuses')) {
-        const asked = params.get('statuses').split(',').map(s => s.trim());
-        // Устанавливаем чекбоксы в соответствии с URL-параметрами
-        for (const [id, status] of STATUS_BOXES) {
-            document.getElementById(id).checked = asked.includes(status);
-        }
-    }
-}
-
-// --- Инициализация и обработчики событий ---
-
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('page-size').addEventListener('change', () => { 
-        currentPage = 1; 
-        renderPage(); 
-    });
-    
-    document.getElementById('filter-agent').addEventListener('keydown', e => { 
-        if (e.key === 'Enter') loadData(); 
-    });
-    
-    document.getElementById('btn-search').addEventListener('click', loadData);
-    
-    document.getElementById('btn-reset').addEventListener('click', () => {
-        document.getElementById('filter-agent').value = '';
-        document.getElementById('filter-igk').value = '';
-        document.getElementById('filter-cfo').value = '';
-        selectedDate = '';
-        for (const [id] of STATUS_BOXES) {
-            document.getElementById(id).checked = true;
-        }
-        loadData();
-    });
-    
-    // Загрузка при инициализации страницы
-    loadFiltersFromURL();
-    loadData();
+initRegistry({
+    apiUrl: document.getElementById('page-data').dataset.apiUrl,
+    cols: [
+        { field: 'igk',              title: 'ИГК',                     style: 'style="width: 55px;"' },
+        { field: 'cfo',              title: 'ЦФО',                     style: 'style="width: 50px;"' },
+        { field: 'c_agent',          title: 'Контрагент' },
+        { field: 'reg_num',          title: 'Рег. номер',              style: 'style="width: 80px;"', wrap: 'wrap-sm' },
+        { field: 'items',            title: 'Текст',                   style: 'style="width: 180px;"', wrap: 'wrap-sm' },
+        { field: 'sap_status',       title: 'Этап',                    style: 'style="width: 100px;"', wrap: 'wrap-sm' },
+        { field: 'bank_name',        title: 'Банк' },
+        { field: 'stage_c',          title: 'В реестре',               style: 'style="width: 80px;"', format: 'date' },
+        { field: 'stage_e',          title: 'Передано в 18 отдел',     style: 'style="width: 80px;"', format: 'date' },
+        { field: 'stage_f',          title: 'Подтверждено 18 отделом', style: 'style="width: 80px;"', format: 'date' },
+        { field: 'payment_possible', title: 'Дата оплаты',             style: 'style="width: 80px;"', format: 'date' },
+        { field: 'vv_sum',           title: 'Сумма ВВ, руб.',          format: 'number' },
+    ],
+    statusBoxes: [
+        ['cb-waiting-agreement', 'waiting_agreement'],
+        ['cb-agreed-registry',   'agreed_registry'],
+        ['cb-sent-18',           'sent_18'],
+        ['cb-confirmed-18',      'confirmed_18'],
+        ['cb-paid',              'paid'],
+        ['cb-ready-18',          'ready_18'],
+    ].map(([id, name]) => ({ id, name, values: [name], reset: true })),
+    // Дата приходит только из ссылки карточки сводки, снимается кнопкой «Сбросить»
+    hasDate: true,
 });
 </script>
 {% endblock %}

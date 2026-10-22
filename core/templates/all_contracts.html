@@ -2,6 +2,7 @@
 {# Данные загружаются асинхронно через API (api_all_contracts). #}
 
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Реестр договоров{% endblock %}
 
 {% block content %}
@@ -91,207 +92,37 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/registry.js' %}"></script>
 <script>
 "use strict";
 
-// --- Константы и конфигурация ---
+const json = id => JSON.parse(document.getElementById(id).textContent);
 
-const CONCLUDED_STATUSES  = JSON.parse(document.getElementById('concluded-statuses').textContent);
-const NOT_CONCL_STATUSES  = JSON.parse(document.getElementById('not-concl-statuses').textContent);
-const TERMINATED_STATUSES = JSON.parse(document.getElementById('terminated-statuses').textContent);
-
-const COLS = [
-    { field: 'igk',          title: 'ИГК',                   style: 'style="width: 48px;"' },
-    { field: 'c_agent',      title: 'Контрагент' },
-    { field: 'contract',     title: 'Договор',               wrap: 'contract-cell' },
-    { field: 'status',       title: 'Состояние',             style: 'style="width: 90px;"', wrap: 'wrap-sm' },
-    { field: 'payment_type', title: 'Тип платежа',           style: 'style="width: 80px;"', wrap: 'wrap-sm' },
-    { field: 'item',         title: 'Предмет' },
-    { field: 'order',        title: 'Заказ',                 style: 'style="width: 70px;"', wrap: 'wrap-sm' },
-    { field: 'stage',        title: 'Этап',                  style: 'style="width: 60px;"', wrap: 'wrap-sm' },
-    { field: 'spec_sum',     title: 'Сумма договора, руб.',  format: 'number' },
-    { field: 'pp_sum',       title: 'План, руб.',            format: 'number' },
-    { field: 'pp_fact',      title: 'Факт, руб.',            format: 'number' },
-    { field: 'pp_remain',    title: 'Остаток, руб.',         format: 'number' },
-];
-
-const apiUrl = document.getElementById('page-data').dataset.apiUrl;
-
-// --- Состояние приложения ---
-
-let loadedData = [];
-let currentPage = 1;
-
-// Экранирование (esc), размер страницы (pageSize) и кнопки страниц
-// (renderPagination) — общие функции из base.html, как в остальных реестрах.
-
-// --- Логика запросов ---
-
-/**
- * Формирует URL для API-запроса на основе текущих значений фильтров.
- */
-function buildUrl() {
-    const params = new URLSearchParams();
-    const agent = document.getElementById('filter-agent').value.trim();
-    const igk = document.getElementById('filter-igk').value.trim();
-    const cfo = document.getElementById('filter-cfo').value.trim();
-    
-    if (agent) params.append('agent', agent);
-    if (igk) params.append('igk', igk);
-    if (cfo) params.append('cfo', cfo);
-    
-    if (document.getElementById('cb-concluded').checked) {
-        CONCLUDED_STATUSES.forEach(s => params.append('status', s));
-    }
-    if (document.getElementById('cb-not-concluded').checked) {
-        NOT_CONCL_STATUSES.forEach(s => params.append('status', s));
-    }
-    if (document.getElementById('cb-terminated').checked) {
-        TERMINATED_STATUSES.forEach(s => params.append('status', s));
-    }
-    
-    // Если ни один статус не выбран, отправляем пустой параметр, 
-    // чтобы API вернул пустой результат, а не все статусы.
-    if (!params.has('status')) {
-        params.append('status', '');
-    }
-    
-    const year = document.getElementById('filter-year').value;
-    if (year !== 'all') {
-        params.append('year', year);
-    }
-    
-    const qs = params.toString();
-    return apiUrl + (qs ? '?' + qs : '');
-}
-
-/**
- * Выполняет запрос к API и обновляет состояние данных.
- */
-async function loadData() {
-    document.getElementById('table-wrapper').innerHTML = 
-        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка…</div>';
-    try {
-        const resp = await fetch(buildUrl());
-        if (!resp.ok) throw new Error(apiError(resp));
-        loadedData = await resp.json();
-        currentPage = 1;
-        renderPage();
-    } catch (e) {
-        document.getElementById('table-wrapper').innerHTML = 
-            `<div class="error-msg">Ошибка загрузки данных: ${esc(e.message)}</div>`;
-    }
-}
-
-// --- Рендеринг ---
-
-/**
- * Отрисовывает текущую страницу таблицы на основе loadedData.
- */
-function renderPage() {
-    const onlyTotals = document.getElementById('cb-only-totals').checked;
-    const rows = onlyTotals ? loadedData.filter(r => r.is_subtotal === 1) : loadedData;
-    const ps = pageSize();
-    const start = isFinite(ps) ? (currentPage - 1) * ps : 0;
-    const slice = isFinite(ps) ? rows.slice(start, start + ps) : rows;
-    
-    document.getElementById('row-count').textContent = rows.length;
-    renderPagination(rows.length, ps, currentPage, 'pagination-top');
-    renderPagination(rows.length, ps, currentPage, 'pagination-bot');
-
-    const container = document.getElementById('table-wrapper');
-    if (!slice.length) {
-        container.innerHTML = '<div class="p-4 text-muted text-center">Нет данных по заданным фильтрам</div>';
-        return;
-    }
-
-    let html = '<table class="report-table registry-table" style="table-layout: auto;"><thead><tr>';
-    COLS.forEach(col => { html += `<th ${col.style || ''}>${esc(col.title)}</th>`; });
-    html += '</tr></thead><tbody>';
-
-    slice.forEach(row => {
-        const cls = row.is_subtotal === 1 ? 'row-subtotal' : '';
-        html += `<tr class="${cls}">`;
-        COLS.forEach(col => {
-            let val = row[col.field] ?? '';
-            
-            // Специфичная логика форматирования для итоговых строк и конкретных полей
-            if (col.field === 'payment_type' && row.is_subtotal === 1) {
-                val = 'ИТОГО';
-            } else if (col.field === 'igk' && val !== '') {
-                val = String(val).slice(-4);
-            } else if (col.field === 'stage' && val !== '') {
-                val = String(val).trim();
-            } else if (col.format === 'number' && val !== '') {
-                val = parseFloat(val).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            }
-            
-            const align = col.format ? 'text-end' : '';
-            // col.wrap — свой режим переноса колонки; иначе длинный текст без ширины переносится
-            const wrap = col.wrap || ((!col.format && !col.style) ? 'wrap' : '');
-            const classes = [align, wrap].filter(Boolean).join(' ');
-            
-            // Номер договора: место переноса — только после «/»
-            const text = col.field === 'contract' ? esc(val).replace(/\//g, '/<wbr>') : esc(val);
-            html += `<td class="${classes}">${text}</td>`;
-        });
-        html += '</tr>';
-    });
-
-    html += '</tbody></table>';
-    container.innerHTML = html;
-}
-
-/**
- * Инициализирует значения фильтров из параметров URL (для сохранения состояния при обновлении).
- */
-function loadFiltersFromURL() {
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('agent')) document.getElementById('filter-agent').value = params.get('agent');
-    if (params.has('igk')) document.getElementById('filter-igk').value = params.get('igk');
-    if (params.has('cfo')) document.getElementById('filter-cfo').value = params.get('cfo');
-    if (params.has('year')) document.getElementById('filter-year').value = params.get('year');
-    
-    if (params.has('statuses')) {
-        const statusesParams = params.get('statuses').split(',');
-        document.getElementById('cb-concluded').checked = statusesParams.includes('concluded');
-        document.getElementById('cb-not-concluded').checked = statusesParams.includes('not_concluded');
-        document.getElementById('cb-terminated').checked = statusesParams.includes('terminated');
-    }
-}
-
-// --- Инициализация и обработчики событий ---
-
-document.getElementById('page-size').addEventListener('change', () => { 
-    currentPage = 1; 
-    renderPage(); 
+initRegistry({
+    apiUrl: document.getElementById('page-data').dataset.apiUrl,
+    cols: [
+        { field: 'igk',          title: 'ИГК',                   style: 'style="width: 48px;"', short: true },
+        { field: 'c_agent',      title: 'Контрагент' },
+        { field: 'contract',     title: 'Договор',               wrap: 'contract-cell' },
+        { field: 'status',       title: 'Состояние',             style: 'style="width: 90px;"', wrap: 'wrap-sm' },
+        { field: 'payment_type', title: 'Тип платежа',           style: 'style="width: 80px;"', wrap: 'wrap-sm' },
+        { field: 'item',         title: 'Предмет' },
+        { field: 'order',        title: 'Заказ',                 style: 'style="width: 70px;"', wrap: 'wrap-sm' },
+        { field: 'stage',        title: 'Этап',                  style: 'style="width: 60px;"', wrap: 'wrap-sm' },
+        { field: 'spec_sum',     title: 'Сумма договора, руб.',  format: 'number' },
+        { field: 'pp_sum',       title: 'План, руб.',            format: 'number' },
+        { field: 'pp_fact',      title: 'Факт, руб.',            format: 'number' },
+        { field: 'pp_remain',    title: 'Остаток, руб.',         format: 'number' },
+    ],
+    // Группа чекбокса — несколько статусов договора (списки приходят из view)
+    statusBoxes: [
+        { id: 'cb-concluded',     name: 'concluded',     values: json('concluded-statuses'),  reset: true },
+        { id: 'cb-not-concluded', name: 'not_concluded', values: json('not-concl-statuses'),  reset: false },
+        { id: 'cb-terminated',    name: 'terminated',    values: json('terminated-statuses'), reset: false },
+    ],
+    hasYear: true,
+    onlyTotalsId: 'cb-only-totals',
+    subtotalLabel: { field: 'payment_type', text: 'ИТОГО' },
 });
-
-document.getElementById('cb-only-totals').addEventListener('change', () => { 
-    currentPage = 1; 
-    renderPage(); 
-});
-
-document.getElementById('filter-agent').addEventListener('keydown', e => {
-    if (e.key === 'Enter') loadData();
-});
-
-document.getElementById('btn-search').addEventListener('click', loadData);
-
-document.getElementById('btn-reset').addEventListener('click', () => {
-    document.getElementById('filter-agent').value = '';
-    document.getElementById('filter-igk').value = '';
-    document.getElementById('filter-cfo').value = '';
-    document.getElementById('cb-concluded').checked = true;
-    document.getElementById('cb-not-concluded').checked = false;
-    document.getElementById('cb-terminated').checked = false;
-    document.getElementById('cb-only-totals').checked = false;
-    document.getElementById('filter-year').value = 'all';
-    loadData();
-});
-
-// Запуск при загрузке страницы
-loadFiltersFromURL();
-loadData();
 </script>
 {% endblock %}

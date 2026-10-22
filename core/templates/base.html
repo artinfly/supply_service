@@ -178,56 +178,6 @@ function downloadKDR(url, year, startId, endId) {
 }
 
 /**
- * Возвращает размер страницы для пагинации (Infinity, если выбрано "Все").
- * Требует наличия элемента с id="page-size".
- */
-function pageSize() {
-    const el = document.getElementById('page-size');
-    if (!el) return 100; // Значение по умолчанию
-    const v = parseInt(el.value, 10);
-    return v === 0 ? Infinity : v;
-}
-
-/**
- * Рендерит кнопки пагинации.
- * Требует, чтобы в области видимости были определены переменные `currentPage` и функция `renderPage()`.
- */
-function renderPagination(total, ps, cur, id) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (!isFinite(ps) || total <= ps) { el.innerHTML = ''; return; }
-    
-    const pages = Math.ceil(total / ps);
-    const d = 2;
-    let html = '<div class="d-flex gap-1 flex-wrap align-items-center">';
-    html += `<button class="pgn-btn" data-p="1" ${cur === 1 ? 'disabled' : ''}>«</button>`;
-    html += `<button class="pgn-btn" data-p="${cur - 1}" ${cur === 1 ? 'disabled' : ''}>‹</button>`;
-    
-    for (let p = 1; p <= pages; p++) {
-        if (p === 1 || p === pages || (p >= cur - d && p <= cur + d)) {
-            html += `<button class="pgn-btn${p === cur ? ' pgn-active' : ''}" data-p="${p}">${p}</button>`;
-        } else if (p === cur - d - 1 || p === cur + d + 1) {
-            html += '<span style="padding:0 4px;color:var(--text-muted)">…</span>';
-        }
-    }
-    
-    html += `<button class="pgn-btn" data-p="${cur + 1}" ${cur === pages ? 'disabled' : ''}>›</button>`;
-    html += `<button class="pgn-btn" data-p="${pages}" ${cur === pages ? 'disabled' : ''}>»</button>`;
-    html += `<span class="row-count-label ms-2">стр. ${cur} из ${pages}</span></div>`;
-    el.innerHTML = html;
-    
-    el.querySelectorAll('.pgn-btn:not([disabled])').forEach(btn => {
-        btn.addEventListener('click', () => { 
-            // Проверка на существование глобальных переменных, определённых в конкретных шаблонах
-            if (typeof currentPage !== 'undefined' && typeof renderPage === 'function') {
-                currentPage = parseInt(btn.dataset.p, 10); 
-                renderPage(); 
-            }
-        });
-    });
-}
-
-/**
  * Универсальная функция загрузки и отрисовки простой таблицы по API.
  */
 async function loadTable(apiUrl, containerId, cols) {

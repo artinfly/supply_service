@@ -3,6 +3,7 @@
 {# Данные загружаются асинхронно через API (api_znp_list). #}
 
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Реестр ЗнП (ФЗД){% endblock %}
 
 {% block content %}
@@ -87,210 +88,40 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/registry.js' %}"></script>
 <script>
 "use strict";
 
-// --- Конфигурация колонок таблицы ---
-
-const COLS = [
-    { field: 'igk',               title: 'ИГК дог.',         style: 'style="width: 40px;"' },
-    { field: 'znp_igk',           title: 'ИГК опл.',         style: 'style="width: 40px;"' },
-    { field: 'c_agent',           title: 'Контрагент' },
-    { field: 'contract',          title: 'Договор',          wrap: 'contract-cell' },
-    { field: 'cfo',               title: 'ЦФО',              style: 'style="width: 40px;"' },
-    { field: 'payment_type',      title: 'Тип',              style: 'style="width: 60px;"', wrap: 'wrap-sm' },
-    { field: 'znp_status',        title: 'Статус',           style: 'style="width: 140px;"', wrap: 'wrap-sm' },
-    { field: 'plan_doc',          title: 'Док. план.',       style: 'style="width: 60px;"', wrap: 'wrap-sm' },
-    { field: 'payment_purpose',   title: 'Назначение' },
-    { field: 'plan_payment_date', title: 'Дата план',        style: 'style="width: 80px;"', format: 'date' },
-    { field: 'fact_payment_date', title: 'Дата факт',        style: 'style="width: 80px;"', format: 'date' },
-    { field: 'position_sum',      title: 'Сумма поз., руб.', format: 'number' },
-    { field: 'znp_plan_sum',      title: 'План, руб.',       format: 'number' },
-    { field: 'znp_fact_sum',      title: 'Факт, руб.',       format: 'number' },
-];
-
-// --- Состояние приложения ---
-
-const apiUrl = document.getElementById('page-data').dataset.apiUrl;
-let loadedData = [];
-let currentPage = 1;
-
-// --- Маппинг чекбоксов статусов на значения API ---
-
-// Пары [ID чекбокса, значение статуса для API]
-const STATUS_BOXES = [
-    ['cb-not-issued-advance',     'not_issued_advance'],
-    ['cb-not-issued-postpayment', 'not_issued_postpayment'],
-    ['cb-in-progress',            'in_progress'],
-    ['cb-advance',                'advance'],
-    ['cb-advance-paid',           'advance_paid'],
-    ['cb-postpayment',            'postpayment'],
-    ['cb-postpayment-paid',       'postpayment_paid'],
-];
-
-// Алиасы: при выборе "not_issued" в URL, включаются оба типа "не оформлена"
-const STATUS_ALIASES = { not_issued: ['not_issued_advance', 'not_issued_postpayment'] };
-
-// --- Логика запросов ---
-
-/**
- * Формирует URL для API-запроса на основе текущих значений фильтров.
- * @returns {string} URL с query-параметрами
- */
-function buildUrl() {
-    const params = new URLSearchParams();
-    const agent = document.getElementById('filter-agent').value.trim();
-    const igk = document.getElementById('filter-igk').value.trim();
-    const cfo = document.getElementById('filter-cfo').value.trim();
-    
-    if (agent) params.append('agent', agent);
-    if (igk) params.append('igk', igk);
-    if (cfo) params.append('cfo', cfo);
-    
-    // Добавляем выбранные статусы
-    for (const [id, status] of STATUS_BOXES) {
-        if (document.getElementById(id).checked) {
-            params.append('status', status);
-        }
-    }
-    
-    // Если ни один статус не выбран, отправляем пустой параметр
-    if (!params.has('status')) {
-        params.append('status', '');
-    }
-    
-    const year = document.getElementById('filter-year').value;
-    if (year !== 'all') {
-        params.append('year', year);
-    }
-    
-    const qs = params.toString();
-    return apiUrl + (qs ? '?' + qs : '');
-}
-
-/**
- * Выполняет запрос к API и обновляет состояние данных.
- */
-async function loadData() {
-    document.getElementById('table-wrapper').innerHTML = 
-        '<div class="loading-spinner"><div class="spinner-border spinner-border-sm"></div> Загрузка…</div>';
-    try {
-        const resp = await fetch(buildUrl());
-        if (!resp.ok) throw new Error(apiError(resp));
-        loadedData = await resp.json();
-        currentPage = 1;
-        renderPage();
-    } catch (e) {
-        document.getElementById('table-wrapper').innerHTML = 
-            `<div class="error-msg">Ошибка загрузки: ${esc(e.message)}</div>`;
-    }
-}
-
-// --- Рендеринг ---
-
-/**
- * Отрисовывает текущую страницу таблицы на основе loadedData.
- */
-function renderPage() {
-    const ps = pageSize();
-    const start = isFinite(ps) ? (currentPage - 1) * ps : 0;
-    const slice = isFinite(ps) ? loadedData.slice(start, start + ps) : loadedData;
-    
-    document.getElementById('row-count').textContent = loadedData.length;
-    renderPagination(loadedData.length, ps, currentPage, 'pagination-top');
-    renderPagination(loadedData.length, ps, currentPage, 'pagination-bot');
-
-    const container = document.getElementById('table-wrapper');
-    if (!slice.length) {
-        container.innerHTML = '<div class="p-4 text-muted text-center">Нет данных по заданным фильтрам</div>';
-        return;
-    }
-
-    let html = '<table class="report-table registry-table" style="table-layout: auto;"><thead><tr>';
-    COLS.forEach(col => { html += `<th ${col.style || ''}>${esc(col.title)}</th>`; });
-    html += '</tr></thead><tbody>';
-
-    slice.forEach(row => {
-        html += '<tr>';
-        COLS.forEach(col => {
-            let val = row[col.field] ?? '';
-            
-            // Специфичная логика форматирования
-            if ((col.field === 'igk' || col.field === 'znp_igk') && val !== '') {
-                val = String(val).slice(-4);
-            } else if (col.format === 'number' && val !== '') {
-                val = parseFloat(val).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            } else if (col.format === 'date' && val !== '') {
-                val = fmtDate(val);
-            }
-            
-            const align = (col.format && col.format !== 'date') ? 'text-end' : '';
-            // col.wrap — свой режим переноса колонки; иначе длинный текст без ширины переносится
-            const wrap = col.wrap || ((!col.format && !col.style) ? 'wrap' : '');
-            // Номер договора: место переноса — только после «/»
-            const text = col.field === 'contract' ? esc(val).replace(/\//g, '/<wbr>') : esc(val);
-            html += `<td class="${[align, wrap].filter(Boolean).join(' ')}">${text}</td>`;
-        });
-        html += '</tr>';
-    });
-
-    html += '</tbody></table>';
-    container.innerHTML = html;
-}
-
-/**
- * Инициализирует значения фильтров из параметров URL (для сохранения состояния).
- * Поддерживает алиасы статусов (например, "not_issued" включает оба типа).
- */
-function loadFiltersFromURL() {
-    const params = new URLSearchParams(window.location.search);
-    
-    if (params.has('agent')) document.getElementById('filter-agent').value = params.get('agent');
-    if (params.has('igk')) document.getElementById('filter-igk').value = params.get('igk');
-    if (params.has('cfo')) document.getElementById('filter-cfo').value = params.get('cfo');
-    if (params.has('year')) document.getElementById('filter-year').value = params.get('year');
-    
-    if (params.has('statuses')) {
-        const asked = new Set();
-        // Раскрываем алиасы в конкретные статусы
-        for (const s of params.get('statuses').split(',')) {
-            (STATUS_ALIASES[s] || [s]).forEach(x => asked.add(x));
-        }
-        // Устанавливаем чекбоксы
-        for (const [id, status] of STATUS_BOXES) {
-            document.getElementById(id).checked = asked.has(status);
-        }
-    }
-}
-
-// --- Инициализация и обработчики событий ---
-
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('page-size').addEventListener('change', () => { 
-        currentPage = 1; 
-        renderPage(); 
-    });
-    
-    document.getElementById('filter-agent').addEventListener('keydown', e => {
-        if (e.key === 'Enter') loadData();
-    });
-    
-    document.getElementById('btn-search').addEventListener('click', loadData);
-    
-    document.getElementById('btn-reset').addEventListener('click', () => {
-        document.getElementById('filter-agent').value = '';
-        document.getElementById('filter-igk').value = '';
-        document.getElementById('filter-cfo').value = '';
-        for (const [id] of STATUS_BOXES) {
-            document.getElementById(id).checked = true;
-        }
-        document.getElementById('filter-year').value = 'all';
-        loadData();
-    });
-    
-    // Загрузка при инициализации страницы
-    loadFiltersFromURL();
-    loadData();
+initRegistry({
+    apiUrl: document.getElementById('page-data').dataset.apiUrl,
+    cols: [
+        { field: 'igk',               title: 'ИГК дог.',         style: 'style="width: 40px;"', short: true },
+        { field: 'znp_igk',           title: 'ИГК опл.',         style: 'style="width: 40px;"', short: true },
+        { field: 'c_agent',           title: 'Контрагент' },
+        { field: 'contract',          title: 'Договор',          wrap: 'contract-cell' },
+        { field: 'cfo',               title: 'ЦФО',              style: 'style="width: 40px;"' },
+        { field: 'payment_type',      title: 'Тип',              style: 'style="width: 60px;"', wrap: 'wrap-sm' },
+        { field: 'znp_status',        title: 'Статус',           style: 'style="width: 140px;"', wrap: 'wrap-sm' },
+        { field: 'plan_doc',          title: 'Док. план.',       style: 'style="width: 60px;"', wrap: 'wrap-sm' },
+        { field: 'payment_purpose',   title: 'Назначение' },
+        { field: 'plan_payment_date', title: 'Дата план',        style: 'style="width: 80px;"', format: 'date' },
+        { field: 'fact_payment_date', title: 'Дата факт',        style: 'style="width: 80px;"', format: 'date' },
+        { field: 'position_sum',      title: 'Сумма поз., руб.', format: 'number' },
+        { field: 'znp_plan_sum',      title: 'План, руб.',       format: 'number' },
+        { field: 'znp_fact_sum',      title: 'Факт, руб.',       format: 'number' },
+    ],
+    statusBoxes: [
+        ['cb-not-issued-advance',     'not_issued_advance'],
+        ['cb-not-issued-postpayment', 'not_issued_postpayment'],
+        ['cb-in-progress',            'in_progress'],
+        ['cb-advance',                'advance'],
+        ['cb-advance-paid',           'advance_paid'],
+        ['cb-postpayment',            'postpayment'],
+        ['cb-postpayment-paid',       'postpayment_paid'],
+    ].map(([id, name]) => ({ id, name, values: [name], reset: true })),
+    // «not_issued» в ссылке карточки — оба вида «не оформлена»
+    aliases: { not_issued: ['not_issued_advance', 'not_issued_postpayment'] },
+    hasYear: true,
 });
 </script>
 {% endblock %}
