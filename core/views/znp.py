@@ -26,7 +26,6 @@ from ..services.queries import (
 )
 from .common import base_context, igk_and_cfo_lists
 
-
 # --- Реестры ---
 
 
@@ -108,7 +107,9 @@ def znp_sap_table(request):
     second_date = sap_second_date(first_date)
 
     available_igk = znp_cards.sap_igk_list()
-    selected_igk = request.GET.get("igk", "") or (available_igk[0] if available_igk else "")
+    selected_igk = request.GET.get("igk", "") or (
+        available_igk[0] if available_igk else ""
+    )
     all_breakdown = znp_cards.sap_breakdown()
     cfo_table, cfo_total_row = znp_cards.sap_cfo_table(selected_igk)
 

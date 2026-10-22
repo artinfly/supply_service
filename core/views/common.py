@@ -31,7 +31,8 @@ def superuser_required(view_func):
     def wrapper(request, *args, **kwargs):
         if not request.user.is_superuser:
             messages.error(
-                request, "Загружать справочник ГК из файла могут только суперпользователи."
+                request,
+                "Загружать справочник ГК из файла могут только суперпользователи.",
             )
             return redirect("goz_report")
         return view_func(request, *args, **kwargs)

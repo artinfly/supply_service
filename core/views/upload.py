@@ -107,7 +107,9 @@ def upload_excel(request):
                     result = out.getvalue()
                     messages.success(request, "Файл успешно загружен и нормализован")
                 except Exception as e:  # показываем пользователю, трассировку — в лог
-                    logger.exception("Ошибка загрузки файла %s (%s)", uploaded_file.name, file_type)
+                    logger.exception(
+                        "Ошибка загрузки файла %s (%s)", uploaded_file.name, file_type
+                    )
                     text = str(e)
                     messages.error(
                         request,

@@ -23,6 +23,12 @@ from ..services.dashboards.charts import (
     znp_by_cfo,
     znp_sap_by_cfo,
 )
+from ..services.dashboards.sap_status import (
+    SAP_STAGE_LABELS,
+    sap_date_field,
+    sap_status_conditions,
+    sap_status_expr,
+)
 from ..services.queries import (
     ADVANCE,
     ALL_CONTRACTS_GROUP,
@@ -48,12 +54,6 @@ from ..services.queries import (
     valid_date,
     valid_year,
     znp_list,
-)
-from ..services.dashboards.sap_status import (
-    SAP_STAGE_LABELS,
-    sap_date_field,
-    sap_status_conditions,
-    sap_status_expr,
 )
 
 # --- Вспомогательные функции для JSON ---
@@ -113,8 +113,14 @@ def _get_filters(request):
 
 # Проценты строки «ИТОГО» КДР: поле -> (числитель, знаменатель)
 _KDR_TOTAL_PERCENTS = {
-    "count_concluded_percent_curr_year": ("count_concluded_curr_year", "count_curr_year"),
-    "order_sum_percent_curr_year": ("concluded_order_sum_curr_year", "order_sum_curr_year"),
+    "count_concluded_percent_curr_year": (
+        "count_concluded_curr_year",
+        "count_curr_year",
+    ),
+    "order_sum_percent_curr_year": (
+        "concluded_order_sum_curr_year",
+        "order_sum_curr_year",
+    ),
     "pp_percent": ("pp_sum_fact", "pp_sum_plan"),
 }
 

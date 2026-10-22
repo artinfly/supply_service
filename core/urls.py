@@ -7,8 +7,9 @@ core/middleware.py. При добавлении страницы её имя н�
 
 from django.urls import path
 
-from .views import api, auth, contracts, exports, goz, upload, znp
+from .views import api, auth, contracts, exports, goz
 from .views import sum_report as sum_report_views
+from .views import upload, znp
 
 urlpatterns = [
     # --- Аутентификация ---
@@ -18,7 +19,9 @@ urlpatterns = [
     # --- Сводки и реестры ---
     path("dashboard/", contracts.dashboard, name="dashboard"),
     path("all-contracts/", contracts.all_contracts_table, name="all_contracts_table"),
-    path("contract-dupes/", contracts.contract_dupes_table, name="contract_dupes_table"),
+    path(
+        "contract-dupes/", contracts.contract_dupes_table, name="contract_dupes_table"
+    ),
     # --- Заявки на платёж ---
     path("znp/", znp.znp_table, name="znp_table"),
     path("znp-list/", znp.znp_list_table, name="znp_list_table"),
@@ -58,7 +61,9 @@ urlpatterns = [
         name="igk_terminated_table",
     ),
     # --- История изменений ---
-    path("history-status/", contracts.history_status_table, name="history_status_table"),
+    path(
+        "history-status/", contracts.history_status_table, name="history_status_table"
+    ),
     path("history-plan/", contracts.history_plan_table, name="history_plan_table"),
     path("history-fact/", contracts.history_fact_table, name="history_fact_table"),
     # --- Загрузка и справочники ---

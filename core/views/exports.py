@@ -16,12 +16,12 @@ from django.shortcuts import render
 
 from ..services.queries import (
     YEAR_COL,
-    distinct_agents,
     advances,
     contract_dupes,
     contract_dupes_by_order,
     contracts_appeared,
     contracts_by_agent_filter,
+    distinct_agents,
 )
 from ..services.queries import export_contracts_by_agent as query_contracts_by_agent
 from ..services.queries import (
@@ -399,7 +399,9 @@ def export_kdr(request, year):
             delta_map = {(igk, cfo): count for igk, cfo, count in cur.fetchall()}
 
     rows, kinds = _kdr_table(detail_rows, delta_map)
-    period_text = f" с {_ru_date(start_date)} по {_ru_date(end_date)}" if has_period else ""
+    period_text = (
+        f" с {_ru_date(start_date)} по {_ru_date(end_date)}" if has_period else ""
+    )
     return xlsx_response(
         make_wb(
             f"КДР {year}",

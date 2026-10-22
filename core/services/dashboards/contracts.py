@@ -97,7 +97,9 @@ def cfo_table(igk, year):
             .annotate(
                 all_count=Count("contract", distinct=True),
                 all_sum=Sum("plan"),
-                all_concluded_count=Count("contract", filter=CONCLUDED_Q, distinct=True),
+                all_concluded_count=Count(
+                    "contract", filter=CONCLUDED_Q, distinct=True
+                ),
                 all_concluded_sum=Sum("plan", filter=CONCLUDED_Q),
                 curr_count=Count("contract", filter=year_q, distinct=True),
                 curr_sum=Sum("plan", filter=year_q),

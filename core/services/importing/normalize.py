@@ -9,7 +9,6 @@ from django.core.management.base import CommandError
 from django.db import connection, transaction
 from django.utils import timezone
 
-from .linking import contract_hash, relink_znp_parents
 from ..queries import (
     ADVANCE,
     CONCLUDED,
@@ -17,6 +16,7 @@ from ..queries import (
     POSTPAYMENT,
     YEARS,
 )
+from .linking import contract_hash, relink_znp_parents
 
 # --- Константы и маппинги ---
 
@@ -241,7 +241,9 @@ def _position_key(igk, c_agent, contract, item, order, stage, plan_date) -> tupl
 
     Склейка этих же полей даёт MD5-хеш записи истории (см. queries._HISTORY_JOIN).
     """
-    return tuple(norm(v) or "" for v in (igk, c_agent, contract, item, order, stage, plan_date))
+    return tuple(
+        norm(v) or "" for v in (igk, c_agent, contract, item, order, stage, plan_date)
+    )
 
 
 def _sync_igk_directory(cur) -> None:
@@ -280,8 +282,24 @@ def _read_contract_staging(cur) -> list[Position]:
         )
 
     positions = []
-    for (igk, agent, cfo, contract, status, payment, item, order, plan, fact,
-         tolerance, stage, plan_date, contract_sum, god_igk, remainder) in rows:
+    for (
+        igk,
+        agent,
+        cfo,
+        contract,
+        status,
+        payment,
+        item,
+        order,
+        plan,
+        fact,
+        tolerance,
+        stage,
+        plan_date,
+        contract_sum,
+        god_igk,
+        remainder,
+    ) in rows:
         positions.append(
             Position(
                 igk=norm(igk),
@@ -302,7 +320,9 @@ def _read_contract_staging(cur) -> list[Position]:
                 plan_date=plan_month(plan_date),
                 c_date=norm(god_igk),
                 contract_sum=to_decimal(contract_sum),
-                crc32_hash=contract_hash(norm(igk), norm(agent), norm(contract), norm(stage)),
+                crc32_hash=contract_hash(
+                    norm(igk), norm(agent), norm(contract), norm(stage)
+                ),
                 remainder=to_decimal(remainder),
             )
         )
@@ -343,8 +363,24 @@ def _appeared_rows(old: dict, new: dict, today) -> list[tuple]:
             continue
         else:
             reason = "смена статуса"
-        rows.append((today, kind, reason, pos.igk, pos.cfo, pos.c_agent, pos.contract, pos.item,
-                     pos.order, pos.stage, pos.plan_date, pos.status, pos.plan, pos.contract_sum))
+        rows.append(
+            (
+                today,
+                kind,
+                reason,
+                pos.igk,
+                pos.cfo,
+                pos.c_agent,
+                pos.contract,
+                pos.item,
+                pos.order,
+                pos.stage,
+                pos.plan_date,
+                pos.status,
+                pos.plan,
+                pos.contract_sum,
+            )
+        )
     return rows
 
 
