@@ -103,7 +103,7 @@ const TERMINATED_STATUSES = JSON.parse(document.getElementById('terminated-statu
 const COLS = [
     { field: 'igk',          title: 'ИГК',                   style: 'style="width: 48px;"' },
     { field: 'c_agent',      title: 'Контрагент' },
-    { field: 'contract',     title: 'Договор',               wrap: 'nobreak' },
+    { field: 'contract',     title: 'Договор',               wrap: 'contract-cell' },
     { field: 'status',       title: 'Состояние',             style: 'style="width: 90px;"', wrap: 'wrap-sm' },
     { field: 'payment_type', title: 'Тип платежа',           style: 'style="width: 80px;"', wrap: 'wrap-sm' },
     { field: 'item',         title: 'Предмет' },
@@ -231,7 +231,9 @@ function renderPage() {
             const wrap = col.wrap || ((!col.format && !col.style) ? 'wrap' : '');
             const classes = [align, wrap].filter(Boolean).join(' ');
             
-            html += `<td class="${classes}">${esc(val)}</td>`;
+            // Номер договора: место переноса — только после «/»
+            const text = col.field === 'contract' ? esc(val).replace(/\//g, '/<wbr>') : esc(val);
+            html += `<td class="${classes}">${text}</td>`;
         });
         html += '</tr>';
     });
