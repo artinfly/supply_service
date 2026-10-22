@@ -3,6 +3,7 @@
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from typing import NamedTuple, Optional
 
 from django.core.management.base import CommandError
 from django.db import connection, transaction
@@ -206,158 +207,242 @@ def parse_date(value):
 # --- Нормализация договоров ---
 
 
-def normalize_contracts():
-    """Нормализует данные договоров из staging_excel в igk_stat_data.
+class Position(NamedTuple):
+    """Позиция договора в том виде, в каком она пишется в igk_stat_data.
 
-    Процесс:
-    1. Заполняет справочник ИГК (nsi_igk)
-    2. Читает staging-данные и преобразует их
-    3. Сравнивает с предыдущей версией, фиксирует изменения
-    4. Записывает историю изменений и появившиеся договоры
-    5. Очищает и заполняет рабочую таблицу
-    6. Обновляет снимки агрегатов
-    7. Перепривязывает заявки ФЗД
+    Порядок полей совпадает с колонками INSERT в _write_positions.
+    """
+
+    igk: Optional[str]
+    c_agent: Optional[str]
+    cfo: Optional[str]
+    contract: Optional[str]
+    status: Optional[str]
+    payment_type: Optional[str]
+    item: Optional[str]
+    order: Optional[str]
+    plan: Optional[Decimal]
+    fact: Optional[Decimal]
+    tolerance: Optional[Decimal]
+    stage: Optional[str]
+    y25: bool
+    y26: bool
+    y27: bool
+    plan_date: Optional[str]
+    c_date: Optional[str]  # год из «ГодИГК» (имя поля историческое)
+    contract_sum: Optional[Decimal]
+    crc32_hash: int
+    remainder: Optional[Decimal]
+
+
+def _position_key(igk, c_agent, contract, item, order, stage, plan_date) -> tuple:
+    """Ключ позиции для сравнения загрузок: ИГК, контрагент, договор, предмет,
+    заказ, этап и месяц плана (пустые значения — пустая строка).
+
+    Склейка этих же полей даёт MD5-хеш записи истории (см. queries._HISTORY_JOIN).
+    """
+    return tuple(norm(v) or "" for v in (igk, c_agent, contract, item, order, stage, plan_date))
+
+
+def _sync_igk_directory(cur) -> None:
+    """Справочник ИГК = ИГК из загруженного файла: новые добавляются, пропавшие удаляются."""
+    file_igks = """
+        SELECT DISTINCT TRIM(igk) FROM staging_excel
+        WHERE igk IS NOT NULL AND TRIM(igk) <> ''
+    """
+    cur.execute(f"INSERT INTO nsi_igk (igk) {file_igks} ON CONFLICT DO NOTHING")
+    cur.execute(f"DELETE FROM nsi_igk WHERE igk NOT IN ({file_igks})")
+
+
+def _read_contract_staging(cur) -> list[Position]:
+    """Позиции из staging_excel (только «Аванс» и «Постоплата»), приведённые к типам.
+
+    Исключения:
+        CommandError: в файле нет ни одной такой строки. Пустой файл не должен
+            стирать загруженные договоры: ошибка откатывает всю загрузку.
+    """
+    cur.execute(
+        """
+        SELECT igk, kontragent, cfo, dogovor, sostoyanie,
+               tip_platezha, predmet, zakaz, plan, fakt,
+               tol, etap_grafika, dataplan, summa_dogovora, god_igk,
+               ostatok
+        FROM staging_excel
+        WHERE tip_platezha IN (%s, %s)
+        """,
+        [ADVANCE, POSTPAYMENT],
+    )
+    rows = cur.fetchall()
+    if not rows:
+        raise CommandError(
+            f"В файле нет строк с типом платежа «{ADVANCE}» или «{POSTPAYMENT}» — "
+            "данные не изменены. Проверьте, что выбран нужный тип файла."
+        )
+
+    positions = []
+    for (igk, agent, cfo, contract, status, payment, item, order, plan, fact,
+         tolerance, stage, plan_date, contract_sum, god_igk, remainder) in rows:
+        positions.append(
+            Position(
+                igk=norm(igk),
+                c_agent=norm(agent),
+                cfo=norm(cfo),
+                contract=norm(contract),
+                status=norm(status),
+                payment_type=norm(payment) or None,
+                item=norm(item),
+                order=norm(order),
+                plan=to_decimal(plan),
+                fact=to_decimal(fact),
+                tolerance=to_decimal(tolerance),
+                stage=norm(stage),
+                y25=year_flags(god_igk)[0],
+                y26=year_flags(god_igk)[1],
+                y27=year_flags(god_igk)[2],
+                plan_date=plan_month(plan_date),
+                c_date=norm(god_igk),
+                contract_sum=to_decimal(contract_sum),
+                crc32_hash=contract_hash(norm(igk), norm(agent), norm(contract), norm(stage)),
+                remainder=to_decimal(remainder),
+            )
+        )
+    return positions
+
+
+def _previous_positions(cur) -> dict:
+    """Позиции прошлой загрузки: {ключ + № повтора: (статус, план, факт, сумма договора)}."""
+    cur.execute("""
+        SELECT igk, c_agent, contract, item, "order", stage, plan_date,
+               status, plan, fact, contract_sum
+        FROM igk_stat_data
+        ORDER BY pp_id
+    """)
+    return _indexed_lookup(
+        cur.fetchall(),
+        key_fn=lambda r: _position_key(*r[:7]),
+        value_fn=lambda r: (r[7], r[8], r[9], r[10]),
+    )
+
+
+def _appeared_rows(old: dict, new: dict, today) -> list[tuple]:
+    """Позиции, которые появились или перешли между «заключён» и «не заключён».
+
+    При самой первой загрузке (прошлой нет) журнал не заполняется.
+    """
+    if not old:
+        return []
+    rows = []
+    for key, pos in new.items():
+        kind = status_group(pos.status)
+        if kind is None:
+            continue
+        previous = old.get(key)
+        if previous is None:
+            reason = "новая позиция"
+        elif status_group(previous[0]) == kind:
+            continue
+        else:
+            reason = "смена статуса"
+        rows.append((today, kind, reason, pos.igk, pos.cfo, pos.c_agent, pos.contract, pos.item,
+                     pos.order, pos.stage, pos.plan_date, pos.status, pos.plan, pos.contract_sum))
+    return rows
+
+
+def _history_rows(old: dict, new: dict, today) -> list[tuple]:
+    """Изменения статуса, плана, факта и суммы договора у позиций, бывших в прошлой загрузке."""
+    rows = []
+    for key, pos in new.items():
+        if key not in old:
+            continue
+        old_status, old_plan, old_fact, old_sum = old[key]
+        status_changed = old_status != pos.status
+        plan_changed = not values_equal(old_plan, pos.plan)
+        fact_changed = not values_equal(old_fact, pos.fact)
+        sum_changed = not values_equal(old_sum, pos.contract_sum)
+        if not (status_changed or plan_changed or fact_changed or sum_changed):
+            continue
+        rows.append(
+            (
+                "".join(key[:-1]),  # склейка ключа без № повтора -> MD5 в SQL
+                old_status if status_changed else None,
+                pos.status if status_changed else None,
+                today if status_changed else None,
+                today if status_changed else None,
+                old_plan if plan_changed else None,
+                pos.plan if plan_changed else None,
+                old_fact if fact_changed else None,
+                pos.fact if fact_changed else None,
+                today if plan_changed else None,
+                today if fact_changed else None,
+                old_sum,
+                pos.contract_sum,
+            )
+        )
+    return rows
+
+
+def _write_positions(cur, positions: list[Position]) -> None:
+    """Перезаписывает рабочую таблицу договоров целиком."""
+    cur.execute("TRUNCATE igk_stat_data RESTART IDENTITY")
+    cur.executemany(
+        """
+        INSERT INTO igk_stat_data
+            (igk, c_agent, cfo, contract, status, payment_type,
+             item, "order", plan, fact, tolerance, stage,
+             y25, y26, y27, plan_date, c_date, contract_sum,
+             crc32_hash, remainder)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """,
+        positions,
+    )
+
+
+def _save_snapshots(cur, today) -> None:
+    """Снимок числа заключённых договоров по ИГК/ЦФО/году — для дельты в выгрузке КДР."""
+    cur.execute("DELETE FROM contract_counts_snapshot WHERE upload_date = %s", [today])
+    for year_col in YEAR_COLS:
+        cur.execute(
+            f"""
+            INSERT INTO contract_counts_snapshot
+                (upload_date, igk, cfo, year_col, concluded_count)
+            SELECT %s, RIGHT(igk, 4), cfo, %s, COUNT(DISTINCT contract)
+            FROM igk_stat_data
+            WHERE {year_col}=TRUE
+              AND status IN ({STATUS_PLACEHOLDERS})
+              AND contract IS NOT NULL AND TRIM(contract) != ''
+              AND igk IS NOT NULL AND TRIM(igk) != ''
+              AND cfo IS NOT NULL AND TRIM(cfo) != ''
+            GROUP BY RIGHT(igk, 4), cfo
+            """,
+            [today, year_col, *CONCLUDED],
+        )
+
+
+def normalize_contracts():
+    """Переносит договоры из staging_excel в igk_stat_data с учётом прошлой загрузки.
+
+    Шаги: справочник ИГК → позиции из файла → сравнение с прошлой загрузкой
+    (журнал появившихся и история изменений) → перезапись рабочей таблицы →
+    снимки для КДР → перепривязка заявок ФЗД. Всё в одной транзакции.
 
     Returns:
-        str: отчёт о количестве обработанных строк и изменений
+        str: отчёт о количестве обработанных строк и записанных изменений.
     """
+    today = timezone.localdate()
     with transaction.atomic(), connection.cursor() as cur:
-        # Шаг 1: Заполняем справочник ИГК
-        cur.execute("""
-            INSERT INTO nsi_igk (igk)
-            SELECT DISTINCT TRIM(igk) FROM staging_excel
-            WHERE igk IS NOT NULL AND TRIM(igk) <> ''
-            ON CONFLICT DO NOTHING
-        """)
+        _sync_igk_directory(cur)
+        positions = _read_contract_staging(cur)
 
-        # Шаг 2: Читаем staging-данные
-        cur.execute(
-            """
-            SELECT igk, kontragent, cfo, dogovor, sostoyanie,
-                   tip_platezha, predmet, zakaz, plan, fakt,
-                   tol, etap_grafika, dataplan, summa_dogovora, god_igk,
-                   ostatok
-            FROM staging_excel
-            WHERE tip_platezha IN (%s, %s)
-            """,
-            [ADVANCE, POSTPAYMENT],
-        )
-        staging_rows = cur.fetchall()
-        # Пустой файл не должен стирать загруженные договоры: ошибка откатывает
-        # всю загрузку (транзакция команды load_contracts), данные остаются прежними
-        if not staging_rows:
-            raise CommandError(
-                f"В файле нет строк с типом платежа «{ADVANCE}» или «{POSTPAYMENT}» — "
-                "данные не изменены. Проверьте, что выбран нужный тип файла."
-            )
-
-        # Шаг 3: Преобразуем данные в формат рабочей таблицы
-        new_data = []
-
-        for r in staging_rows:
-            y25, y26, y27 = year_flags(r[14])
-
-            new_data.append(
-                (
-                    norm(r[0]),  # igk
-                    norm(r[1]),  # c_agent
-                    norm(r[2]),  # cfo
-                    norm(r[3]),  # contract
-                    norm(r[4]),  # status
-                    norm(r[5]) or None,  # payment_type
-                    norm(r[6]),  # item
-                    norm(r[7]),  # order
-                    to_decimal(r[8]),  # plan
-                    to_decimal(r[9]),  # fact
-                    to_decimal(r[10]),  # tolerance
-                    norm(r[11]),  # stage
-                    y25,  # y25
-                    y26,  # y26
-                    y27,  # y27
-                    plan_month(r[12]),  # plan_date
-                    norm(r[14]),  # c_date: год из «ГодИГК» (имя поля историческое)
-                    to_decimal(r[13]),  # contract_sum
-                    contract_hash(
-                        norm(r[0]), norm(r[1]), norm(r[3]), norm(r[11])
-                    ),  # crc32_hash
-                    to_decimal(r[15]),  # remainder
-                )
-            )
-
-        # Шаг 4: Читаем предыдущую версию для сравнения
-        cur.execute("""
-            SELECT igk, c_agent, contract, item, "order", stage, plan_date,
-                   status, plan, fact, contract_sum
-            FROM igk_stat_data
-            ORDER BY pp_id
-        """)
-        old_lookup = _indexed_lookup(
-            cur.fetchall(),
-            key_fn=lambda r: (
-                norm(r[0]) or "",
-                norm(r[1]) or "",
-                norm(r[2]) or "",
-                norm(r[3]) or "",
-                norm(r[4]) or "",
-                norm(r[5]) or "",
-                norm(r[6]) or "",
+        old = _previous_positions(cur)
+        new = _indexed_lookup(
+            positions,
+            key_fn=lambda p: _position_key(
+                p.igk, p.c_agent, p.contract, p.item, p.order, p.stage, p.plan_date
             ),
-            value_fn=lambda r: (r[7], r[8], r[9], r[10]),
+            value_fn=lambda p: p,
         )
 
-        new_lookup = _indexed_lookup(
-            new_data,
-            key_fn=lambda r: (
-                r[0] or "",
-                r[1] or "",
-                r[3] or "",
-                r[6] or "",
-                r[7] or "",
-                r[11] or "",
-                r[15] or "",
-            ),
-            value_fn=lambda r: r,
-        )
-
-        # Шаг 5: Фиксируем появившиеся договоры
-        today = timezone.localdate()
-        appeared = []
-
-        if old_lookup:
-            for key, row in new_lookup.items():
-                kind = status_group(row[4])
-
-                if kind is None:
-                    continue
-
-                old_row = old_lookup.get(key)
-
-                if old_row is None:
-                    reason = "новая позиция"
-                elif status_group(old_row[0]) == kind:
-                    continue
-                else:
-                    reason = "смена статуса"
-
-                appeared.append(
-                    (
-                        today,
-                        kind,
-                        reason,
-                        row[0],
-                        row[2],
-                        row[1],
-                        row[3],
-                        row[6],
-                        row[7],
-                        row[11],
-                        row[15],
-                        row[4],
-                        row[8],
-                        row[17],
-                    )
-                )
-
+        appeared = _appeared_rows(old, new, today)
         if appeared:
             cur.executemany(
                 """
@@ -369,100 +454,26 @@ def normalize_contracts():
                 appeared,
             )
 
-        # Шаг 6: Фиксируем историю изменений
-        history = []
-
-        for key, new_row in new_lookup.items():
-            if key not in old_lookup:
-                continue
-
-            old_status, old_plan, old_fact, old_sum = old_lookup[key]
-            new_status, new_plan = new_row[4], new_row[8]
-            new_fact, new_sum = new_row[9], new_row[17]
-
-            status_changed = old_status != new_status
-            plan_changed = not values_equal(old_plan, new_plan)
-            fact_changed = not values_equal(old_fact, new_fact)
-            sum_changed = not values_equal(old_sum, new_sum)
-
-            if not (status_changed or plan_changed or fact_changed or sum_changed):
-                continue
-
-            history.append(
-                (
-                    "".join(key[:-1]),
-                    old_status if status_changed else None,
-                    new_status if status_changed else None,
-                    today if status_changed else None,
-                    today if status_changed else None,
-                    old_plan if plan_changed else None,
-                    new_plan if plan_changed else None,
-                    old_fact if fact_changed else None,
-                    new_fact if fact_changed else None,
-                    today if plan_changed else None,
-                    today if fact_changed else None,
-                    old_sum,
-                    new_sum,
-                )
-            )
-
+        history = _history_rows(old, new, today)
         if history:
             cur.executemany(
                 """
                 INSERT INTO contracts_history
-                    (hash, old_status, new_status,
-                    update_date, upload_date,
-                    old_plan, new_plan,
-                    old_fact, new_fact,
-                    plan_changed_date, fact_changed_date,
-                    old_contract_sum, new_contract_sum)
+                    (hash, old_status, new_status, update_date, upload_date,
+                     old_plan, new_plan, old_fact, new_fact,
+                     plan_changed_date, fact_changed_date,
+                     old_contract_sum, new_contract_sum)
                 VALUES (digest(%s, 'md5'), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                         %s, %s)
                 """,
                 history,
             )
 
-        # Шаг 7: Очищаем и заполняем рабочую таблицу
-        cur.execute("TRUNCATE igk_stat_data RESTART IDENTITY")
-        cur.executemany(
-            """
-            INSERT INTO igk_stat_data
-                (igk, c_agent, cfo, contract, status, payment_type,
-                 item, "order", plan, fact, tolerance, stage,
-                 y25, y26, y27, plan_date, c_date, contract_sum,
-                 crc32_hash, remainder)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """,
-            new_data,
-        )
-
-        # Шаг 8: Обновляем снимки агрегатов
-        cur.execute(
-            "DELETE FROM contract_counts_snapshot WHERE upload_date = %s",
-            [today],
-        )
-
-        for year_col in YEAR_COLS:
-            cur.execute(
-                f"""
-                INSERT INTO contract_counts_snapshot
-                    (upload_date, igk, cfo, year_col, concluded_count)
-                SELECT %s, RIGHT(igk, 4), cfo, %s, COUNT(DISTINCT contract)
-                FROM igk_stat_data
-                WHERE {year_col}=TRUE
-                  AND status IN ({STATUS_PLACEHOLDERS})
-                  AND contract IS NOT NULL AND TRIM(contract) != ''
-                  AND igk IS NOT NULL AND TRIM(igk) != ''
-                  AND cfo IS NOT NULL AND TRIM(cfo) != ''
-                GROUP BY RIGHT(igk, 4), cfo
-                """,
-                [today, year_col, *CONCLUDED],
-            )
-
-        # Шаг 9: Перепривязываем заявки ФЗД
+        _write_positions(cur, positions)
+        _save_snapshots(cur, today)
         relink_znp_parents()
 
-    return f"обработано строк: {len(new_data)}, изменений записано: {len(history)}"
+    return f"обработано строк: {len(positions)}, изменений записано: {len(history)}"
 
 
 # --- Нормализация заявок ФЗД ---
