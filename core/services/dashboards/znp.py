@@ -91,7 +91,8 @@ def znp_cfo_table(igk, year):
         for row in znp_qs.values("parent__cfo").annotate(**znp_aggregates())
     }
     stages = {
-        row["cfo"]: row for row in stages_qs.values("cfo").annotate(**stage_aggregates())
+        row["cfo"]: row
+        for row in stages_qs.values("cfo").annotate(**stage_aggregates())
     }
     available_cfo = (
         IgkStatData.objects.filter(igk=igk)

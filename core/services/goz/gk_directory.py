@@ -223,7 +223,11 @@ def simple_values_from_docx(file):
             if not igk or "гк" in igk.lower() or "номер" in igk.lower():
                 continue
             # В первой колонке должен быть порядковый номер (или пусто/«№»)
-            if num_text and not num_text.isdigit() and num_text.lower() not in ("№", "п/п"):
+            if (
+                num_text
+                and not num_text.isdigit()
+                and num_text.lower() not in ("№", "п/п")
+            ):
                 continue
             values.append(igk)
     return values
@@ -248,7 +252,9 @@ def import_simple_values(values):
             existing += 1
             continue
         try:
-            index[key] = GozContractVat.objects.create(igk=key, vat_rate=DEFAULT_VAT_RATE)
+            index[key] = GozContractVat.objects.create(
+                igk=key, vat_rate=DEFAULT_VAT_RATE
+            )
             added += 1
         except Exception as e:
             errors.append(f"{key}: {e}")

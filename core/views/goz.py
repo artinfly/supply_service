@@ -78,9 +78,13 @@ def _cleanup_old_archives():
 def _save_archive(request, uploaded):
     """Сохраняет загруженный ZIP во временный файл и запоминает путь в сессии."""
     _cleanup_old_archives()
-    _remove_file(request.session.pop(_SESSION_KEY, None))  # предыдущий архив этого пользователя
+    _remove_file(
+        request.session.pop(_SESSION_KEY, None)
+    )  # предыдущий архив этого пользователя
 
-    with tempfile.NamedTemporaryFile(delete=False, prefix=_TEMP_PREFIX, suffix=".zip") as tmp:
+    with tempfile.NamedTemporaryFile(
+        delete=False, prefix=_TEMP_PREFIX, suffix=".zip"
+    ) as tmp:
         for chunk in uploaded.chunks():
             tmp.write(chunk)
     request.session[_SESSION_KEY] = tmp.name
@@ -271,7 +275,9 @@ def upload_gk_directory(request):
 
     try:
         if ext == ".docx":
-            added, existing, errors = import_simple_values(simple_values_from_docx(file))
+            added, existing, errors = import_simple_values(
+                simple_values_from_docx(file)
+            )
             summary = f"Добавлено: {added}, уже были в справочнике: {existing}."
         elif ext in (".xlsx", ".xls"):
             rows = read_sheet_rows(file, ext)

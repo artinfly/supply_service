@@ -21,7 +21,6 @@ from ..services.queries import (
 )
 from .common import base_context, igk_and_cfo_lists
 
-
 # --- КДР и ИГК по годам ---
 
 

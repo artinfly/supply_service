@@ -104,7 +104,9 @@ _SECTIONS = {
 
 # Маршрут -> полное имя права, например "dashboard" -> "core.access_dashboard"
 ROUTE_PERMISSIONS = {
-    route: f"core.{section}" for section, routes in _SECTIONS.items() for route in routes
+    route: f"core.{section}"
+    for section, routes in _SECTIONS.items()
+    for route in routes
 }
 
 

@@ -82,7 +82,7 @@ def key_from_contract(text):
     m = _LAST4_RE.search(text)
     if not m:
         return None
-    igk, rest = m.group(1), text[m.end():]
+    igk, rest = m.group(1), text[m.end() :]
 
     # Число после слова «спец» — всегда спецификация, даже если это 137
     spec_word = _SPEC_WORD_RE.search(text)
@@ -94,7 +94,9 @@ def key_from_contract(text):
         return _compose(igk, sb_m.group(1), spec)
 
     no_m = _CONTRACT_NO_RE.match(rest)
-    spec = spec_word or (no_m.group(1) if no_m and no_m.group(1) != CONTRACT_NO else None)
+    spec = spec_word or (
+        no_m.group(1) if no_m and no_m.group(1) != CONTRACT_NO else None
+    )
     return _compose(igk, spec=spec)
 
 
@@ -111,7 +113,9 @@ def _key_from_label(text):
 
     sb_m = _FILE_SB_RE.match(rest)
     if sb_m:  # 3, 4, 6: «137» после сб — номер договора, отбрасывается в _spec_after_sb
-        return _compose(igk, sb_m.group(1), _spec_after_sb([sb_m.group(2), sb_m.group(3)]))
+        return _compose(
+            igk, sb_m.group(1), _spec_after_sb([sb_m.group(2), sb_m.group(3)])
+        )
 
     spec_m = _FILE_SPEC_RE.match(rest)
     if spec_m:  # 2. ГК_число — спец (в том числе «_137»: без сб это номер спецификации)
