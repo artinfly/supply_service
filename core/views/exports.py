@@ -258,6 +258,124 @@ def export_contract_dupes_by_order(request):
 # --- Экспорт КДР ---
 
 
+# Суммируемые поля строки КДР (для строк «Итого» по ИГК и общего «ИТОГО»)
+KDR_SUM_KEYS = [
+    "total_count",
+    "total_sum",
+    "concl_count",
+    "concl_sum",
+    "year_count",
+    "year_sum",
+    "year_concl_count",
+    "year_concl_sum",
+    "year_not_concl_count",
+    "year_not_concl_sum",
+    "pp_plan",
+    "pp_fact",
+]
+# Номер колонки (с 1) -> формат числа
+KDR_FORMATS = {
+    4: "#,##0.00",
+    6: "#,##0.00",
+    8: "#,##0.00",
+    11: "#,##0.00",
+    15: "#,##0.00",
+    16: "#,##0.00",
+    17: "#,##0.00",
+    10: '0.0"%"',
+    12: '0.0"%"',
+    18: '0.0"%"',
+}
+KDR_WIDTHS = [10, 6, 12, 14, 12, 16, 12, 14, 12, 12, 16, 14, 12, 16, 14, 14, 12, 16, 17]
+
+
+def _kdr_headers(year, period_text):
+    """Заголовки колонок КДР; period_text — « с ДД.ММ.ГГГГ по ДД.ММ.ГГГГ» или пусто."""
+    return [
+        "ИГК",
+        "ЦФО",
+        "Всего договоров, шт.",
+        "Сумма всех договоров, млн.руб.",
+        "Заключено, шт.",
+        "Сумма заключённых договоров (всех), млн.руб.",
+        f"Всего договоров на {year}г., шт.",
+        f"Сумма договоров на {year}г., млн.руб.",
+        f"Заключено договоров на {year}г., шт.",
+        f"% контрактации {year}г. (по количеству)",
+        f"Сумма заключённых договоров на {year}г., млн.руб.",
+        f"% контрактации {year}г. (по сумме)",
+        f"Заключено{period_text}, шт.",
+        f"Не заключено на {year}г., шт.",
+        f"Сумма незаключённых договоров на {year}г., млн.руб.",
+        f"Плановая сумма аванса в {year}г., млн.руб.",
+        f"Фактическая сумма аванса на {year}г., млн.руб.",
+        f"% авансирования на {year}г.",
+        "Примечание",
+    ]
+
+
+def _kdr_row(r, igk_label, cfo_label, delta):
+    """Строка таблицы КДР из агрегатов r; delta — заключено за период."""
+    return [
+        igk_label,
+        cfo_label,
+        _fv(r["total_count"]),
+        _fv(r["total_sum"]),
+        _fv(r["concl_count"]),
+        _fv(r["concl_sum"]),
+        _fv(r["year_count"]),
+        _fv(r["year_sum"]),
+        _fv(r["year_concl_count"]),
+        _pct(r["year_concl_count"], r["year_count"]),
+        _fv(r["year_concl_sum"]),
+        _pct(r["year_concl_sum"], r["year_sum"]),
+        delta,
+        _fv(r["year_not_concl_count"]),
+        _fv(r["year_not_concl_sum"]),
+        _fv(r["pp_plan"]),
+        _fv(r["pp_fact"]),
+        _pct(r["pp_fact"], r["pp_plan"]),
+    ]
+
+
+def _kdr_sum(rows):
+    """Сумма агрегатов по группе строк."""
+    return {k: sum(_fv(r[k]) for r in rows) for k in KDR_SUM_KEYS}
+
+
+def _kdr_table(detail_rows, delta_map):
+    """Строки КДР и их виды: по каждому ИГК «Итого», затем ЦФО; в конце «ИТОГО».
+
+    delta_map: {(последние 4 символа ИГК, ЦФО): заключено за период}; пустой,
+    если период не задан. В «Итого» входят только положительные дельты.
+    """
+    igk_groups = defaultdict(list)
+    for r in detail_rows:
+        igk_groups[r["igk"]].append(r)
+
+    rows, kinds = [], []
+    total_delta = 0
+    for igk, grp in igk_groups.items():
+        deltas = [delta_map.get((_igk4(r["igk"]), r["cfo"]), 0) for r in grp]
+        group_delta = sum(d for d in deltas if d > 0)
+        total_delta += group_delta
+
+        rows.append(_kdr_row(_kdr_sum(grp), igk, "Итого", group_delta))
+        kinds.append("subtotal")
+        for r, delta in zip(grp, deltas):
+            rows.append(_kdr_row(r, "", r["cfo"], delta))
+            kinds.append("normal")
+
+    rows.append(_kdr_row(_kdr_sum(detail_rows), "ИТОГО", "", total_delta))
+    kinds.append("total")
+    return rows, kinds
+
+
+def _ru_date(iso):
+    """«2025-03-15» -> «15.03.2025»."""
+    return datetime.strptime(iso, "%Y-%m-%d").strftime("%d.%m.%Y")
+
+
 @login_required
 def export_kdr(request, year):
     """Экспорт отчёта КДР (контрактация договоров) с опциональным периодом."""
@@ -271,135 +389,27 @@ def export_kdr(request, year):
     if has_period and not (valid_date(start_date) and valid_date(end_date)):
         return JsonResponse({"error": "недопустимая дата периода"}, status=400)
 
+    delta_map = {}
     with connection.cursor() as cur:
         cur.execute(kdr_export(year))
         db_cols = [c[0] for c in cur.description]
         detail_rows = [dict(zip(db_cols, r)) for r in cur.fetchall()]
-
-    delta_map = {}
-    if has_period:
-        delta_sql, delta_params = kdr_delta(yc, start_date, end_date)
-        with connection.cursor() as cur:
-            cur.execute(delta_sql, delta_params)
-            for row in cur.fetchall():
-                delta_map[(row[0], row[1])] = row[2]
-
-    def row_vals(r, igk_label, cfo_label, d_igk, d_cfo, delta_value=None):
-        yn, ys = _fv(r["year_count"]), _fv(r["year_sum"])
-        delta = (
-            delta_value
-            if delta_value is not None
-            else (delta_map.get((_igk4(d_igk), d_cfo), 0) if has_period else 0)
-        )
-        return [
-            igk_label,
-            cfo_label,
-            _fv(r["total_count"]),
-            _fv(r["total_sum"]),
-            _fv(r["concl_count"]),
-            _fv(r["concl_sum"]),
-            _fv(r["year_count"]),
-            _fv(r["year_sum"]),
-            _fv(r["year_concl_count"]),
-            _pct(r["year_concl_count"], yn),
-            _fv(r["year_concl_sum"]),
-            _pct(r["year_concl_sum"], ys),
-            delta,
-            _fv(r["year_not_concl_count"]),
-            _fv(r["year_not_concl_sum"]),
-            _fv(r["pp_plan"]),
-            _fv(r["pp_fact"]),
-            _pct(r["pp_fact"], r["pp_plan"]),
-        ]
-
-    def sum_group(rows):
-        keys = [
-            "total_count",
-            "total_sum",
-            "concl_count",
-            "concl_sum",
-            "year_count",
-            "year_sum",
-            "year_concl_count",
-            "year_concl_sum",
-            "delta_concl_count",
-            "year_not_concl_count",
-            "year_not_concl_sum",
-            "pp_plan",
-            "pp_fact",
-        ]
-        return {k: sum(_fv(r[k]) for r in rows) for k in keys}
-
-    igk_groups = defaultdict(list)
-    for r in detail_rows:
-        igk_groups[r["igk"]].append(r)
-
-    rows, kinds = [], []
-    total_delta_sum = 0
-    for igk, grp in igk_groups.items():
-        delta_sum = 0
         if has_period:
-            for r in grp:
-                delta_val = delta_map.get((_igk4(r["igk"]), r["cfo"]), 0)
-                if delta_val > 0:
-                    delta_sum += delta_val
-        total_delta_sum += delta_sum
+            cur.execute(*kdr_delta(yc, start_date, end_date))
+            delta_map = {(igk, cfo): count for igk, cfo, count in cur.fetchall()}
 
-        rows.append(
-            row_vals(sum_group(grp), igk, "Итого", igk, grp[0]["cfo"], delta_sum)
-        )
-        kinds.append("subtotal")
-
-        for r in grp:
-            rows.append(row_vals(r, "", r["cfo"], r["igk"], r["cfo"]))
-            kinds.append("normal")
-
-    rows.append(row_vals(sum_group(detail_rows), "ИТОГО", "", "", "", total_delta_sum))
-    kinds.append("total")
-
-    if has_period:
-        start_date = datetime.strptime(start_date, "%Y-%m-%d").strftime("%d.%m.%Y")
-        end_date = datetime.strptime(end_date, "%Y-%m-%d").strftime("%d.%m.%Y")
-
-    yy = str(year)
-    period_text = f" с {start_date} по {end_date}" if has_period else ""
-
-    headers = [
-        "ИГК",
-        "ЦФО",
-        "Всего договоров, шт.",
-        "Сумма всех договоров, млн.руб.",
-        "Заключено, шт.",
-        "Сумма заключённых договоров (всех), млн.руб.",
-        f"Всего договоров на {yy}г., шт.",
-        f"Сумма договоров на {yy}г., млн.руб.",
-        f"Заключено договоров на {yy}г., шт.",
-        f"% контрактации {yy}г. (по количеству)",
-        f"Сумма заключённых договоров на {yy}г., млн.руб.",
-        f"% контрактации {yy}г. (по сумме)",
-        f"Заключено{period_text}, шт.",
-        f"Не заключено на {yy}г., шт.",
-        f"Сумма незаключённых договоров на {yy}г., млн.руб.",
-        f"Плановая сумма аванса в {yy}г., млн.руб.",
-        f"Фактическая сумма аванса на {yy}г., млн.руб.",
-        f"% авансирования на {yy}г.",
-        "Примечание",
-    ]
-    formats = {
-        4: "#,##0.00",
-        6: "#,##0.00",
-        8: "#,##0.00",
-        11: "#,##0.00",
-        15: "#,##0.00",
-        16: "#,##0.00",
-        17: "#,##0.00",
-        10: '0.0"%"',
-        12: '0.0"%"',
-        18: '0.0"%"',
-    }
-    col_w = [10, 6, 12, 14, 12, 16, 12, 14, 12, 12, 16, 14, 12, 16, 14, 14, 12, 16, 17]
+    rows, kinds = _kdr_table(detail_rows, delta_map)
+    period_text = f" с {_ru_date(start_date)} по {_ru_date(end_date)}" if has_period else ""
     return xlsx_response(
-        make_wb(f"КДР {year}", headers, col_w, rows, kinds, formats), f"кдр_{year}"
+        make_wb(
+            f"КДР {year}",
+            _kdr_headers(year, period_text),
+            KDR_WIDTHS,
+            rows,
+            kinds,
+            KDR_FORMATS,
+        ),
+        f"кдр_{year}",
     )
 
 
