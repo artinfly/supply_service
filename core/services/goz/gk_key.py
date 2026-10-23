@@ -16,6 +16,11 @@
 и в договоре после слова «спец» (…/255сб/137 от …, спец…./137) — это ключ «0262 137»
 (файл) и «0262/255сб 137» (справочник), они находятся друг по другу.
 «1493», «1493 5», «1493/34сб», «1493/34сб 5» — разные ГК.
+
+Одинаковое окончание у разных ИГК (только для ГК без «сб»). Если два разных длинных
+номера дают один и тот же ключ без сб («…195369» и «…195369» -> «5369»), к ключу
+спереди добавляются первые 4 цифры номера: «2123_5369» и «2527_5369».
+Ключи с «сб» не меняются никогда.
 """
 
 import re
@@ -30,6 +35,9 @@ _SB = r"(\d+)\s*[сc]б"
 
 # Уже готовый ключ: «1493», «1493 5», «1493/34сб», «1493/34сб 5»
 _KEY_RE = re.compile(rf"^(\d{{4}})(?:/{_SB})?(?: (\d+))?$", re.IGNORECASE)
+
+# Готовый ключ с префиксом первых 4 цифр: «2123_5369», «2123_5369 5» (только без сб)
+_PREFIXED_KEY_RE = re.compile(r"^(\d{4})_(\d{4}(?: \d+)?)$")
 
 # Последние 4 цифры длинного номера = ИГК
 _LAST4_RE = re.compile(r"(\d{4})(?!\d)")
@@ -50,6 +58,51 @@ _CONTRACT_NO_RE = re.compile(r"^/(\d+)")
 
 # Спец в договоре: «спец…/138», «спец. …/175», «Спец…205»
 _SPEC_WORD_RE = re.compile(r"спец\D*?(\d+)", re.IGNORECASE)
+
+
+# --- Одинаковое окончание у разных ИГК (ГК без сб) ---
+
+
+def with_prefix(key, number):
+    """«5369» + длинный номер «2123…195369» -> «2123_5369».
+
+    Только для ключей без «сб» и без префикса; остальные возвращаются как есть.
+    """
+    if not key or not number or "сб" in key or _PREFIXED_KEY_RE.match(key):
+        return key
+    return f"{number[:4]}_{key}"
+
+
+def split_prefix(key):
+    """«2123_5369» -> («2123», «5369»); ключ без префикса -> (None, ключ)."""
+    m = _PREFIXED_KEY_RE.match(key or "")
+    return (m.group(1), m.group(2)) if m else (None, key)
+
+
+def prefix_duplicates(items):
+    """Разводит ГК без сб, у которых совпал ключ при разных длинных номерах.
+
+    Args:
+        items: список пар (ключ, длинный номер или None)
+
+    Returns:
+        список ключей той же длины: у совпавших — «первые 4 цифры_ключ»
+    """
+    numbers = {}
+    for key, number in items:
+        if key and number and "сб" not in key:
+            numbers.setdefault(key, set()).add(number)
+    clash = {key for key, nums in numbers.items() if len(nums) > 1}
+    return [with_prefix(key, number) if key in clash else key for key, number in items]
+
+
+def contract_number(text):
+    """Длинный номер ИГК в начале строки «Договор/Дата» («2123…195369/137 от …»)."""
+    m = re.match(r"\s*(\d{5,})", str(text or ""))
+    return m.group(1) if m else None
+
+
+# --- Сборка ключа ---
 
 
 def _compose(igk, sb=None, spec=None):
@@ -126,11 +179,18 @@ def _key_from_label(text):
     return f"{igk}_{rest.lstrip('_/ ')}"
 
 
-def parse_gk_key(value):
-    """Нормализует метку ГК (ключ, имя файла или строку договора) или None."""
+def parse_gk_key(value, allow_prefix=True):
+    """Нормализует метку ГК (ключ, имя файла или строку договора) или None.
+
+    allow_prefix=False — для меток из имени файла: там «6766_1234» означает
+    ГК 6766 со спецификацией 1234, а не префикс (префикс добавляется отдельно).
+    """
     text = str(value or "").strip()
     if not text:
         return None
+
+    if allow_prefix and _PREFIXED_KEY_RE.match(text):
+        return text  # «2123_5369» — уже готовый ключ с префиксом
 
     key_m = _KEY_RE.match(text)
     if key_m:  # уже готовый ключ — берём как есть (спецификация может быть и 137)
@@ -147,3 +207,9 @@ def gk_key(value):
     """Ключ ГК; если разобрать не удалось — строка без изменений."""
     text = str(value or "").strip()
     return parse_gk_key(text) or text
+
+
+def label_key(value):
+    """Ключ ГК из метки имени файла («5369», «9741_255сб_137») — без разбора префикса."""
+    text = str(value or "").strip()
+    return parse_gk_key(text, allow_prefix=False) or text

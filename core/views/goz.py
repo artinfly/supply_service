@@ -37,7 +37,7 @@ from ..services.goz.gk_directory import (
     simple_values_from_docx,
     simple_values_from_rows,
 )
-from ..services.goz.gk_key import gk_key
+from ..services.goz.gk_key import gk_key, split_prefix
 from ..services.reports.excel import xlsx_response
 from .common import base_context, superuser_required
 
@@ -150,6 +150,13 @@ def _save_gk_to_directory(gk_data):
 # --- Страница раздела ---
 
 
+def _label(zip_igk, rec):
+    """Подпись ГК: ключ справочника; ключ с префиксом «2123_5369» — как в архиве."""
+    if rec is None or split_prefix(zip_igk)[0]:
+        return zip_igk
+    return rec.igk
+
+
 def _archive_gk_list(archive_path):
     """Список ГК архива для шага 1: данные из справочника или «новый»."""
     index = directory_index()
@@ -161,7 +168,7 @@ def _archive_gk_list(archive_path):
             {
                 # Найденный ГК показываем ключом справочника («9741/255сб 136»,
                 # хотя в имени файла было «9741_136»), новый — как в имени файла
-                "igk": rec.igk if rec else zip_igk,
+                "igk": _label(zip_igk, rec),
                 "enterprise": (rec and rec.enterprise) or "",
                 "order": (rec and rec.order) or "",
                 "year": (rec and rec.year) or "",
@@ -182,7 +189,7 @@ def _build_report(archive_path, gk_data):
     for zip_igk, plan, fact in goz_analysis.read_archive(archive_path):
         rec = find_gk(zip_igk, index)
         # Та же подпись ГК, что на шаге 1: по ней из формы берутся НДС и изделие
-        label = rec.igk if rec else zip_igk
+        label = _label(zip_igk, rec)
         contracts.append((label, plan, fact))
         if rec:
             extras[label] = {"agent": rec.enterprise or "", "order": rec.order or ""}
@@ -240,6 +247,9 @@ def goz_report(request):
                 ctx["step2"] = True
                 # Разные ИГК с одинаковыми последними 4 цифрами склеиваются в один ключ
                 for key, nums in goz_analysis.same_key_numbers(archive_path).items():
+                    # ГК без сб уже разведены префиксом («2123_5369», «2527_5369»)
+                    if "сб" not in key and len({n[:4] for n in nums}) == len(nums):
+                        continue
                     messages.warning(
                         request,
                         f"ГК «{key}»: в архиве разные ИГК с одинаковыми последними "

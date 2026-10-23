@@ -15,6 +15,7 @@ from core.services.goz import analysis
 from core.services.goz.gk_directory import (
     directory_index,
     find_gk,
+    import_extended_rows,
     import_simple_values,
     simple_values_from_rows,
 )
@@ -239,6 +240,31 @@ class GozTests(TestCase):
         self.assertEqual(find_gk("0262_136", directory_index()).igk, "0262/255сб 136")
         self.assertIsNone(find_gk("9999", directory_index()))
         self.assertEqual(import_simple_values(["1493"]), (0, 1, []))
+
+    def test_profitability_uses_full_cost(self):
+        # Рентабельность = прибыль / (себестоимость + АУР + коммерческие)
+        metrics = analysis._line_metrics(self.PLAN, 20.0)
+        self.assertAlmostEqual(metrics[9], 120 / (800 + 50 + 20))
+
+    def test_same_ending_in_directory(self):
+        added, _updated, errors = import_extended_rows(
+            [
+                ["№", "Предприятие", "Заказ", "Договор/Дата"],
+                [1, "АО А", "З-1", "2123000195369/137 от 01.02.2024"],
+                [2, "АО Б", "З-2", "2527000195369/137 от 01.02.2024"],
+            ]
+        )
+        self.assertEqual((added, errors), (2, []))
+        self.assertEqual(sorted(directory_index()), ["2123_5369", "2527_5369"])
+
+    def test_prefixed_archive_key_finds_plain_record(self):
+        # Старая запись без префикса подходит, только если её номер начинается с префикса
+        GozContractVat.objects.create(
+            igk="5369", contract_date="2123000195369/137 от 01.02.2024"
+        )
+        index = directory_index()
+        self.assertEqual(find_gk("2123_5369", index).igk, "5369")
+        self.assertIsNone(find_gk("2527_5369", index))
 
     def test_archive_errors(self):
         self.client.force_login(make_user("goz", "access_goz_report"))

@@ -6,7 +6,14 @@ from decimal import Decimal
 from django.test import SimpleTestCase
 
 from core.services.goz.analysis import _contract_label
-from core.services.goz.gk_key import gk_key, key_from_contract, parse_gk_key
+from core.services.goz.gk_key import (
+    gk_key,
+    key_from_contract,
+    label_key,
+    parse_gk_key,
+    prefix_duplicates,
+    split_prefix,
+)
 from core.services.importing.excel_import import clean_header
 from core.services.importing.linking import contract_hash
 from core.services.importing.normalize import (
@@ -115,6 +122,28 @@ class GkKeyTests(SimpleTestCase):
         self.assertEqual(parse_gk_key("1493/34сб 5"), "1493/34сб 5")
         self.assertIsNone(parse_gk_key("  "))
         self.assertEqual(gk_key("без номера"), "без номера")
+
+    def test_same_ending_without_sb_gets_prefix(self):
+        """Разные ИГК без сб с одинаковым окончанием разводятся первыми 4 цифрами номера."""
+        keys = prefix_duplicates(
+            [
+                ("5369", "2123000195369"),
+                ("5369", "2527000195369"),
+                ("0087/334сб", "1111000000087"),  # со сб — не меняется
+                ("0087/334сб", "2222000000087"),
+                ("1493", "1234500001493"),  # окончание не совпало — не меняется
+            ]
+        )
+        self.assertEqual(
+            keys, ["2123_5369", "2527_5369", "0087/334сб", "0087/334сб", "1493"]
+        )
+        self.assertEqual(parse_gk_key("2123_5369"), "2123_5369")
+        self.assertEqual(split_prefix("2123_5369"), ("2123", "5369"))
+        self.assertEqual(split_prefix("5369"), (None, "5369"))
+
+    def test_file_label_underscore_is_spec(self):
+        # В имени файла «6766_1234» — ГК 6766 со спецификацией 1234, а не префикс
+        self.assertEqual(label_key("6766_1234"), "6766 1234")
 
     def test_archive_file_names(self):
         self.assertEqual(_contract_label("№ 12345671234_5.xls"), "1234 5")
