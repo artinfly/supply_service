@@ -9,7 +9,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from .gk_key import gk_key
+from .gk_key import label_key, prefix_duplicates
 
 # --- Константы для чтения .xls файлов ---
 
@@ -167,13 +167,13 @@ def _contract_label(filename):
         suffix = (num_match.group(2) or "").strip(" ._")
         if suffix:
             label += f"_{suffix}"
-        return gk_key(label)
+        return label_key(label)
 
     igk_match = _IGK_RE.search(filename)
     if igk_match:
-        return gk_key(igk_match.group(1)[-4:])
+        return label_key(igk_match.group(1)[-4:])
 
-    return gk_key(filename[:-4])
+    return label_key(filename[:-4])
 
 
 def _cell_number(sheet, row, col):
@@ -254,6 +254,7 @@ def read_archive(archive_file):
         ValueError: если в архиве не найдено ни одного .xls файла
     """
     contracts = []
+    numbers = []  # длинный номер ИГК каждого файла — для prefix_duplicates
     with zipfile.ZipFile(archive_file) as zf:
         for info in zf.infolist():
             name = _zip_name(info)
@@ -263,12 +264,19 @@ def read_archive(archive_file):
             page = _PAGE_RE.search(filename)
             if page and int(page.group(1)) % 2 == 1:
                 continue
-            igk = _contract_label(_PAGE_RE.sub("", filename))
+            filename = _PAGE_RE.sub("", filename)
+            igk = _contract_label(filename)
+            num = _NUM_RE.search(filename)
+            numbers.append(num.group(1) if num else None)
             with zf.open(info) as fh:
                 contracts.append(_read_contract_file(igk, fh.read()))
 
     if not contracts:
         raise ValueError("В архиве не найдено ни одного .xls файла")
+
+    # Разные ИГК без сб с одинаковым окончанием: «5369» -> «2123_5369», «2527_5369»
+    keys = prefix_duplicates([(c[0], n) for c, n in zip(contracts, numbers)])
+    contracts = [(key, plan, fact) for key, (_k, plan, fact) in zip(keys, contracts)]
 
     contracts.sort(key=lambda c: (len(c[0]), c[0]))
     return contracts
@@ -295,8 +303,11 @@ def _line_metrics(values, vat_rate):
     credit_pct = values["credit_pct"]
     profit = values["profit"]
     calc_profit = shipment - cost - amr - commercial - vat - credit_pct
-    rent_calc = (calc_profit / cost) if cost else None
-    rent_report = (profit / cost) if cost else None
+    # Рентабельность считается к полной себестоимости: себестоимость + АУР + КР
+    # (в Excel: M = L/(F+G+H), N = K/(F+G+H)); раньше делили только на себестоимость
+    full_cost = cost + amr + commercial
+    rent_calc = (calc_profit / full_cost) if full_cost else None
+    rent_report = (profit / full_cost) if full_cost else None
     return [
         shipment,
         cost,

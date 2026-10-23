@@ -17,7 +17,14 @@ import openpyxl
 import xlrd
 
 from ...models import GozContractVat
-from .gk_key import gk_key, key_from_contract, parse_gk_key
+from .gk_key import (
+    contract_number,
+    gk_key,
+    key_from_contract,
+    parse_gk_key,
+    prefix_duplicates,
+    split_prefix,
+)
 
 # Ставка НДС по умолчанию для новых записей справочника
 DEFAULT_VAT_RATE = Decimal("22.0")
@@ -72,7 +79,18 @@ def find_gk(label, index):
     rec = index.get(key)
     if rec is not None and rec.contract_date:
         return rec
-    return spec_counterpart(key, index) or rec
+    found = spec_counterpart(key, index) or rec
+    if found:
+        return found
+
+    # 3. «2123_5369» из архива, а в справочнике запись «5369» без префикса:
+    #    подходит, только если её длинный номер тоже начинается на 2123
+    prefix, plain = split_prefix(key)
+    if prefix:
+        rec = index.get(plain)
+        if rec and (contract_number(rec.contract_date) or "").startswith(prefix):
+            return rec
+    return None
 
 
 # --- Вспомогательные функции для импорта ---
@@ -112,18 +130,23 @@ def import_extended_rows(rows):
     added = updated = 0
     errors = []
 
+    # Строки файла (первые 4 колонки) без пустых и заголовков
+    parsed = []
     for n, row in enumerate(rows, 1):
-        # Берём первые 4 колонки, дополняем пустыми при необходимости
         cells = [_cell(c) for c in list(row)[:4]]
         cells += [""] * (4 - len(cells))
-        _num, enterprise, order, contract = cells
-
-        # Пропускаем пустые строки и заголовки
         if not any(cells[1:]) or _is_header(cells):
             continue
+        parsed.append((n, cells))
 
-        # Извлекаем ключ ГК из поля «Договор/Дата»
-        key = key_from_contract(contract)
+    # Ключи ГК из «Договор/Дата»; у разных ИГК без сб с одинаковым окончанием —
+    # префикс первых 4 цифр («2123_5369», «2527_5369»), см. gk_key.prefix_duplicates
+    keys = prefix_duplicates(
+        [(key_from_contract(c[3]), contract_number(c[3])) for _, c in parsed]
+    )
+
+    for (n, cells), key in zip(parsed, keys):
+        _num, enterprise, order, contract = cells
         if not key:
             errors.append(f"строка {n}: в «{contract[:40]}» не найден номер ГК")
             continue
