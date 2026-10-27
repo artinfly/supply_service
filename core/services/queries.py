@@ -38,6 +38,12 @@ SAP_CFO = tuple(str(n) for n in range(420, 430))
 # --- Утилиты валидации и форматирования ---
 
 
+def dict_rows(cursor):
+    """Строки результата SQL-запроса как словари {колонка: значение}."""
+    columns = [column[0] for column in cursor.description]
+    return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
+
+
 def valid_date(value):
     """Проверяет, является ли строка валидной датой в формате ГГГГ-ММ-ДД."""
     try:

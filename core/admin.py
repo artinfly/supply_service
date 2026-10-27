@@ -21,6 +21,7 @@ from .models import (
     StagingExcel,
     StagingZnpExcel,
     StagingZnpSAPExcel,
+    SystemEvent,
     ZnpData,
     ZnpDataSAP,
 )
@@ -386,3 +387,20 @@ class UserWithSectionsAdmin(UserAdmin):
     sync_with_external_api.short_description = (
         f"Синхронизация с сервисом персонала (до {BULK_SYNC_LIMIT} за раз)"
     )
+
+
+@admin.register(SystemEvent)
+class SystemEventAdmin(admin.ModelAdmin):
+    """Время последних загрузок (только просмотр: события пишут команды загрузки)."""
+
+    list_display = ("event_key", "event_time")
+    list_filter = ("event_key",)
+    search_fields = ("event_key",)
+    date_hierarchy = "event_time"
+    fields = ("event_key", "event_time")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

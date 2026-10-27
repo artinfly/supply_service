@@ -1,0 +1,10 @@
+{% extends "base_auth.html" %}
+
+{% block head %}<meta http-equiv="refresh" content="0;url={{ url }}">{% endblock %}
+{% block title %}Переход{% endblock %}
+
+{% block content %}
+  <p>Переход на вход…</p>
+  <p class="text-muted">Если страница не открылась сама, нажмите кнопку.</p>
+  <a class="btn-login d-block text-center text-decoration-none" href="{{ url }}">Продолжить</a>
+{% endblock %}

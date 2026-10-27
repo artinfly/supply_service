@@ -21,6 +21,7 @@ from ..services.queries import (
     contract_dupes_by_order,
     contracts_appeared,
     contracts_by_agent_filter,
+    dict_rows,
     distinct_agents,
 )
 from ..services.queries import export_contracts_by_agent as query_contracts_by_agent
@@ -73,10 +74,9 @@ def _export_simple(sql, params, name, headers, col_widths):
     """Выполняет SQL-запрос и возвращает Excel-файл."""
     with connection.cursor() as cur:
         cur.execute(sql, params)
-        cols = [c[0] for c in cur.description]
-        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        rows = dict_rows(cur)
     return xlsx_response(
-        make_wb(name, headers, col_widths, [[row[c] for c in cols] for row in rows]),
+        make_wb(name, headers, col_widths, [list(row.values()) for row in rows]),
         name,
     )
 
@@ -362,7 +362,7 @@ def _kdr_table(detail_rows, delta_map):
 
         rows.append(_kdr_row(_kdr_sum(grp), igk, "Итого", group_delta))
         kinds.append("subtotal")
-        for r, delta in zip(grp, deltas):
+        for r, delta in zip(grp, deltas, strict=True):
             rows.append(_kdr_row(r, "", r["cfo"], delta))
             kinds.append("normal")
 
@@ -392,8 +392,7 @@ def export_kdr(request, year):
     delta_map = {}
     with connection.cursor() as cur:
         cur.execute(kdr_export(year))
-        db_cols = [c[0] for c in cur.description]
-        detail_rows = [dict(zip(db_cols, r)) for r in cur.fetchall()]
+        detail_rows = dict_rows(cur)
         if has_period:
             cur.execute(*kdr_delta(yc, start_date, end_date))
             delta_map = {(igk, cfo): count for igk, cfo, count in cur.fetchall()}
@@ -425,8 +424,7 @@ def export_advances(request, year):
         return JsonResponse({"error": "недопустимый год"}, status=400)
     with connection.cursor() as cur:
         cur.execute(advances(year))
-        cols = [c[0] for c in cur.description]
-        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        rows = dict_rows(cur)
     return build_advances_xlsx(rows, str(year))
 
 
@@ -446,8 +444,7 @@ def export_contracts_by_agent(request, year):
 
     with connection.cursor() as cur:
         cur.execute(sql, params)
-        cols = [c[0] for c in cur.description]
-        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        rows = dict_rows(cur)
 
     headers = [
         "ИГК",

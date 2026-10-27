@@ -67,7 +67,7 @@ def make_wb(sheet_name, headers, col_widths, rows_data, kinds=None, formats=None
     ws.freeze_panes = "A2"  # Фиксируем первую строку (заголовки)
 
     # Форматируем заголовки
-    for ci, (header, width) in enumerate(zip(headers, col_widths), 1):
+    for ci, (header, width) in enumerate(zip(headers, col_widths, strict=True), 1):
         cell = ws.cell(row=1, column=ci, value=header)
         cell.font = _HEADER_FONT
         cell.fill = _HEADER_FILL

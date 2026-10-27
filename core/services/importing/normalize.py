@@ -3,7 +3,7 @@
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 from django.core.management.base import CommandError
 from django.db import connection, transaction
@@ -213,26 +213,26 @@ class Position(NamedTuple):
     Порядок полей совпадает с колонками INSERT в _write_positions.
     """
 
-    igk: Optional[str]
-    c_agent: Optional[str]
-    cfo: Optional[str]
-    contract: Optional[str]
-    status: Optional[str]
-    payment_type: Optional[str]
-    item: Optional[str]
-    order: Optional[str]
-    plan: Optional[Decimal]
-    fact: Optional[Decimal]
-    tolerance: Optional[Decimal]
-    stage: Optional[str]
+    igk: str | None
+    c_agent: str | None
+    cfo: str | None
+    contract: str | None
+    status: str | None
+    payment_type: str | None
+    item: str | None
+    order: str | None
+    plan: Decimal | None
+    fact: Decimal | None
+    tolerance: Decimal | None
+    stage: str | None
     y25: bool
     y26: bool
     y27: bool
-    plan_date: Optional[str]
-    c_date: Optional[str]  # год из «ГодИГК» (имя поля историческое)
-    contract_sum: Optional[Decimal]
+    plan_date: str | None
+    c_date: str | None  # год из «ГодИГК» (имя поля историческое)
+    contract_sum: Decimal | None
     crc32_hash: int
-    remainder: Optional[Decimal]
+    remainder: Decimal | None
 
 
 def _position_key(igk, c_agent, contract, item, order, stage, plan_date) -> tuple:

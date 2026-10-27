@@ -315,10 +315,11 @@ def sap_aggregates(date=None):
         "total_sum": Sum("vv_sum", filter=total_filter),
     }
     for status, condition in sap_status_conditions().items():
-        if date:
-            condition = condition & Q(**{sap_date_field(status): date})
-        aggregates[f"{status}_count"] = Count("id", filter=condition)
-        aggregates[f"{status}_sum"] = Sum("vv_sum", filter=condition)
+        status_filter = (
+            condition & Q(**{sap_date_field(status): date}) if date else condition
+        )
+        aggregates[f"{status}_count"] = Count("id", filter=status_filter)
+        aggregates[f"{status}_sum"] = Sum("vv_sum", filter=status_filter)
     return aggregates
 
 

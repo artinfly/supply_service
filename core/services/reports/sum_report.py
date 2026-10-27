@@ -13,7 +13,6 @@ from copy import copy
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List
 
 from django.http import HttpResponse
 from django.utils import timezone
@@ -221,14 +220,14 @@ def _is_valid_sheet_name(name: str) -> bool:
     return name.strip().isdigit() and len(name.strip()) == 4
 
 
-def parse_sum_report_file(file_stream) -> List[SumReportRow]:
+def parse_sum_report_file(file_stream) -> list[SumReportRow]:
     """Парсит входной Excel-файл и возвращает список строк данных.
 
     Обрабатывает только листы с 4-значными именами (ИГК).
     Определяет формат «длинноцикловые» по заголовку колонки 7.
     """
     wb = load_workbook(file_stream, data_only=True)
-    all_rows: List[SumReportRow] = []
+    all_rows: list[SumReportRow] = []
 
     for ws in wb.worksheets:
         sheet_name = ws.title
@@ -498,13 +497,13 @@ def _filter_table2(rows):
     (Раньше здесь проверялся и статус «ЗнП оформлена», но до этой функции доходят
     только «Заключен» и «Не заключен» — ТЗ п.6, см. generate_single_report.)
     """
-    result = []
-    for r in rows:
-        status = _normalize_condition(r.condition)
-        if status == "заключен":
-            if not (-1 <= r.remains_pay <= 1) and not (-1 <= r.sum_avans <= 1):
-                result.append(r)
-    return result
+    return [
+        r
+        for r in rows
+        if _normalize_condition(r.condition) == "заключен"
+        and not -1 <= r.remains_pay <= 1
+        and not -1 <= r.sum_avans <= 1
+    ]
 
 
 def _filter_table3(rows):
@@ -515,24 +514,18 @@ def _filter_table3(rows):
     в оформленной ЗнП, часть — в ЗнП на оформлении). Суммы аванса в таблицах
     разные, а сумма самого договора в итоге «Всего по ГК» считается один раз.
     """
-    result = []
-    for r in rows:
-        status = _normalize_condition(r.condition)
-        if status == "заключен":
-            if not (-1 <= r.remains_pay <= 1) and not (
-                -1 <= round(r.sum_issued_znp, 2) <= 1
-            ):
-                result.append(r)
-    return result
+    return [
+        r
+        for r in rows
+        if _normalize_condition(r.condition) == "заключен"
+        and not -1 <= r.remains_pay <= 1
+        and not -1 <= round(r.sum_issued_znp, 2) <= 1
+    ]
 
 
 def _filter_table4(rows):
     """Фильтрует строки для таблицы 4: только незаключённые договоры."""
-    result = []
-    for r in rows:
-        if _normalize_condition(r.condition) == "не заключен":
-            result.append(r)
-    return result
+    return [r for r in rows if _normalize_condition(r.condition) == "не заключен"]
 
 
 # --- Запись таблиц в шаблон ---

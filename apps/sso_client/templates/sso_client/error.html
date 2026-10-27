@@ -1,0 +1,10 @@
+{% extends "base_auth.html" %}
+
+{% block title %}Ошибка входа{% endblock %}
+
+{% block content %}
+  <h5 class="mb-3">Не удалось войти</h5>
+  <div class="login-error" role="alert">Вход через сервис авторизации не выполнен: {{ text }}.</div>
+  <p class="text-muted small">Попробуйте ещё раз. Если ошибка повторяется, сообщите администратору.</p>
+  <a class="btn-login d-block text-center text-decoration-none" href="{% url 'sso_client:login' %}">Войти ещё раз</a>
+{% endblock %}

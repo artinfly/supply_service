@@ -42,6 +42,7 @@ from ..services.queries import (
     all_contracts,
     contract_dupes,
     contract_dupes_by_order,
+    dict_rows,
     escape_like,
     history_fact,
     history_plan,
@@ -70,8 +71,7 @@ def _to_json_types(rows):
 
 def _json_rows(cur):
     """Преобразует результат курсора в список словарей."""
-    cols = [c[0] for c in cur.description]
-    return _to_json_types([dict(zip(cols, r)) for r in cur.fetchall()])
+    return _to_json_types(dict_rows(cur))
 
 
 def _json_response(sql, params=None):
@@ -92,7 +92,7 @@ def _igk_response(year, statuses):
         cur.execute(igk_stat(yc, statuses))
         rows = _json_rows(cur)
         cur.execute(igk_stat_total(yc, statuses))
-        rows.append(dict(zip([c[0] for c in cur.description], cur.fetchone())))
+        rows += _json_rows(cur)
     return JsonResponse(rows, safe=False, json_dumps_params={"ensure_ascii": False})
 
 
@@ -265,11 +265,9 @@ def api_all_contracts(request):
 
     with connection.cursor() as cur:
         cur.execute(detail_sql, params)
-        cols = [c[0] for c in cur.description]
-        detail = [dict(zip(cols, r)) for r in cur.fetchall()]
+        detail = dict_rows(cur)
         cur.execute(total_sql, params)
-        total_cols = [c[0] for c in cur.description]
-        total_rows = [dict(zip(total_cols, r)) for r in cur.fetchall()]
+        total_rows = dict_rows(cur)
 
     # Ключ подытога — те же поля, что в GROUP BY запроса итогов
     def group_key(row):

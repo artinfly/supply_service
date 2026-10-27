@@ -1,11 +1,13 @@
 # Зависимости проекта. Установка: pip install -r requirements.txt
+# Версии — как на рабочем сервере (пакеты там не обновляются).
 
 # --- Каркас и окружение ---
 Django==6.1.1                  # веб-фреймворк
-psycopg2-binary==2.9.13        # драйвер PostgreSQL
-whitenoise==6.12.0             # раздача статики без отдельного веб-сервера
+psycopg==3.3.5                 # драйвер PostgreSQL (нужен PostgreSQL\bin в PATH)
 python-dotenv==1.2.3           # чтение настроек из .env
-requests==2.34.2               # синхронизация с HR-сервисом (админка)
+whitenoise==6.12.0             # раздача статики на сервере
+gunicorn==26.2.0               # запуск на сервере (Linux)
+requests==2.34.2               # кадровый сервис (админка)
 
 # --- Документы: чтение и формирование ---
 openpyxl==3.1.5                # .xlsx (договоры, ЗнП, выгрузки)
@@ -15,8 +17,8 @@ python-docx==1.2.0             # .docx (справочник ГК из Word)
 # --- Устанавливаются автоматически вместе с пакетами выше ---
 # Закреплены, чтобы на всех машинах стояли одинаковые версии.
 asgiref==3.12.1                # Django
-sqlparse==0.5.5                # Django
-tzdata==2026.4                 # Django (часовые пояса на Windows)
+sqlparse==0.6.0                # Django
+tzdata==2026.3                 # Django (часовые пояса на Windows)
 et_xmlfile==2.0.0              # openpyxl
 lxml==6.1.3                    # python-docx
 typing_extensions==4.16.0      # python-docx

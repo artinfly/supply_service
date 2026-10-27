@@ -1,0 +1,14 @@
+{% extends "base_auth.html" %}
+
+{% block title %}Нет учётной записи{% endblock %}
+
+{% block content %}
+  <h5 class="mb-3">Нет доступа</h5>
+  <div class="login-error" role="alert">
+    Вы вошли как {{ username }}, но в этом сервисе для вас нет учётной записи. Обратитесь к администратору сервиса.
+  </div>
+  <form method="post" action="{% url 'sso_client:logout' %}">
+    {% csrf_token %}
+    <button type="submit" class="btn-login">Выйти</button>
+  </form>
+{% endblock %}

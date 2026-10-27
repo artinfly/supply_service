@@ -275,8 +275,12 @@ def read_archive(archive_file):
         raise ValueError("В архиве не найдено ни одного .xls файла")
 
     # Разные ИГК без сб с одинаковым окончанием: «5369» -> «2123_5369», «2527_5369»
-    keys = prefix_duplicates([(c[0], n) for c, n in zip(contracts, numbers)])
-    contracts = [(key, plan, fact) for key, (_k, plan, fact) in zip(keys, contracts)]
+    keys = prefix_duplicates(
+        [(c[0], n) for c, n in zip(contracts, numbers, strict=True)]
+    )
+    contracts = [
+        (key, plan, fact) for key, (_k, plan, fact) in zip(keys, contracts, strict=True)
+    ]
 
     contracts.sort(key=lambda c: (len(c[0]), c[0]))
     return contracts
@@ -334,10 +338,11 @@ def _deviation(fact_m, plan_m):
             if isinstance(fv, (int, float)) and isinstance(pv, (int, float))
             else None
         )
-        for fv, pv in zip(fact_m, plan_m)
+        for fv, pv in zip(fact_m, plan_m, strict=True)
     ]
     rel_dev = [
-        (av / pv) if av is not None and pv else None for av, pv in zip(abs_dev, plan_m)
+        (av / pv) if av is not None and pv else None
+        for av, pv in zip(abs_dev, plan_m, strict=True)
     ]
     return abs_dev, rel_dev
 
@@ -409,12 +414,13 @@ def _apply_report_checks(ws, row_idx, metrics):
     фиолетовым при расхождении прибыли в отчёте и расчётной.
     """
     profit_report, profit_calc = metrics[6], metrics[7]
-    if isinstance(profit_report, (int, float)) and isinstance(
-        profit_calc, (int, float)
+    if (
+        isinstance(profit_report, (int, float))
+        and isinstance(profit_calc, (int, float))
+        and abs(profit_report - profit_calc) > _MISMATCH_EPS
     ):
-        if abs(profit_report - profit_calc) > _MISMATCH_EPS:
-            ws.cell(row=row_idx, column=_K_COL).fill = _PROFIT_MISMATCH_FILL
-            ws.cell(row=row_idx, column=_L_COL).fill = _PROFIT_MISMATCH_FILL
+        ws.cell(row=row_idx, column=_K_COL).fill = _PROFIT_MISMATCH_FILL
+        ws.cell(row=row_idx, column=_L_COL).fill = _PROFIT_MISMATCH_FILL
 
     for val, col in ((metrics[8], _M_COL), (metrics[9], _N_COL)):
         if isinstance(val, (int, float)) and val > _RENT_THRESHOLD:
@@ -430,10 +436,13 @@ def _apply_fact_checks(ws, row_idx, fact_extra):
     красным при отрицательном значении ресурсов.
     """
     q_calc, r_report = fact_extra[2], fact_extra[3]
-    if isinstance(q_calc, (int, float)) and isinstance(r_report, (int, float)):
-        if abs(q_calc - r_report) > _MISMATCH_EPS:
-            ws.cell(row=row_idx, column=_Q_COL).fill = _RESOURCE_MISMATCH_FILL
-            ws.cell(row=row_idx, column=_R_COL).fill = _RESOURCE_MISMATCH_FILL
+    if (
+        isinstance(q_calc, (int, float))
+        and isinstance(r_report, (int, float))
+        and abs(q_calc - r_report) > _MISMATCH_EPS
+    ):
+        ws.cell(row=row_idx, column=_Q_COL).fill = _RESOURCE_MISMATCH_FILL
+        ws.cell(row=row_idx, column=_R_COL).fill = _RESOURCE_MISMATCH_FILL
     if isinstance(q_calc, (int, float)) and q_calc < 0:
         ws.cell(row=row_idx, column=_Q_COL).fill = _NEGATIVE_FILL
 
@@ -506,7 +515,7 @@ def build_report(contracts, vat_rates, products=None, extras=None):
 
     # Шапка таблицы
     hdr_aln = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    for ci, (h, w) in enumerate(zip(HEADERS, _COL_WIDTHS), 1):
+    for ci, (h, w) in enumerate(zip(HEADERS, _COL_WIDTHS, strict=True), 1):
         cell = ws.cell(row=2, column=ci, value=h)
         cell.font = _FONT
         cell.border = _BORDER

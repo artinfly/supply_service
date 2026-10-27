@@ -145,7 +145,7 @@ def build_advances_xlsx(rows, year):
         '<row r="1" spans="1:11" ht="26.1" customHeight="1" x14ac:dyDescent="0.2">',
         *[
             f'<c r="{col}1" s="{s}" t="s"><v>{idx}</v></c>'
-            for idx, s, col in zip(hdr_indices, HEADER_STYLES, COLUMNS)
+            for idx, s, col in zip(hdr_indices, HEADER_STYLES, COLUMNS, strict=True)
         ],
         "</row>",
         *[
@@ -155,7 +155,9 @@ def build_advances_xlsx(rows, year):
                 f'<row r="{ri}" spans="1:11" ht="12" customHeight="1" x14ac:dyDescent="0.2">',
                 *[
                     f'<c r="{col}{ri}" s="{s}" t="s"><v>{idx}</v></c>'
-                    for idx, s, col in zip(txt_idx, DATA_STYLES[:8], COLUMNS[:8])
+                    for idx, s, col in zip(
+                        txt_idx, DATA_STYLES[:8], COLUMNS[:8], strict=True
+                    )
                 ],
                 f'<c r="I{ri}" s="{DATA_STYLES[8]}"><v>{spec_sum}</v></c>',
                 f'<c r="J{ri}" s="{DATA_STYLES[9]}"><v>{adv_plan}</v></c>',
@@ -171,9 +173,9 @@ def build_advances_xlsx(rows, year):
 
     # Очищаем кэш сводной таблицы (данные будут пересчитаны при открытии)
     empty_records = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="0"/>'
-    ).encode("utf-8")
+        b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        b'<pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="0"/>'
+    )
 
     # Собираем новый ZIP-архив
     buf = io.BytesIO()

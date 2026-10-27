@@ -145,7 +145,7 @@ def import_extended_rows(rows):
         [(key_from_contract(c[3]), contract_number(c[3])) for _, c in parsed]
     )
 
-    for (n, cells), key in zip(parsed, keys):
+    for (n, cells), key in zip(parsed, keys, strict=True):
         _num, enterprise, order, contract = cells
         if not key:
             errors.append(f"строка {n}: в «{contract[:40]}» не найден номер ГК")

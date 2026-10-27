@@ -1,46 +1,24 @@
-# --- Python ---
-*.py[cod]
-*$py.class
-__pycache__/
-*.egg-info/
-*.egg
-
-# --- Виртуальное окружение ---
+# Виртуальное окружение Python — у каждого своё, создаётся заново по requirements.txt
 .venv/
-venv/
-ENV/
 
-# --- Django ---
-*.log
-*.sqlite3
-db.sqlite3
+# Настройки машины: пароли, ключи, адреса
+.env
+
+# Файлы, которые Python и Django создают сами
+__pycache__/
+*.py[cod]
 staticfiles/
 media/
+*.log
 
-# --- Документы (выгрузки пользователей) ---
+# Выгрузки и загружаемые пользователями файлы
 *.xls
 *.xlsx
 *.zip
-
-# --- Шаблоны отчётов: нужны в git ---
-# Исключения обязательно ПОСЛЕ правил *.xlsx: в .gitignore побеждает последнее правило.
+# Шаблоны отчётов нужны в git (исключение — после правила *.xlsx)
 !core/static/files/*.xlsx
 
-# --- IDE ---
+# Настройки редакторов и системы
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# --- OS ---
-.DS_Store
 Thumbs.db
-
-# --- Переменные окружения ---
-.env
-.env.local
-
-# --- Тесты ---
-.pytest_cache/
-.coverage
-htmlcov/
