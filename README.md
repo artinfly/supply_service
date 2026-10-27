@@ -30,6 +30,7 @@ pip install -r requirements.txt
 copy .env.example .env            # и заполните значения
 python manage.py migrate
 python manage.py createsuperuser
+python manage.py seed_demo        # по желанию: вымышленные договоры и заявки
 python manage.py runserver
 ```
 
@@ -73,6 +74,7 @@ gunicorn config.wsgi --bind 127.0.0.1:8000
 config/                 настройки (settings/base, dev, prod), корневые адреса (/admin/, /reports/, /sso/)
 apps/
   sso_client/           единый вход через сервис авторизации (включается настройкой)
+  demo/                 демо-данные seed_demo (только для разработки)
 core/                   основное приложение: договоры, заявки, сводки, отчёты
   models.py             таблицы БД (договоры, ЗнП, справочники, история, права)
   urls.py               адреса страниц; имена адресов используются в middleware.py
@@ -135,6 +137,15 @@ python manage.py load_znp_sap путь\к\знп_sap.xlsx
    и в `INSERT INTO igk_stat_data` (`_write_positions`).
 4. Поиском по проекту найти `y27` и добавить `y28` рядом (SQL в `queries.py`, шаблоны).
 5. `python manage.py makemigrations` и `python manage.py migrate`, затем перезагрузить файл договоров.
+
+## Демо-данные (только для разработки)
+
+```bash
+python manage.py seed_demo --contracts 150 --seed 1
+```
+
+Создаёт вымышленные выгрузки (договоры двумя загрузками, заявки ФЗД и SAP) и загружает их
+обычными командами загрузки — загруженные ранее данные заменяются. Контрагенты и банки вымышленные.
 
 ## Тесты и форматирование
 
