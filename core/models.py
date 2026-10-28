@@ -100,13 +100,10 @@ class IgkStatData(models.Model):
 
     stage = models.CharField(max_length=250, null=True, verbose_name="Этап графика")
 
-    y25 = models.BooleanField(null=True, verbose_name="Флаг 2025 года")
-    y26 = models.BooleanField(null=True, verbose_name="Флаг 2026 года")
-    y27 = models.BooleanField(null=True, verbose_name="Флаг 2027 года")
-
     # Месяц плановой даты в виде «ГГГГ.ММ» (см. normalize.plan_month)
     plan_date = models.CharField(max_length=50, null=True, verbose_name="Плановая дата")
-    # Историческое имя: на самом деле здесь год из колонки «ГодИГК», а не дата договора
+    # Год позиции — 4 цифры из колонки «ГодИГК» («2026»), см. normalize.igk_year.
+    # По нему фильтруются все отчёты «за год». Имя поля историческое (не дата).
     c_date = models.CharField(max_length=50, null=True, verbose_name="Год ИГК")
 
     # CRC32 от склейки ИГК+контрагент+договор+этап (services/importing/linking.py).
@@ -287,7 +284,8 @@ class ContractCountsSnapshot(models.Model):
     upload_date = models.DateField(verbose_name="Дата загрузки (снимка)")
     igk = models.CharField(max_length=10, verbose_name="Код ИГК")
     cfo = models.CharField(max_length=50, verbose_name="ЦФО")
-    year_col = models.CharField(max_length=5, verbose_name="Колонка года")
+    # Год («2026»). Имя поля историческое: раньше тут было имя флага «y26»
+    year_col = models.CharField(max_length=5, verbose_name="Год")
     concluded_count = models.IntegerField(
         default=0, verbose_name="Количество заключённых"
     )

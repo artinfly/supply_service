@@ -37,7 +37,6 @@ from ..services.queries import (
     POSTPAYMENT,
     SAP_CFO,
     TERMINATED,
-    YEAR_COL,
     ZNP_APPROVED,
     all_contracts,
     contract_dupes,
@@ -52,8 +51,10 @@ from ..services.queries import (
     igk_stat_total,
     kdr,
     needs_znp,
+    parse_year,
     valid_date,
     valid_year,
+    year_sql,
     znp_list,
 )
 
@@ -85,9 +86,10 @@ def _json_response(sql, params=None):
 
 def _igk_response(year, statuses):
     """Возвращает статистику по ИГК с итоговой строкой."""
-    yc = YEAR_COL.get(year)
-    if not yc:
+    year = parse_year(year)
+    if not year:
         return JsonResponse({"error": "недопустимый год"}, status=400)
+    yc = year_sql(year)
     with connection.cursor() as cur:
         cur.execute(igk_stat(yc, statuses))
         rows = _json_rows(cur)
@@ -143,7 +145,7 @@ def _kdr_total_row(rows):
 @login_required
 def api_kdr(request, year):
     """API для таблицы КДР: строки по ИГК и итоговая строка «ИТОГО»."""
-    if year not in YEAR_COL:
+    if not parse_year(year):
         return JsonResponse({"error": "недопустимый год"}, status=400)
     with connection.cursor() as cur:
         cur.execute(kdr(year))
@@ -217,8 +219,7 @@ def api_contract_dupes_by_order(request):
 @login_required
 def api_igk_detail(request, year, igk):
     """API для детализации по конкретному ИГК."""
-    yc = YEAR_COL.get(year)
-    if not yc:
+    if not parse_year(year):
         return JsonResponse({"error": "недопустимый год"}, status=400)
     report_type = request.GET.get("type", "concluded")
     statuses = {"concluded": CONCLUDED, "not_concluded": NOT_CONCL}.get(
@@ -257,8 +258,9 @@ def api_all_contracts(request):
     elif f["raw_statuses"]:
         conditions.append("FALSE")
 
-    if f["year"] in YEAR_COL:
-        conditions.append(f"{YEAR_COL[f['year']]} = TRUE")
+    year = parse_year(f["year"])
+    if year:
+        conditions.append(year_sql(year))
 
     where = "WHERE " + " AND ".join(conditions)
     detail_sql, total_sql = all_contracts(where)
@@ -327,8 +329,9 @@ def api_znp_list(request):
         conditions.append("TRIM(i.cfo) = TRIM(%s)")
         params.append(f["cfo"])
 
-    if f["year"] in YEAR_COL:
-        conditions.append(f"i.{YEAR_COL[f['year']]} = TRUE")
+    year = parse_year(f["year"])
+    if year:
+        conditions.append(year_sql(year, "i."))
 
     status_conditions = [
         ZNP_STATUS_CONDITIONS[s] for s in f["statuses"] if s in ZNP_STATUS_CONDITIONS
@@ -467,7 +470,7 @@ def api_chart_contracts(request):
     igk = request.GET.get("igk", "").strip()
     if not igk:
         return _chart_response([], [])
-    sql, params = contracts_by_cfo(YEAR_COL[str(year)], igk)
+    sql, params = contracts_by_cfo(year_sql(year), igk)
     return _stacked_by_cfo(sql, params, CONTRACT_AGE)
 
 
@@ -482,7 +485,7 @@ def api_chart_znp(request):
         return JsonResponse({"error": "недопустимая дата периода"}, status=400)
     if not igk:
         return _chart_response([], [])
-    sql, params = znp_by_cfo(YEAR_COL[str(year)], igk, start, end)
+    sql, params = znp_by_cfo(year_sql(year, "i."), igk, start, end)
     return _stacked_by_cfo(sql, params, ZNP_STAGES)
 
 

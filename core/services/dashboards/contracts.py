@@ -18,9 +18,9 @@ NOT_CONCL_Q = Q(status__in=NOT_CONCL)
 ADVANCE_Q = Q(payment_type=ADVANCE)
 
 
-def _year_field(year):
-    """Имя флага года: 2025 -> «y25»."""
-    return f"y{str(year)[-2:]}"
+def _year_q(year):
+    """Условие «позиция этого года»: c_date = '2026'."""
+    return Q(c_date=str(year))
 
 
 def total_cards():
@@ -47,7 +47,7 @@ def year_cards(year):
     """Карточки «За год»: позиции выбранного года без расторгнутых."""
     totals = (
         IgkStatData.objects.exclude(status__in=TERMINATED)
-        .filter(HAS_ORDER_Q, contract__isnull=False, **{_year_field(year): True})
+        .filter(HAS_ORDER_Q, _year_q(year), contract__isnull=False)
         .aggregate(
             count=Count("contract", distinct=True),
             plan_sum=Sum("plan"),
@@ -81,7 +81,7 @@ def year_cards(year):
 
 def cfo_table(igk, year):
     """Строки таблицы по ЦФО выбранного ИГК и строка «ИТОГО» в конце."""
-    year_q = Q(**{_year_field(year): True})
+    year_q = _year_q(year)
     available_cfo = (
         IgkStatData.objects.filter(igk=igk)
         .values_list("cfo", flat=True)

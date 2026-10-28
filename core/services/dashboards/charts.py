@@ -40,7 +40,7 @@ SAP_STAGES = tuple(
 # --- SQL-запросы для графиков ---
 
 
-def contracts_by_cfo(year_col, igk):
+def contracts_by_cfo(year_cond, igk):
     """Возвращает SQL для графика контрактации по ЦФО (просроченность договоров).
 
     Группирует незаключённые договоры по степени просроченности плановой даты.
@@ -59,7 +59,7 @@ def contracts_by_cfo(year_col, igk):
         FROM (
             SELECT cfo, plan, to_date(plan_date, 'YYYY.MM') AS due
             FROM igk_stat_data
-            WHERE {year_col} = TRUE
+            WHERE {year_cond}
               AND igk = %s
               AND status IN ({not_concl})
               AND cfo IS NOT NULL AND TRIM(cfo) <> ''
@@ -70,7 +70,7 @@ def contracts_by_cfo(year_col, igk):
     return sql, [igk, *NOT_CONCL]
 
 
-def znp_by_cfo(year_col, igk, start=None, end=None):
+def znp_by_cfo(year_cond, igk, start=None, end=None):
     """Возвращает SQL для графика заявок ФЗД по ЦФО (статусы оформления).
 
     Опционально фильтрует по периоду дат заявок.
@@ -103,7 +103,7 @@ def znp_by_cfo(year_col, igk, start=None, end=None):
             LEFT JOIN znp_data z ON z.parent_id = i.pp_id
             WHERE i.igk = %s
               AND i.status IN ({concluded})
-              AND i.{year_col} = TRUE
+              AND {year_cond}
               AND i.cfo IS NOT NULL AND TRIM(i.cfo) <> ''
               AND i.payment_type IN ('{ADVANCE}', '{POSTPAYMENT}')
               AND (z.id IS NOT NULL OR {needs_znp()})

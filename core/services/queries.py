@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from django.db import connection
 from django.utils import timezone
 
 # --- Константы статусов и типов ---
@@ -25,8 +26,6 @@ POSTPAYMENT = "Постоплата"
 
 ZNP_APPROVED = "Утвержден"
 
-YEARS = [2025, 2026, 2027]
-YEAR_COL = {str(y): f"y{str(y)[2:]}" for y in YEARS}
 
 # Условие наличия заказа (используется в фильтрации)
 HAS_ORDER = '"order" IS NOT NULL AND TRIM("order") != \'\''
@@ -53,13 +52,57 @@ def valid_date(value):
     return True
 
 
+# --- Годы ---
+# Год позиции договора хранится в igk_stat_data.c_date — 4 цифры из колонки
+# «ГодИГК» («2026»). Список годов берётся из загруженных данных, поэтому новый год
+# появляется на страницах сам, без правок кода и миграций.
+
+
+def available_years():
+    """Годы для выбора на страницах: все годы из договоров + текущий год, по возрастанию."""
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT c_date FROM igk_stat_data WHERE c_date ~ '^[0-9]{4}$'"
+        )
+        years = {int(row[0]) for row in cur.fetchall()}
+    years.add(timezone.localdate().year)
+    return sorted(years)
+
+
+def default_year():
+    """Год по умолчанию — последний из доступных."""
+    return available_years()[-1]
+
+
 def valid_year(value):
-    """Возвращает валидный год из YEARS. Если некорректно — последний год из списка."""
+    """Год из списка available_years(); если такого нет — последний доступный."""
+    years = available_years()
     try:
         year = int(value)
     except (TypeError, ValueError):
         year = timezone.localdate().year
-    return year if year in YEARS else YEARS[-1]
+    return year if year in years else years[-1]
+
+
+def parse_year(value):
+    """Год из адреса или параметра запроса, если он есть в available_years().
+
+    «2026» -> 2026; неизвестный год или мусор -> None.
+    """
+    try:
+        year = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return year if year in available_years() else None
+
+
+def year_sql(year, alias=""):
+    """SQL-условие «позиция этого года»: c_date = '2026'.
+
+    year приводится к int, поэтому подставлять его в текст запроса безопасно.
+    alias — префикс таблицы, например «i.».
+    """
+    return f"{alias}c_date = '{int(year)}'"
 
 
 def needs_znp(alias="i"):
@@ -98,7 +141,7 @@ def kdr(year):
     все позиции и группировка по последним 4 цифрам — поэтому цифры
     на экране и в файле могут расходиться.
     """
-    yc = YEAR_COL.get(str(year))
+    yc = year_sql(year)
     cl = _sl(CONCLUDED)
     nl = _sl(NOT_CONCL)
     return f"""
@@ -107,25 +150,25 @@ def kdr(year):
         ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER}), 0)/1e6 AS numeric), 2) AS order_sum,
         COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND status IN ({cl})) AS count_concluded,
         ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND status IN ({cl})), 0)/1e6 AS numeric), 2) AS concluded_order_sum,
-        COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status!='Расторгнут') AS count_curr_year,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS order_sum_curr_year,
-        COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status IN ({cl})) AS count_concluded_curr_year,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status IN ({cl})), 0)/1e6 AS numeric), 2) AS concluded_order_sum_curr_year,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS pp_sum_plan,
-        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS pp_sum_fact,
-        COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND status IN ({nl}) AND {yc}=TRUE) AS count_not_concluded_curr_year,
-        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status IN ({nl})), 0)/1e6 AS numeric), 2) AS not_concluded_order_sum_curr_year,
-        CASE WHEN COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status!='Расторгнут') = 0 THEN 0
-             ELSE CAST(COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status IN ({cl})) * 100.0
-                  / NULLIF(COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status!='Расторгнут'), 0) AS int)
+        COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc} AND status!='Расторгнут') AS count_curr_year,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc} AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS order_sum_curr_year,
+        COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc} AND status IN ({cl})) AS count_concluded_curr_year,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc} AND status IN ({cl})), 0)/1e6 AS numeric), 2) AS concluded_order_sum_curr_year,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc} AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS pp_sum_plan,
+        ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE {HAS_ORDER} AND {yc} AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)/1e6 AS numeric), 2) AS pp_sum_fact,
+        COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND status IN ({nl}) AND {yc}) AS count_not_concluded_curr_year,
+        ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc} AND status IN ({nl})), 0)/1e6 AS numeric), 2) AS not_concluded_order_sum_curr_year,
+        CASE WHEN COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc} AND status!='Расторгнут') = 0 THEN 0
+             ELSE CAST(COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc} AND status IN ({cl})) * 100.0
+                  / NULLIF(COUNT(DISTINCT contract) FILTER (WHERE {HAS_ORDER} AND {yc} AND status!='Расторгнут'), 0) AS int)
         END AS count_concluded_percent_curr_year,
-        CASE WHEN COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status!='Расторгнут'), 0) = 0 THEN 0
-             ELSE CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status IN ({cl})), 0) * 100.0
-                  / NULLIF(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND status!='Расторгнут'), 0) AS int)
+        CASE WHEN COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc} AND status!='Расторгнут'), 0) = 0 THEN 0
+             ELSE CAST(COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc} AND status IN ({cl})), 0) * 100.0
+                  / NULLIF(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc} AND status!='Расторгнут'), 0) AS int)
         END AS order_sum_percent_curr_year,
-        CASE WHEN COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0) = 0 THEN 0
-             ELSE CAST(COALESCE(SUM(fact) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)
-                  / NULLIF(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0) * 100 AS int)
+        CASE WHEN COALESCE(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc} AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0) = 0 THEN 0
+             ELSE CAST(COALESCE(SUM(fact) FILTER (WHERE {HAS_ORDER} AND {yc} AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0)
+                  / NULLIF(SUM(plan) FILTER (WHERE {HAS_ORDER} AND {yc} AND payment_type='{ADVANCE}' AND status!='Расторгнут'), 0) * 100 AS int)
         END AS pp_percent
     FROM igk_stat_data
     GROUP BY igk ORDER BY igk
@@ -147,7 +190,7 @@ _IGK_STAT_COLS = f"""
                   - COALESCE(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}'), 0))*100.0 / NULLIF(SUM(plan),0) AS numeric), 0) AS remain_percent,
         COUNT(*) AS pp_quantity
     FROM igk_stat_data
-    WHERE {{yc}} = TRUE AND status IN ({{sl}})
+    WHERE {{yc}} AND status IN ({{sl}})
 """
 
 
@@ -240,8 +283,9 @@ def dupes_filter(cfo, year):
     if cfo:
         conditions.append("TRIM(cfo) = %s")
         params.append(cfo)
-    if year in YEAR_COL:
-        conditions.append(f"{YEAR_COL[year]} = TRUE")
+    year = parse_year(year)
+    if year:
+        conditions.append(year_sql(year))
     return conditions, params
 
 
@@ -293,7 +337,7 @@ def contract_dupes_by_order(cfo=None, year=None):
 
 def igk_detail(year, igk, statuses):
     """Возвращает SQL для детализации договоров по конкретному ИГК."""
-    yc = YEAR_COL.get(str(year))
+    yc = year_sql(year)
     sl = _sl(statuses)
     return f"""
         SELECT contract, c_agent, status,
@@ -303,7 +347,7 @@ def igk_detail(year, igk, statuses):
             ROUND(CAST(SUM(fact) AS numeric), 2) AS fact_sum,
             ROUND(CAST(SUM(plan)-SUM(COALESCE(fact,0)) AS numeric), 2) AS remain
         FROM igk_stat_data
-        WHERE igk LIKE %s AND {yc}=TRUE AND status IN ({sl})
+        WHERE igk LIKE %s AND {yc} AND status IN ({sl})
           AND payment_type IS NOT NULL AND TRIM(payment_type) != ''
         GROUP BY contract, c_agent, status, payment_type, item, "order", stage
         ORDER BY contract, payment_type
@@ -318,29 +362,28 @@ ALL_CONTRACTS_GROUP = ("igk", "c_agent", "contract", "status", "item", "order")
 def all_contracts(where):
     """Два SQL-запроса реестра «Все договоры»: строки позиций и подытоги по договору.
 
-    Подытог считается по договору целиком, через все годы: флаги y25/y26/y27
-    в нём — «есть хоть одна позиция в этом году» (BOOL_OR). Раньше годы были
-    в GROUP BY, и у договора с этапами в разных годах получалось несколько
-    подытогов, из которых на экран попадал только последний.
+    Подытог считается по договору целиком, через все годы (год в GROUP BY не
+    входит): иначе у договора с этапами в разных годах получалось бы несколько
+    подытогов.
     """
     detail = f"""
         SELECT igk, c_agent, contract, status,
             COALESCE(payment_type,'ИНОЕ') AS payment_type,
-            item, "order", TRIM(stage) AS stage, y25, y26, y27,
+            item, "order", TRIM(stage) AS stage, c_date,
             ROUND(CAST(SUM(plan) AS numeric), 2) AS spec_sum,
             ROUND(CAST(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}') AS numeric), 2) AS pp_sum,
             ROUND(CAST(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}') AS numeric), 2) AS pp_fact,
             ROUND(CAST(SUM(plan) - SUM(COALESCE(fact,0)) AS numeric), 2) AS pp_remain,
             0 AS is_subtotal
         FROM igk_stat_data {where}
-        GROUP BY igk, c_agent, contract, status, payment_type, item, "order", stage, y25, y26, y27
+        GROUP BY igk, c_agent, contract, status, payment_type, item, "order", stage, c_date
         ORDER BY igk NULLS LAST, contract, payment_type, stage
     """
     total = f"""
         SELECT igk, c_agent, contract, status,
             'ИТОГО' AS payment_type,
             item, "order", NULL AS stage,
-            BOOL_OR(y25) AS y25, BOOL_OR(y26) AS y26, BOOL_OR(y27) AS y27,
+            NULL AS c_date,
             ROUND(CAST(SUM(plan) AS numeric), 2) AS spec_sum,
             ROUND(CAST(SUM(plan) FILTER (WHERE payment_type='{ADVANCE}') AS numeric), 2) AS pp_sum,
             ROUND(CAST(SUM(fact) FILTER (WHERE payment_type='{ADVANCE}') AS numeric), 2) AS pp_fact,
@@ -358,7 +401,7 @@ def all_contracts(where):
 
 def advances(year):
     """Возвращает SQL для экспорта отчёта по авансам."""
-    yc = YEAR_COL.get(str(year))
+    yc = year_sql(year)
     # «Заключён» — если хотя бы одна позиция договора в статусе из CONCLUDED,
     # как на сводках. Раньше бралось MAX(status) (по алфавиту), и «Приостановлен»
     # считался незаключённым, хотя на сводках он заключённый.
@@ -371,7 +414,7 @@ def advances(year):
                               WHEN payment_type='{ADVANCE}' THEN plan ELSE 0 END) AS numeric),2) AS advance_plan,
             ROUND(CAST(SUM(CASE WHEN payment_type='{ADVANCE}' THEN COALESCE(fact,0) ELSE 0 END) AS numeric),2) AS advance_fact
         FROM igk_stat_data
-        WHERE {yc}=TRUE AND status!='Расторгнут'
+        WHERE {yc} AND status!='Расторгнут'
           AND payment_type IN ('{ADVANCE}','{POSTPAYMENT}')
           AND igk IS NOT NULL AND TRIM(igk)!=''
           AND cfo IS NOT NULL AND TRIM(cfo)!=''
@@ -386,7 +429,7 @@ def kdr_export(year):
 
     В отличие от kdr() учитывает и позиции без заказа (см. комментарий там).
     """
-    yc = YEAR_COL.get(str(year))
+    yc = year_sql(year)
     cl = _sl(CONCLUDED)
     nl = _sl(NOT_CONCL)
     return f"""
@@ -395,14 +438,14 @@ def kdr_export(year):
             ROUND(CAST(COALESCE(SUM(plan),0)/1e6 AS numeric),2) AS total_sum,
             COUNT(DISTINCT contract) FILTER (WHERE status IN ({cl})) AS concl_count,
             ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE status IN ({cl})),0)/1e6 AS numeric),2) AS concl_sum,
-            COUNT(DISTINCT contract) FILTER (WHERE {yc}=TRUE AND status!='Расторгнут') AS year_count,
-            ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {yc}=TRUE AND status!='Расторгнут'),0)/1e6 AS numeric),2) AS year_sum,
-            COUNT(DISTINCT contract) FILTER (WHERE {yc}=TRUE AND status IN ({cl})) AS year_concl_count,
-            ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {yc}=TRUE AND status IN ({cl})),0)/1e6 AS numeric),2) AS year_concl_sum,
-            COUNT(DISTINCT contract) FILTER (WHERE {yc}=TRUE AND status IN ({nl})) AS year_not_concl_count,
-            ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {yc}=TRUE AND status IN ({nl})),0)/1e6 AS numeric),2) AS year_not_concl_sum,
-            ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'),0)/1e6 AS numeric),2) AS pp_plan,
-            ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE {yc}=TRUE AND payment_type='{ADVANCE}' AND status!='Расторгнут'),0)/1e6 AS numeric),2) AS pp_fact,
+            COUNT(DISTINCT contract) FILTER (WHERE {yc} AND status!='Расторгнут') AS year_count,
+            ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {yc} AND status!='Расторгнут'),0)/1e6 AS numeric),2) AS year_sum,
+            COUNT(DISTINCT contract) FILTER (WHERE {yc} AND status IN ({cl})) AS year_concl_count,
+            ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {yc} AND status IN ({cl})),0)/1e6 AS numeric),2) AS year_concl_sum,
+            COUNT(DISTINCT contract) FILTER (WHERE {yc} AND status IN ({nl})) AS year_not_concl_count,
+            ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {yc} AND status IN ({nl})),0)/1e6 AS numeric),2) AS year_not_concl_sum,
+            ROUND(CAST(COALESCE(SUM(plan) FILTER (WHERE {yc} AND payment_type='{ADVANCE}' AND status!='Расторгнут'),0)/1e6 AS numeric),2) AS pp_plan,
+            ROUND(CAST(COALESCE(SUM(fact) FILTER (WHERE {yc} AND payment_type='{ADVANCE}' AND status!='Расторгнут'),0)/1e6 AS numeric),2) AS pp_fact,
             0 AS delta_concl_count
         FROM igk_stat_data
         WHERE igk IS NOT NULL AND TRIM(igk)!='' AND cfo IS NOT NULL AND TRIM(cfo)!=''
@@ -411,7 +454,7 @@ def kdr_export(year):
     """
 
 
-def kdr_delta(yc, start_date, end_date):
+def kdr_delta(year, start_date, end_date):
     """Возвращает SQL и параметры для расчёта дельты заключённых договоров между двумя датами."""
     return """
         with data_t1 as (
@@ -432,16 +475,16 @@ def kdr_delta(yc, start_date, end_date):
         full outer join data_t2 t2 using(igk, cfo)
     """, [
         start_date,
-        yc,
+        str(year),
         end_date,
-        yc,
+        str(year),
     ]
 
 
-def contracts_by_agent_filter(yc, agent):
+def contracts_by_agent_filter(year, agent):
     """Формирует условия и параметры для фильтрации договоров по контрагенту."""
     conditions = [
-        f"{yc}=TRUE",
+        year_sql(year),
         "contract IS NOT NULL AND TRIM(contract)!=''",
         "payment_type IS NOT NULL AND TRIM(payment_type)!=''",
     ]

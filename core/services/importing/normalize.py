@@ -14,7 +14,6 @@ from ..queries import (
     CONCLUDED,
     NOT_CONCL,
     POSTPAYMENT,
-    YEARS,
 )
 from .linking import contract_hash, relink_znp_parents
 
@@ -22,7 +21,6 @@ from .linking import contract_hash, relink_znp_parents
 
 
 TWO_PLACES = Decimal("0.01")
-YEAR_COLS = [f"y{str(y)[2:]}" for y in YEARS]
 STATUS_PLACEHOLDERS = ", ".join(["%s"] * len(CONCLUDED))
 
 # Маппинг русских названий месяцев для парсинга дат
@@ -61,14 +59,13 @@ def to_decimal(value):
         return None
 
 
-def year_flags(god_igk):
-    """Возвращает кортеж булевых флагов годов (y25, y26, y27) для значения ГодИГК."""
-    try:
-        year = int(str(god_igk).strip()[:4])
-    except (ValueError, TypeError):
-        year = None
+def igk_year(god_igk):
+    """Год из колонки «ГодИГК» как строка из 4 цифр: «2026», « 2025 г.» -> «2025».
 
-    return tuple(year == y for y in YEARS)
+    Любой год подходит без правок кода. Пусто или не год -> None.
+    """
+    text = str(god_igk).strip()[:4] if god_igk is not None else ""
+    return text if len(text) == 4 and text.isdigit() else None
 
 
 def norm(value):
@@ -225,11 +222,8 @@ class Position(NamedTuple):
     fact: Decimal | None
     tolerance: Decimal | None
     stage: str | None
-    y25: bool
-    y26: bool
-    y27: bool
     plan_date: str | None
-    c_date: str | None  # год из «ГодИГК» (имя поля историческое)
+    c_date: str | None  # год из «ГодИГК», 4 цифры (имя поля историческое)
     contract_sum: Decimal | None
     crc32_hash: int
     remainder: Decimal | None
@@ -314,11 +308,8 @@ def _read_contract_staging(cur) -> list[Position]:
                 fact=to_decimal(fact),
                 tolerance=to_decimal(tolerance),
                 stage=norm(stage),
-                y25=year_flags(god_igk)[0],
-                y26=year_flags(god_igk)[1],
-                y27=year_flags(god_igk)[2],
                 plan_date=plan_month(plan_date),
-                c_date=norm(god_igk),
+                c_date=igk_year(god_igk),
                 contract_sum=to_decimal(contract_sum),
                 crc32_hash=contract_hash(
                     norm(igk), norm(agent), norm(contract), norm(stage)
@@ -425,9 +416,9 @@ def _write_positions(cur, positions: list[Position]) -> None:
         INSERT INTO igk_stat_data
             (igk, c_agent, cfo, contract, status, payment_type,
              item, "order", plan, fact, tolerance, stage,
-             y25, y26, y27, plan_date, c_date, contract_sum,
+             plan_date, c_date, contract_sum,
              crc32_hash, remainder)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """,
         positions,
     )
@@ -436,22 +427,22 @@ def _write_positions(cur, positions: list[Position]) -> None:
 def _save_snapshots(cur, today) -> None:
     """Снимок числа заключённых договоров по ИГК/ЦФО/году — для дельты в выгрузке КДР."""
     cur.execute("DELETE FROM contract_counts_snapshot WHERE upload_date = %s", [today])
-    for year_col in YEAR_COLS:
-        cur.execute(
-            f"""
-            INSERT INTO contract_counts_snapshot
-                (upload_date, igk, cfo, year_col, concluded_count)
-            SELECT %s, RIGHT(igk, 4), cfo, %s, COUNT(DISTINCT contract)
-            FROM igk_stat_data
-            WHERE {year_col}=TRUE
-              AND status IN ({STATUS_PLACEHOLDERS})
-              AND contract IS NOT NULL AND TRIM(contract) != ''
-              AND igk IS NOT NULL AND TRIM(igk) != ''
-              AND cfo IS NOT NULL AND TRIM(cfo) != ''
-            GROUP BY RIGHT(igk, 4), cfo
-            """,
-            [today, year_col, *CONCLUDED],
-        )
+    # Сразу по всем годам: в year_col пишется сам год («2026») из c_date
+    cur.execute(
+        f"""
+        INSERT INTO contract_counts_snapshot
+            (upload_date, igk, cfo, year_col, concluded_count)
+        SELECT %s, RIGHT(igk, 4), cfo, c_date, COUNT(DISTINCT contract)
+        FROM igk_stat_data
+        WHERE c_date IS NOT NULL
+          AND status IN ({STATUS_PLACEHOLDERS})
+          AND contract IS NOT NULL AND TRIM(contract) != ''
+          AND igk IS NOT NULL AND TRIM(igk) != ''
+          AND cfo IS NOT NULL AND TRIM(cfo) != ''
+        GROUP BY RIGHT(igk, 4), cfo, c_date
+        """,
+        [today, *CONCLUDED],
+    )
 
 
 def normalize_contracts():
@@ -536,26 +527,24 @@ def normalize_znp():
                 "данные не изменены. Проверьте, что выбран нужный тип файла."
             )
 
-        new_data = []
-
-        for r in staging_rows:
-            new_data.append(
-                (
-                    None,  # parent_id (заполняется позже)
-                    norm(r[1]),  # plan_doc
-                    norm(r[2]),  # payment_purpose
-                    parse_date(r[3]),  # plan_payment_date
-                    parse_date(r[4]),  # fact_payment_date
-                    to_decimal(r[5]),  # plan_sum
-                    to_decimal(r[6]),  # fact_sum
-                    r[0],  # crc32_hash
-                    norm(r[7]),  # stage
-                    norm(r[8]),  # znp_igk
-                    norm(r[9]),  # znp_payment_type
-                    norm(r[10]),  # znp_status
-                    parse_date(r[11]),  # znp_date
-                )
+        new_data = [
+            (
+                None,  # parent_id (заполняется позже)
+                norm(r[1]),  # plan_doc
+                norm(r[2]),  # payment_purpose
+                parse_date(r[3]),  # plan_payment_date
+                parse_date(r[4]),  # fact_payment_date
+                to_decimal(r[5]),  # plan_sum
+                to_decimal(r[6]),  # fact_sum
+                r[0],  # crc32_hash
+                norm(r[7]),  # stage
+                norm(r[8]),  # znp_igk
+                norm(r[9]),  # znp_payment_type
+                norm(r[10]),  # znp_status
+                parse_date(r[11]),  # znp_date
             )
+            for r in staging_rows
+        ]
 
         cur.execute("TRUNCATE znp_data RESTART IDENTITY")
         cur.executemany(

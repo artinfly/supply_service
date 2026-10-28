@@ -55,7 +55,7 @@ class ContractsUploadTests(TestCase):
 
         position = IgkStatData.objects.get(order="1001")
         self.assertEqual(position.plan_date, "2026.03")
-        self.assertTrue(position.y26)
+        self.assertEqual(position.c_date, "2026")
         self.assertEqual(position.plan, 1000)
         self.assertEqual(
             list(NsiIgk.objects.values_list("igk", flat=True)), ["000000001111"]

@@ -17,12 +17,12 @@ from core.services.goz.gk_key import (
 from core.services.importing.excel_import import clean_header
 from core.services.importing.linking import contract_hash
 from core.services.importing.normalize import (
+    igk_year,
     parse_date,
     plan_month,
     status_group,
     to_decimal,
     values_equal,
-    year_flags,
 )
 
 
@@ -48,10 +48,12 @@ class NumbersAndDatesTests(SimpleTestCase):
         self.assertIsNone(plan_month(""))
         self.assertIsNone(plan_month("март"))
 
-    def test_year_flags(self):
-        self.assertEqual(year_flags("2026"), (False, True, False))
-        self.assertEqual(year_flags(" 2025 г."), (True, False, False))
-        self.assertEqual(year_flags(None), (False, False, False))
+    def test_igk_year(self):
+        self.assertEqual(igk_year("2026"), "2026")
+        self.assertEqual(igk_year(" 2025 г."), "2025")
+        self.assertEqual(igk_year(2031), "2031")  # новый год — без правок кода
+        self.assertIsNone(igk_year(None))
+        self.assertIsNone(igk_year("нет"))
 
     def test_parse_date(self):
         self.assertEqual(parse_date("15.03.2026"), date(2026, 3, 15))

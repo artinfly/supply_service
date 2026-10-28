@@ -40,7 +40,7 @@
             <label class="filter-label">Год</label>
             <select id="filter-year" class="filter-select">
                 <option value="all">Все</option>
-                {% for y, yc in year_cols %}
+                {% for y in years %}
                 <option value="{{ y }}">{{ y }}</option>
                 {% endfor %}
             </select>

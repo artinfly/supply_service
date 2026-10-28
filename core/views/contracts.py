@@ -15,7 +15,8 @@ from ..services.queries import (
     CONCLUDED,
     NOT_CONCL,
     TERMINATED,
-    YEARS,
+    available_years,
+    default_year,
     distinct_cfo,
     valid_year,
 )
@@ -40,7 +41,7 @@ def kdr_table(request, year):
 @login_required
 def kdr_table_default(request):
     """Перенаправление на КДР за последний год."""
-    return redirect("kdr_table", year=str(YEARS[-1]))
+    return redirect("kdr_table", year=str(default_year()))
 
 
 # Три таблицы ИГК (заключённые / незаключённые / расторгнутые) устроены
@@ -79,7 +80,7 @@ def igk_concluded_table(request, year):
 
 @login_required
 def igk_concluded_table_default(request):
-    return redirect("igk_concluded_table", year=str(YEARS[-1]))
+    return redirect("igk_concluded_table", year=str(default_year()))
 
 
 @login_required
@@ -90,7 +91,7 @@ def igk_not_concluded_table(request, year):
 
 @login_required
 def igk_not_concluded_table_default(request):
-    return redirect("igk_not_concluded_table", year=str(YEARS[-1]))
+    return redirect("igk_not_concluded_table", year=str(default_year()))
 
 
 @login_required
@@ -101,7 +102,7 @@ def igk_terminated_table(request, year):
 
 @login_required
 def igk_terminated_table_default(request):
-    return redirect("igk_terminated_table", year=str(YEARS[-1]))
+    return redirect("igk_terminated_table", year=str(default_year()))
 
 
 # --- Реестр всех договоров ---
@@ -174,7 +175,7 @@ def dashboard(request):
     ctx = base_context()
     ctx.update(
         {
-            "available_years": YEARS,
+            "available_years": available_years(),
             "selected_year": str(year),
             "available_igk": available_igk,
             "selected_igk": selected_igk,

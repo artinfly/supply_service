@@ -21,7 +21,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils.deprecation import MiddlewareMixin
 
-from .services.queries import YEARS
+from .services.queries import available_years
 
 logger = logging.getLogger(__name__)
 
@@ -155,4 +155,6 @@ class SectionAccessMiddleware(MiddlewareMixin):
         if wants_json:
             return JsonResponse({"error": "Нет доступа к разделу"}, status=403)
 
-        return render(request, "access_denied.html", {"years": YEARS}, status=403)
+        return render(
+            request, "access_denied.html", {"years": available_years()}, status=403
+        )

@@ -15,7 +15,6 @@ from django.http import JsonResponse
 from django.shortcuts import render
 
 from ..services.queries import (
-    YEAR_COL,
     advances,
     contract_dupes,
     contract_dupes_by_order,
@@ -31,6 +30,7 @@ from ..services.queries import (
     history_status,
     kdr_delta,
     kdr_export,
+    parse_year,
     valid_date,
 )
 from ..services.reports.excel import make_wb, xlsx_response
@@ -82,8 +82,8 @@ def _export_simple(sql, params, name, headers, col_widths):
 
 
 def _year_check(year):
-    """Проверяет, существует ли колонка года. Возвращает имя колонки или None."""
-    return YEAR_COL.get(str(year))
+    """Год из адреса (int) или None, если это не год."""
+    return parse_year(year)
 
 
 # --- Экспорт истории изменений ---
@@ -379,8 +379,7 @@ def _ru_date(iso):
 @login_required
 def export_kdr(request, year):
     """Экспорт отчёта КДР (контрактация договоров) с опциональным периодом."""
-    yc = _year_check(year)
-    if not yc:
+    if not _year_check(year):
         return JsonResponse({"error": "недопустимый год"}, status=400)
 
     start_date = request.GET.get("start", "").strip()
@@ -394,7 +393,7 @@ def export_kdr(request, year):
         cur.execute(kdr_export(year))
         detail_rows = dict_rows(cur)
         if has_period:
-            cur.execute(*kdr_delta(yc, start_date, end_date))
+            cur.execute(*kdr_delta(_year_check(year), start_date, end_date))
             delta_map = {(igk, cfo): count for igk, cfo, count in cur.fetchall()}
 
     rows, kinds = _kdr_table(detail_rows, delta_map)
@@ -434,12 +433,12 @@ def export_advances(request, year):
 @login_required
 def export_contracts_by_agent(request, year):
     """Экспорт договоров по контрагенту за год."""
-    yc = _year_check(year)
-    if not yc:
+    year = _year_check(year)
+    if not year:
         return JsonResponse({"error": "недопустимый год"}, status=400)
 
     agent = request.GET.get("agent", "").strip()
-    conditions, params = contracts_by_agent_filter(yc, agent)
+    conditions, params = contracts_by_agent_filter(year, agent)
     sql = query_contracts_by_agent(conditions)
 
     with connection.cursor() as cur:

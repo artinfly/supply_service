@@ -32,9 +32,8 @@ def percent(part, whole):
 
 
 def filter_by_year(queryset, year, field_prefix=""):
-    """Фильтрует queryset по годовому флагу (y25, y26, ...)."""
-    field_name = f"{field_prefix}y{str(year)[-2:]}"
-    return queryset.filter(**{field_name: True})
+    """Фильтрует queryset по году позиции договора (поле c_date = «2026»)."""
+    return queryset.filter(**{f"{field_prefix}c_date": str(year)})
 
 
 # --- Дашборд договоров: константы и функции ---

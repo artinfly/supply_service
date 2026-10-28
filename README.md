@@ -129,14 +129,12 @@ python manage.py load_znp_sap путь\к\знп_sap.xlsx
 Если в файле нет ни одной подходящей строки (например, выбран не тот тип файла),
 загрузка отменяется и прежние данные остаются.
 
-## Добавление нового года (например, 2028)
+## Годы
 
-1. `core/services/queries.py`: `YEARS = [2025, 2026, 2027, 2028]`.
-2. `core/models.py`, модель `IgkStatData`: поле `y28 = models.BooleanField(null=True, ...)`.
-3. `core/services/importing/normalize.py`: добавить `y28` в `Position`, в `_read_contract_staging`
-   и в `INSERT INTO igk_stat_data` (`_write_positions`).
-4. Поиском по проекту найти `y27` и добавить `y28` рядом (SQL в `queries.py`, шаблоны).
-5. `python manage.py makemigrations` и `python manage.py migrate`, затем перезагрузить файл договоров.
+Год позиции договора — поле `c_date` в `igk_stat_data`: 4 цифры из колонки «ГодИГК» файла
+договоров («2026»). Все отчёты «за год» фильтруют по нему (`queries.year_sql`), а список
+годов на страницах берётся из загруженных данных (`queries.available_years`) плюс текущий год.
+Новый год появляется сам после загрузки файла договоров — правки кода и миграции не нужны.
 
 ## Демо-данные (только для разработки)
 

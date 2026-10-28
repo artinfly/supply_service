@@ -18,7 +18,7 @@ from ..services.dashboards import znp as znp_cards
 from ..services.dashboards.cards import ZNP_STAGE_NAMES
 from ..services.dashboards.sap_status import SAP_STAGE_NAMES, sap_second_date
 from ..services.queries import (
-    YEARS,
+    available_years,
     distinct_sap_cfo,
     distinct_sap_igk,
     valid_date,
@@ -74,7 +74,7 @@ def znp_table(request):
     ctx = base_context()
     ctx.update(
         {
-            "available_years": YEARS,
+            "available_years": available_years(),
             "selected_year": str(year),
             "available_igk": available_igk,
             "selected_igk": selected_igk,

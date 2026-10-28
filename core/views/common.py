@@ -6,16 +6,16 @@ from django.contrib import messages
 from django.db import connection
 from django.shortcuts import redirect
 
-from ..services.queries import YEARS, distinct_cfo, distinct_igk_suffixes
+from ..services.queries import available_years, distinct_cfo, distinct_igk_suffixes
 
 
 def base_context():
     """Контекст, который нужен каждой странице: годы для меню и фильтров."""
+    # Годы берутся из загруженных договоров (см. queries.available_years)
+    years = available_years()
     return {
-        "years": YEARS,
-        # Пары (2025, "y25") — для чекбоксов годов в фильтрах реестров
-        "year_cols": [(y, f"y{str(y)[2:]}") for y in YEARS],
-        "last_year": YEARS[-1],
+        "years": years,
+        "last_year": years[-1],
     }
 
 

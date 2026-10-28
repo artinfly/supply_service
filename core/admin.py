@@ -49,8 +49,8 @@ class GozContractVatAdmin(admin.ModelAdmin):
 
 @admin.register(IgkStatData)
 class IgkStatDataAdmin(admin.ModelAdmin):
-    list_display = ("igk", "c_agent", "cfo", "contract", "status", "y25", "y26", "y27")
-    list_filter = ("status", "payment_type", "y25", "y26", "y27")
+    list_display = ("igk", "c_agent", "cfo", "contract", "status", "c_date")
+    list_filter = ("status", "payment_type", "c_date")
     search_fields = ("igk", "c_agent", "contract")
 
 

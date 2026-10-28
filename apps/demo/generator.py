@@ -28,9 +28,13 @@ from core.services.queries import (
     POSTPAYMENT,
     SAP_CFO,
     TERMINATED,
-    YEARS,
     ZNP_APPROVED,
 )
+
+# Годы демо-договоров: прошлый, текущий и следующий (список годов на страницах
+# потом берётся из этих данных сам — см. queries.available_years)
+_THIS_YEAR = date.today().year
+DEMO_YEARS = [_THIS_YEAR - 1, _THIS_YEAR, _THIS_YEAR + 1]
 
 AGENTS = [
     "ООО «Альфа-Снаб»",
@@ -91,7 +95,7 @@ class DemoData:
         positions = []
         number = 0
         while number < count:
-            year = rnd.choice(YEARS)
+            year = rnd.choice(DEMO_YEARS)
             igk = f"{year % 100:02d}{rnd.randrange(10**22):022d}{rnd.randrange(10):d}"
             cfo = rnd.choice(SAP_CFO)
             for _ in range(rnd.randint(1, 3)):
