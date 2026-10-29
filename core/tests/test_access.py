@@ -61,3 +61,21 @@ class AccessTests(TestCase):
         response = self.client.post(reverse("upload_gk_directory"), follow=True)
         self.assertRedirects(response, reverse("goz_report"))
         self.assertIn("только суперпользователи", messages_text(response)[0])
+
+
+class AccountTests(TestCase):
+    """Низ боковой панели."""
+
+    def test_sidebar_footer(self):
+        user = make_user("petrov", "access_znp")
+        user.last_name, user.first_name = "Петров", "Иван"
+        user.save()
+        self.client.force_login(user)
+        page = self.client.get(reverse("root"))
+        self.assertContains(page, "Петров И.")
+        self.assertContains(page, "petrov")
+        self.assertContains(page, reverse("logout"))
+        self.assertNotContains(page, "Администрирование")
+
+        self.client.force_login(make_user("admin", superuser=True))
+        self.assertContains(self.client.get(reverse("root")), "Администрирование")

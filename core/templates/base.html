@@ -1,6 +1,6 @@
 {# Базовый шаблон проекта. Содержит боковое меню, подключение стилей и глобальные JS-утилиты. #}
 
-{% load static %}
+{% load static users %}
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -19,6 +19,9 @@
         </div>
         <div class="sidebar-logo-text">МТО<span>Отчёты</span></div>
     </div>
+
+    {# Разделы. Если не помещаются по высоте — прокручиваются только они, низ панели всегда виден #}
+    <div class="sidebar-nav">
 
     {# Раздел: Сводки #}
     <div class="nav-section">Сводки</div>
@@ -70,7 +73,7 @@
     {% endif %}
 
     {# Раздел: Служебное #}
-    {% if perms.core.access_dupes or perms.core.access_export or perms.core.access_upload or perms.core.access_goz_report or user.is_superuser %}
+    {% if perms.core.access_dupes or perms.core.access_export or perms.core.access_upload or perms.core.access_goz_report %}
     <div class="nav-section">Служебное</div>
     {% if perms.core.access_dupes %}
     <a href="{% url 'contract_dupes_table' %}" class="nav-sub-link">Дубликаты</a>
@@ -87,21 +90,36 @@
     {% if perms.core.access_goz_report %}
     <a href="{% url 'goz_report' %}" class="nav-sub-link">Анализ ГОЗ</a>
     {% endif %}
-    {% if user.is_superuser %}
-    <a href="/admin/" class="nav-sub-link">Админка</a>
     {% endif %}
-    {% endif %}
+    </div>
 
-    {# Кнопка выхода: форма POST, а не ссылка — так выход нельзя вызвать с чужого сайта #}
-    <form class="sidebar-logout" method="post" action="{% url 'logout' %}">
-        {% csrf_token %}
-        <button type="submit">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
-            </svg>
-            Выйти
-        </button>
-    </form>
+    {# Низ панели: кто вошёл, администрирование, выход #}
+    <div class="sidebar-footer">
+        <div class="sidebar-user">
+            <span class="sidebar-user-avatar" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
+            </span>
+            <span class="sidebar-user-info">
+                <span class="sidebar-user-name">{{ user|short_name }}</span>
+                {# Логин — табельный номер #}
+                <span class="sidebar-user-login">{{ user.username }}</span>
+            </span>
+        </div>
+        {% if user.is_superuser %}
+        <a class="sidebar-admin" href="{% url 'admin:index' %}">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Администрирование
+        </a>
+        {% endif %}
+        {# Выход — форма POST, а не ссылка: так выход нельзя вызвать с чужого сайта #}
+        <form class="sidebar-logout" method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button class="sidebar-logout-btn" type="submit">
+                <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+                Выйти
+            </button>
+        </form>
+    </div>
 </nav>
 
 {# --- Основной контент --- #}
@@ -229,8 +247,8 @@ async function loadTable(apiUrl, containerId, cols) {
 // --- Инициализация при загрузке DOM ---
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Сохранение и восстановление позиции скролла сайдбара
-    const sidebar = document.querySelector('.sidebar');
+    // 1. Сохранение и восстановление позиции скролла списка разделов
+    const sidebar = document.querySelector('.sidebar-nav');
     if (sidebar) {
         const saved = sessionStorage.getItem('sidebar_scroll');
         if (saved) sidebar.scrollTop = parseInt(saved, 10);
