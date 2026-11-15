@@ -455,17 +455,36 @@ def kdr_export(year):
 
 
 def kdr_delta(year, start_date, end_date):
-    """Возвращает SQL и параметры для расчёта дельты заключённых договоров между двумя датами."""
+    """Дельта между снимками, включая историю до перехода на c_date.
+
+    До 28.10.2026 year_col содержал y25/y26/y27; новые снимки содержат
+    2025/2026/2027. Миграция 0046 не преобразовывала старые значения.
+    При совпадении обеих версий ключа для одной даты/ИГК/ЦФО приоритет
+    у нового формата: два снимка одного состояния нельзя складывать.
+    """
+    year = str(year)
+    # Старый код создавал флаги только для этих трёх лет.
+    legacy_year = {"2025": "y25", "2026": "y26", "2027": "y27"}.get(year, year)
     return """
         with data_t1 as (
-            select igk, cfo, concluded_count as count_t1
-            from contract_counts_snapshot ccs
-            where upload_date = %s and year_col = %s
+            select igk, cfo,
+                coalesce(
+                    max(case when year_col = %s then concluded_count end),
+                    max(concluded_count)
+                ) as count_t1
+            from contract_counts_snapshot
+            where upload_date = %s and year_col in (%s, %s)
+            group by igk, cfo
         ),
         data_t2 as (
-            select igk, cfo, concluded_count as count_t2
-            from contract_counts_snapshot ccs
-            where upload_date = %s and year_col = %s
+            select igk, cfo,
+                coalesce(
+                    max(case when year_col = %s then concluded_count end),
+                    max(concluded_count)
+                ) as count_t2
+            from contract_counts_snapshot
+            where upload_date = %s and year_col in (%s, %s)
+            group by igk, cfo
         )
         select
             coalesce(t1.igk, t2.igk) as igk,
@@ -474,10 +493,8 @@ def kdr_delta(year, start_date, end_date):
         from data_t1 t1
         full outer join data_t2 t2 using(igk, cfo)
     """, [
-        start_date,
-        str(year),
-        end_date,
-        str(year),
+        year, start_date, year, legacy_year,
+        year, end_date, year, legacy_year,
     ]
 
 
@@ -600,3 +617,4 @@ def contracts_appeared(kind):
     """, [
         kind
     ]
+

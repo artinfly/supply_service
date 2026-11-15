@@ -6,7 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     {% block head %}{% endblock %}
-    <title>{% block title %}Вход{% endblock %} — Отчёты МТО</title>
+    <title>{% block title %}Вход{% endblock %} — МТО УВЗ</title>
     <link rel="stylesheet" href="{% static 'vendor/bootstrap.min.css' %}">
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
@@ -18,14 +18,14 @@
                 <svg viewBox="0 0 24 24"><path d="M3 3h18v4H3zm0 6h11v4H3zm0 6h14v4H3z"/></svg>
             </div>
             <div class="login-title">
-                Отчёты МТО
+                МТО УВЗ
                 <span>{% block subtitle %}Единый вход{% endblock %}</span>
             </div>
         </div>
         <div class="login-body">
             {% block content %}{% endblock %}
         </div>
-        <div class="login-footer">Отчёты МТО</div>
+        <div class="login-footer">МТО УВЗ</div>
     </div>
 </div>
 </body>

@@ -11,13 +11,15 @@ import zipfile
 from collections import defaultdict
 from copy import copy
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from django.http import HttpResponse
 from django.utils import timezone
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Border, PatternFill, Side
+from openpyxl.cell.cell import MergedCell
+from openpyxl.utils import get_column_letter
 
 # --- Константы шаблона ---
 
@@ -58,7 +60,7 @@ SMALL_CONTRACT_LIMIT = 1_000_000.0  # Договоры меньше этой с�
 ALLOWED_DIFFERENCE = 1.0  # Допустимое расхождение для проверок согласованности
 
 # Стили отчёта
-REPORT_FONT_SIZE = 12
+REPORT_FONT_SIZE = 11
 REPORT_END_COLUMN = 11
 
 # В справке показываются только договоры с этими статусами (ТЗ п.6)
@@ -740,35 +742,167 @@ def _set_bold(cell, bold):
 
 
 def _apply_report_layout(ws, start_row=5):
-    """ТЗ п.1–2: жирный шрифт только в заголовках столбцов и итогах,
-    названия блоков — по центру на всю ширину таблицы."""
-    for r in range(start_row, ws.max_row + 1):
+    """Оформление старой справки; значения и расчёты не изменяются."""
+    first_block = next(
+        (r for r in range(start_row, ws.max_row + 1)
+         if _row_kind(ws, r) == "block"),
+        ws.max_row + 1,
+    )
+    no_fill = PatternFill(fill_type=None)
+    total_fill = PatternFill("solid", fgColor="FFF2F2F2")
+    for r in range(3, ws.max_row + 1):
         kind = _row_kind(ws, r)
-        if kind is None or kind == "header":
-            continue
+        end_col = DETAIL_END_COLUMN if r >= first_block else REPORT_END_COLUMN
         if kind == "block":
-            ws.merge_cells(
-                start_row=r, start_column=1, end_row=r, end_column=DETAIL_END_COLUMN
-            )
-            cell = ws.cell(row=r, column=1)
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-            _set_bold(cell, False)
-            continue
+            ws.merge_cells(start_row=r, start_column=1, end_row=r,
+                           end_column=DETAIL_END_COLUMN)
         for c in range(1, REPORT_END_COLUMN + 1):
-            _set_bold(ws.cell(row=r, column=c), kind == "total")
+            cell = ws.cell(r, c)
+            if isinstance(cell, MergedCell):
+                continue
+            if c > end_col or kind is None:
+                cell.border = Border()
+                # Служебные столбцы J/K не входят в детальные таблицы.
+                if cell.value is None:
+                    cell.fill = no_fill
+                continue
+            font = copy(cell.font)
+            font.name = "Times New Roman"
+            font.sz = REPORT_FONT_SIZE
+            font.bold = kind in ("header", "total")
+            cell.font = font
+            cell.border = THIN_BORDER
+            cell.alignment = Alignment(
+                horizontal="left" if kind == "total" and c == 1 and r >= first_block
+                else "center",
+                vertical="center", wrap_text=True,
+            )
+            # Красная проверочная подсветка итогов сводки сохраняется.
+            is_warning = (cell.fill.fill_type == "solid"
+                          and cell.fill.fgColor.type == "rgb"
+                          and cell.fill.fgColor.rgb in ("FFFF0000", "00FF0000"))
+            if not is_warning:
+                cell.fill = (total_fill if kind == "total" and r >= first_block
+                             and c in (3, 4) else no_fill)
+            if isinstance(cell.value, (int, float)) and not isinstance(cell.value, bool):
+                money = c in ((3, 4) if r >= first_block else (3, 5, 6, 8, 9, 10, 11))
+                cell.number_format = "#,##0.00" if money else "0"
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            elif isinstance(cell.value, (date, datetime)):
+                cell.number_format = "dd.mm.yyyy"
+            else:
+                cell.number_format = "General"
+    ws.sheet_view.zoomScale = 80
+    ws.sheet_view.zoomScaleNormal = 80
+
+
+def _display_text(cell):
+    """Текст для подбора размера, включая разделители тысяч и копейки."""
+    value = cell.value
+    if value is None:
+        return ""
+    if isinstance(value, (datetime, date)):
+        return value.strftime("%d.%m.%Y")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if cell.number_format == "#,##0.00":
+            return format(value, ",.2f").replace(",", " ")
+        if cell.number_format == "0":
+            return format(value, ".0f")
+    return str(value)
+
+
+def _text_width(text, bold=False):
+    """Консервативная оценка ширины Times New Roman 11 без новых зависимостей.
+
+    Единица — примерно ширина цифры в стандартной колонке Excel.
+    Небольшой запас компенсирует различия шрифтов Excel/LibreOffice.
+    """
+    width = 0.0
+    for char in text:
+        if char in " .,;:!|'ijlІі":
+            width += 0.5
+        elif char in "ЖШЩЮФМW@%жшщюфмw":
+            width += 1.5
+        elif char.isupper():
+            width += 1.15
+        else:
+            width += 1.0
+    return width * (1.08 if bold else 1.0)
+
+
+def _wrapped_line_count(text, width, bold=False):
+    """Считает строки с учётом пробелов, явных переносов и длинных слов."""
+    lines = 0
+    for paragraph in text.split("\n"):
+        current = 0.0
+        lines += 1
+        for token in re.findall(r"\S+\s*", paragraph):
+            token_width = _text_width(token, bold)
+            if current and current + token_width > width:
+                lines += 1
+                current = 0.0
+            while token_width > width:
+                lines += 1
+                token_width -= width
+            current += token_width
+    return lines
 
 
 def _adjust_column_widths(ws):
-    """Устанавливает ширины колонок для детальных таблиц."""
-    ws.column_dimensions["A"].width = 30
-    ws.column_dimensions["B"].width = 35
-    ws.column_dimensions["C"].width = 18
-    ws.column_dimensions["D"].width = 18
-    ws.column_dimensions["E"].width = 12
-    ws.column_dimensions["F"].width = 20
-    ws.column_dimensions["G"].width = 15
-    ws.column_dimensions["H"].width = 40
-    ws.column_dimensions["I"].width = 10
+    """Ширины старой формы + расширение под числа; высота по всему тексту.
+
+    Один столбец Excel общий для сводки и всех детальных таблиц.
+    Длинные примечания переносятся, чтобы не превращать справку в одну
+    огромную строку. bestFit сам по себе не запускает автоподбор в Excel,
+    поэтому размеры рассчитываются до сохранения файла.
+    """
+    widths = [28.33203125, 36.83203125, 20.1640625, 21.0, 21.0,
+              27.1640625, 17.1640625, 46.83203125, 20.83203125,
+              20.33203125, 21.33203125]
+    for c, baseline in enumerate(widths, 1):
+        required = baseline
+        for column_cell in ws.iter_cols(min_col=c, max_col=c):
+            for cell in column_cell:
+                if isinstance(cell, MergedCell) or cell.value is None:
+                    continue
+                if isinstance(cell.value, (int, float, date, datetime)):
+                    display = _display_text(cell)
+                    # Числа нельзя переносить: учитываем каждый знак и жирный итог.
+                    number_width = len(display) * (1.24 if cell.font.bold else 1.15) + 4
+                    required = max(required, number_width)
+        dimension = ws.column_dimensions[get_column_letter(c)]
+        dimension.width = min(255, required)
+        dimension.bestFit = True
+
+    merged = {}
+    for area in ws.merged_cells.ranges:
+        merged[(area.min_row, area.min_col)] = area
+    heights = {}
+    for r in range(1, ws.max_row + 1):
+        kind = _row_kind(ws, r)
+        heights[r] = 32.25 if r == 2 else (24.0 if kind else 15.0)
+    for row in ws.iter_rows(max_col=REPORT_END_COLUMN):
+        for cell in row:
+            if isinstance(cell, MergedCell) or cell.value is None:
+                continue
+            area = merged.get((cell.row, cell.column))
+            first_col = area.min_col if area else cell.column
+            last_col = area.max_col if area else cell.column
+            width = sum(ws.column_dimensions[get_column_letter(c)].width
+                        for c in range(first_col, last_col + 1)) - 3
+            text = _display_text(cell)
+            lines = (_wrapped_line_count(text, max(1, width), cell.font.bold)
+                     if cell.alignment.wrap_text else 1)
+            height = lines * 20.0 + 8.0
+            if area and area.max_row > area.min_row:
+                # Высота вертикального объединения распределяется по строкам.
+                height /= area.max_row - area.min_row + 1
+                for r in range(area.min_row, area.max_row + 1):
+                    heights[r] = max(heights[r], height)
+            else:
+                heights[cell.row] = max(heights[cell.row], height)
+    for r, height in heights.items():
+        ws.row_dimensions[r].height = min(409.5, height)
 
 
 # --- Генерация отчётов ---
@@ -949,3 +1083,4 @@ def generate_sum_reports_response(file_stream, is_cycle=False, username="user"):
         f'attachment; filename="reports_{suffix}_{today}.zip"'
     )
     return response
+

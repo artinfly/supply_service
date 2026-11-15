@@ -137,21 +137,21 @@ class DemoData:
 
     def contract_rows(self, positions):
         rows = [["Выгрузка договоров (демо-данные)"], list(CONTRACT_COLUMNS)]
-        rows.extend(
-            [p["igk"], p["agent"], p["cfo"], p["contract"], p["status"],
-             p["payment"], p["item"], p["order"], p["plan"], p["fact"],
-             p["plan"] - p["fact"], 0, p["stage"], p["plan_date"],
-             p["contract_sum"], p["year"]]
-            for p in positions
-        )  # fmt: skip
+        for p in positions:
+            rows.append(
+                [p["igk"], p["agent"], p["cfo"], p["contract"], p["status"],
+                 p["payment"], p["item"], p["order"], p["plan"], p["fact"],
+                 p["plan"] - p["fact"], 0, p["stage"], p["plan_date"],
+                 p["contract_sum"], p["year"]]
+            )  # fmt: skip
         return rows
 
     def changed_positions(self):
         """Вторая выгрузка: часть договоров подписана, оплачена, расторгнута; есть новые."""
         rnd = self.random
         changed = []
-        for original in self.positions:
-            p = dict(original)
+        for p in self.positions:
+            p = dict(p)
             roll = rnd.random()
             if p["status"] in NOT_CONCL and roll < 0.5:
                 p["status"] = "Подписан"

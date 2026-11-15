@@ -13,12 +13,12 @@ from . import views
 from .models import SsoSession
 
 User = get_user_model()
-SSO = {
-    "SSO_SERVER_URL": "http://auth.local:8000/",
-    "SSO_SERVER_INTERNAL_URL": "http://127.0.0.1:8000/",
-    "SSO_CLIENT_ID": "supply",
-    "SSO_CLIENT_SECRET": "secret",
-}
+SSO = dict(
+    SSO_SERVER_URL="http://auth.local:8000/",
+    SSO_SERVER_INTERNAL_URL="http://127.0.0.1:8000/",
+    SSO_CLIENT_ID="supply",
+    SSO_CLIENT_SECRET="secret",
+)
 PAYLOAD = {
     "sid": "sid-1",
     "user": {

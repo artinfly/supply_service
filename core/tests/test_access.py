@@ -67,13 +67,13 @@ class AccountTests(TestCase):
     """Низ боковой панели."""
 
     def test_sidebar_footer(self):
-        user = make_user("petrov", "access_znp")
-        user.last_name, user.first_name = "Петров", "Иван"
+        user = make_user("1016599", "access_znp")
+        user.last_name, user.first_name = "Смирнов", "Артём"
         user.save()
         self.client.force_login(user)
         page = self.client.get(reverse("root"))
-        self.assertContains(page, "Петров И.")
-        self.assertContains(page, "petrov")
+        self.assertContains(page, "Смирнов А.")
+        self.assertContains(page, "1016599")
         self.assertContains(page, reverse("logout"))
         self.assertNotContains(page, "Администрирование")
 

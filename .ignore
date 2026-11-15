@@ -1,0 +1,26 @@
+# Виртуальное окружение Python — у каждого своё, создаётся заново по requirements.txt
+.venv/
+
+# Настройки машины: пароли, ключи, адреса
+.env
+
+# Файлы, которые Python и Django создают сами
+__pycache__/
+*.py[cod]
+staticfiles/
+media/
+*.log
+
+# Выгрузки и загружаемые пользователями файлы
+*.zip
+
+# Настройки редакторов и системы
+.vscode/
+.idea/
+Thumbs.db
+
+.env.example
+README.md
+pyproject.toml
+.git/
+core/migrations

@@ -527,24 +527,26 @@ def normalize_znp():
                 "данные не изменены. Проверьте, что выбран нужный тип файла."
             )
 
-        new_data = [
-            (
-                None,  # parent_id (заполняется позже)
-                norm(r[1]),  # plan_doc
-                norm(r[2]),  # payment_purpose
-                parse_date(r[3]),  # plan_payment_date
-                parse_date(r[4]),  # fact_payment_date
-                to_decimal(r[5]),  # plan_sum
-                to_decimal(r[6]),  # fact_sum
-                r[0],  # crc32_hash
-                norm(r[7]),  # stage
-                norm(r[8]),  # znp_igk
-                norm(r[9]),  # znp_payment_type
-                norm(r[10]),  # znp_status
-                parse_date(r[11]),  # znp_date
+        new_data = []
+
+        for r in staging_rows:
+            new_data.append(
+                (
+                    None,  # parent_id (заполняется позже)
+                    norm(r[1]),  # plan_doc
+                    norm(r[2]),  # payment_purpose
+                    parse_date(r[3]),  # plan_payment_date
+                    parse_date(r[4]),  # fact_payment_date
+                    to_decimal(r[5]),  # plan_sum
+                    to_decimal(r[6]),  # fact_sum
+                    r[0],  # crc32_hash
+                    norm(r[7]),  # stage
+                    norm(r[8]),  # znp_igk
+                    norm(r[9]),  # znp_payment_type
+                    norm(r[10]),  # znp_status
+                    parse_date(r[11]),  # znp_date
+                )
             )
-            for r in staging_rows
-        ]
 
         cur.execute("TRUNCATE znp_data RESTART IDENTITY")
         cur.executemany(

@@ -13,8 +13,7 @@ from dotenv import load_dotenv
 
 # Корень проекта — папка, где лежит manage.py
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-load_dotenv(BASE_DIR / ".env", override=True)
-
+load_dotenv(BASE_DIR / ".env", override = True)
 
 def env(name, default=None):
     """Значение из .env; без значения по умолчанию переменная обязательна."""
@@ -98,6 +97,7 @@ DATABASES = {
         "OPTIONS": {"client_encoding": "UTF8"},
     }
 }
+
 
 
 # --- Пользователи и вход ---
