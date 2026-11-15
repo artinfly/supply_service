@@ -1,10 +1,8 @@
-"""WSGI-конфигурация проекта supply_service."""
+"""WSGI entry point for supply_service."""
 
 import os
 
 from django.core.wsgi import get_wsgi_application
 
-# --- Настройки проекта ---
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.prod")
-
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 application = get_wsgi_application()

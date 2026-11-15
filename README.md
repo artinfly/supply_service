@@ -27,7 +27,7 @@
 py -3.14 -m venv .venv
 .venv\Scripts\activate            # Windows; в Linux: source .venv/bin/activate
 pip install -r requirements.txt
-copy .env.example .env            # и заполните значения
+copy .env.example .env            # заполните ключ, БД и DEBUG=True для локального запуска
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py seed_demo        # по желанию: вымышленные договоры и заявки
@@ -42,8 +42,8 @@ python manage.py runserver
 Всё, что отличается между машинами, — в `.env` (образец — `.env.example`): ключ, база, адреса
 внешних сервисов. Код одинаковый дома и на работе.
 
-- `config/settings/base.py` — общие настройки, `dev.py` — разработка (`manage.py` по умолчанию),
-  `prod.py` — сервер (`wsgi.py`, gunicorn).
+- `config/settings.py` — единые настройки Django. `DEBUG=True` в `.env` включает
+  локальный режим; `DEBUG=False` — серверный режим с защищённой статикой.
 - Внешние сервисы включаются адресом в `.env`: `HR_SERVICE_API_URL` — синхронизация ФИО
   в админке, `SSO_SERVER_URL` — единый вход. Пустой адрес — функция выключена.
 
@@ -58,20 +58,20 @@ python manage.py runserver
 ### Запуск на сервере
 
 ```bash
-export DJANGO_SETTINGS_MODULE=config.settings.prod
+export DJANGO_SETTINGS_MODULE=config.settings
 python manage.py migrate
 python manage.py collectstatic --noinput
 gunicorn config.wsgi --bind 127.0.0.1:8000
 ```
 
-В `.env` сервера: `ALLOWED_HOSTS` с именем сервера; за nginx — `USE_X_FORWARDED_HOST`
+В `.env` сервера обязательно `DEBUG=False`, `ALLOWED_HOSTS` с именем сервера; за nginx — `USE_X_FORWARDED_HOST`
 и `CSRF_TRUSTED_ORIGINS`; если несколько сервисов на одном имени — свои `SESSION_COOKIE_NAME`
 и `CSRF_COOKIE_NAME`.
 
 ## Структура проекта
 
 ```
-config/                 настройки (settings/base, dev, prod), корневые адреса (/admin/, /reports/, /sso/)
+config/                 settings.py (общие настройки), urls.py, WSGI/ASGI
 apps/
   sso_client/           единый вход через сервис авторизации (включается настройкой)
   demo/                 демо-данные seed_demo (только для разработки)

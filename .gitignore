@@ -22,3 +22,12 @@ media/
 .vscode/
 .idea/
 Thumbs.db
+
+# Дополнительные кеши инструментов проверки
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
